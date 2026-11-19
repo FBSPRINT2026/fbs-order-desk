@@ -20,7 +20,7 @@ import { carrierOf } from "@/lib/goods";
  * Anything else in the inbox (replies to the launch email…) is left alone. Nothing is moved, marked or answered.
  */
 const KEY = "portal_inbox";
-type State = { seen?: string[]; log?: { at: string; subject: string; from: string; result: string }[]; last_run?: string; last_error?: string | null };
+type State = { /** a one-time longer look back (days) until it has read everything that far back (Nick, Nov 19 2026) */ back?: number; seen?: string[]; log?: { at: string; subject: string; from: string; result: string }[]; last_run?: string; last_error?: string | null };
 
 async function state(admin: SupabaseClient): Promise<State> {
   const { data } = await admin.from("app_keys").select("value").eq("name", KEY).maybeSingle();
@@ -80,10 +80,17 @@ export async function checkPortalInbox(admin: SupabaseClient, opts: { days?: num
   if (!a) return { skipped: "The portal's mailbox isn't connected (Settings → Site email)." };
   const st = await state(admin), seen = new Set(st.seen || []), log = [...(st.log || [])];
   const out = { looked: 0, added: 0, alerts: 0, errors: [] as string[] };
-  const since = new Date(Date.now() - (opts.days || 4) * 864e5).toISOString().replace(/\.\d+Z$/, "Z");
+  const since = new Date(Date.now() - (opts.days || st.back || 4) * 864e5).toISOString().replace(/\.\d+Z$/, "Z");
   try {
-    const x = await call(a, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:FieldURI FieldURI="item:Subject"/><t:FieldURI FieldURI="message:From"/><t:FieldURI FieldURI="message:InternetMessageId"/><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURI FieldURI="item:HasAttachments"/></t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="100" Offset="0" BasePoint="Beginning"/><m:Restriction><t:IsGreaterThan><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURIOrConstant><t:Constant Value="${since}"/></t:FieldURIOrConstant></t:IsGreaterThan></m:Restriction><m:SortOrder><t:FieldOrder Order="Ascending"><t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder><m:ParentFolderIds><t:DistinguishedFolderId Id="inbox"/></m:ParentFolderIds></m:FindItem>`);
-    const items = all(x, "Message").map((m) => ({ id: attr(all(m.inner, "ItemId")[0]?.attrs || "", "Id"), subject: unesc(one(m.inner, "Subject")), from: unesc(one(one(m.inner, "From"), "EmailAddress")).toLowerCase(), mid: unesc(one(m.inner, "InternetMessageId")), att: one(m.inner, "HasAttachments") === "true" }));
+    // every page of what came in since then, oldest first (100 a page; a long look back is more than one)
+    type It = { id: string; subject: string; from: string; mid: string; att: boolean };
+    const items: It[] = [];
+    for (let off = 0; off < 2000; off += 100) {
+      const x = await call(a, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:FieldURI FieldURI="item:Subject"/><t:FieldURI FieldURI="message:From"/><t:FieldURI FieldURI="message:InternetMessageId"/><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURI FieldURI="item:HasAttachments"/></t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="100" Offset="${off}" BasePoint="Beginning"/><m:Restriction><t:IsGreaterThan><t:FieldURI FieldURI="item:DateTimeReceived"/><t:FieldURIOrConstant><t:Constant Value="${since}"/></t:FieldURIOrConstant></t:IsGreaterThan></m:Restriction><m:SortOrder><t:FieldOrder Order="Ascending"><t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder><m:ParentFolderIds><t:DistinguishedFolderId Id="inbox"/></m:ParentFolderIds></m:FindItem>`);
+      const page: It[] = all(x, "Message").map((m) => ({ id: attr(all(m.inner, "ItemId")[0]?.attrs || "", "Id"), subject: unesc(one(m.inner, "Subject")), from: unesc(one(one(m.inner, "From"), "EmailAddress")).toLowerCase(), mid: unesc(one(m.inner, "InternetMessageId")), att: one(m.inner, "HasAttachments") === "true" }));
+      items.push(...page);
+      if (page.length < 100) break;
+    }
     const { aiState, askClaude } = await import("@/lib/ai/claude");
     const ai = await aiState(admin);
     if (!ai.ready) return { ...out, skipped: "AI is off." };
@@ -182,11 +189,13 @@ export async function checkPortalInbox(admin: SupabaseClient, opts: { days?: num
         log.push({ at: new Date().toISOString(), subject: it.subject.slice(0, 120), from: it.from, result: `error: ${msg.slice(0, 150)}` });
       }
     }
-    await save(admin, { seen: [...seen].slice(-600), log: log.slice(-60), last_run: new Date().toISOString(), last_error: out.errors.length ? out.errors.join("; ").slice(0, 300) : null });
+    // the long look back is done once a run gets through everything (no deadline cut it short)
+    const back = st.back && opts.deadline && Date.now() > opts.deadline ? st.back : undefined;
+    await save(admin, { ...(back ? { back } : {}), seen: [...seen].slice(-1500), log: log.slice(-60), last_run: new Date().toISOString(), last_error: out.errors.length ? out.errors.join("; ").slice(0, 300) : null });
     return out;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await save(admin, { ...st, seen: [...seen].slice(-600), log: log.slice(-60), last_run: new Date().toISOString(), last_error: msg.slice(0, 300) });
+    await save(admin, { ...st, seen: [...seen].slice(-1500), log: log.slice(-60), last_run: new Date().toISOString(), last_error: msg.slice(0, 300) });
     return { ...out, error: msg };
   }
 }

@@ -23790,3 +23790,20 @@ main.main .rvg-sub{margin-bottom:10px}
 .mwp-row.done{opacity:.55}.mwp-row.late span{color:var(--danger);font-weight:700}
 .mwp-row.run{box-shadow:inset 3px 0 var(--ok)}
 .mwp-row.ms-hit{outline:2px solid var(--accent);outline-offset:-2px}
+/* Watch on the Goods & Receiving dashboard: late, here today, problems (Nick, Nov 19 2026; ReceivingDash.tsx WatchSide) */
+.rvw-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0 12px 6px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rvw-seg button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 4px;font-size:12.5px;font-weight:700;color:var(--ink-2);border-left:1px solid var(--line);white-space:nowrap}
+.rvw-seg button:first-child{border-left:0}
+.rvw-seg em{font-style:normal;font-size:11px;padding:0 6px;border-radius:99px;background:var(--surface-2);color:var(--ink-3)}
+.rvw-seg button.on{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 -3px var(--accent)}
+.rvw-seg button.late.on,.rvw-seg button.prob.on{background:var(--danger-soft);color:var(--danger);box-shadow:inset 0 -3px var(--danger)}
+.rvw-seg button.here.on{background:var(--ok-soft);color:var(--ok);box-shadow:inset 0 -3px var(--ok)}
+.rvw-seg button.on em{background:var(--surface);color:inherit}
+.rvw-b{display:flex;flex-direction:column}
+.rvw-none{padding:8px 14px 12px;font-size:12.5px}
+.rvw-r{display:flex;flex-direction:column;gap:1px;padding:7px 14px;border-top:1px solid var(--line);font-size:13px;min-width:0}
+.rvw-1{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rvw-nl{font-size:11.5px;font-weight:700;color:var(--warn)}
+.rvw-2{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-3);min-width:0}
+.rvw-2 > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rvw-2 em{font-style:normal;font-weight:700;white-space:nowrap}.rvw-2 em.ok{color:var(--ok)}.rvw-2 em.bad{color:var(--danger)}

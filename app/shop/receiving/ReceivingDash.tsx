@@ -19,7 +19,8 @@ import { countSections, type CheckJob, type JobKind, type JobState } from "@/lib
  * what the S&S and SanMar trucks bring today or tomorrow.
  */
 export type DashTruckRow = { key: string; number: number; href: string; who: string; boxes: number; supplier: string; at: string | null; state: string;
-  /** who's sending it (a vendor's name), and its tracking: for the Customer shipments box */ sub?: string; trks?: { carrier: string; tracking: string; status: string; delivered: boolean }[] };
+  /** who's sending it (a vendor's name), and its tracking: for the Customer shipments box */ sub?: string; trks?: { carrier: string; tracking: string; status: string; delivered: boolean }[];
+  /** for Watch: arrives after it's needed, or its day went by; when it was delivered; what went wrong with it */ late?: boolean; deliveredAt?: string | null; problem?: string };
 type Day = "today" | "tomorrow" | "next" | "later" | "counted";
 
 const STATE: Record<JobState, { label: string; tone: string }> = {
@@ -286,6 +287,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck, onIssue }: { 
         {truck("ss", "S&S", "ss")}
         {truck("sanmar", "SanMar", "sm")}
         {truck("other", "Customer shipments", "cs")}
+        <WatchSide trucks={trucks} localDay={localDay} />
         <IssuesSide onIssue={onIssue} />
         </div>
       </aside>
@@ -328,6 +330,40 @@ function IssuesSide({ onIssue }: { onIssue?: (id: string) => void }) {
             <span className="rvd-isd-2">{i.nickname || i.detail}</span>
           </button>
         ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Watch (Nick, Nov 19 2026, "yes to all"): what needs a look on the shipments, beside the trucks. Late: on the way and
+ * arriving after it's needed, or its delivery day went by. Here today: delivered today. Problems: a carrier exception or
+ * a label never scanned. Each row opens its job; Shipments has the full lists.
+ */
+function WatchSide({ trucks, localDay }: { trucks: DashTruckRow[]; localDay: (iso: string | null | undefined) => string }) {
+  const [tab, setTab] = useSticky<"late" | "here" | "prob">("receiving.watch", "late");
+  const t0 = localDay(new Date().toISOString());
+  const lists = {
+    late: trucks.filter((r) => r.state !== "arrived" && r.late),
+    here: trucks.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0),
+    prob: trucks.filter((r) => r.state === "problem"),
+  };
+  const TABS: ["late" | "here" | "prob", string][] = [["late", "Late"], ["here", "Here today"], ["prob", "Problems"]];
+  const day = (iso: string | null) => (iso ? new Date(iso.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "numeric", day: "numeric" }) : "");
+  const rows = lists[tab];
+  return (
+    <section className="panel rvw">
+      <div className="panel-h"><h2>Watch</h2></div>
+      <div className="rvw-seg" role="tablist">{TABS.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={(tab === k ? "on " : "") + k} onClick={() => setTab(k)}>{l}<em>{lists[k].length}</em></button>)}</div>
+      <div className="rvw-b">
+        {!rows.length && <div className="faint rvw-none">{tab === "late" ? "Nothing running late." : tab === "here" ? "Nothing delivered yet today." : "No delivery problems."}</div>}
+        {rows.slice(0, 12).map((r) => (
+          <div key={r.key} className="rvw-r">
+            <span className="rvw-1">{r.number ? <Link className="ordno" href={r.href}>#{r.number}</Link> : <span className="rvw-nl">not linked</span>} <span data-notranslate>{r.who}</span></span>
+            <span className="rvw-2"><span data-notranslate>{r.sub || "—"}{r.boxes ? ` · ${r.boxes} box${r.boxes === 1 ? "" : "es"}` : ""}</span><em className={tab === "here" ? "ok" : "bad"}>{tab === "here" ? (r.deliveredAt && r.deliveredAt.length > 10 ? new Date(r.deliveredAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Here") : tab === "late" ? (r.at ? `arrives ${day(r.at)}` : "no date") : r.problem || "Problem"}</em></span>
+          </div>
+        ))}
+        {rows.length > 12 && <div className="faint rvw-none">+{rows.length - 12} more under Shipments</div>}
       </div>
     </section>
   );

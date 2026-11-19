@@ -571,7 +571,7 @@ export default function GoodsReceiving() {
           {!pending ? <div className="empty">Loading…</div> : <ResolveList list={pending} onDone={() => { loadPending(); load(); setRefreshKey((k) => k + 1); }} />}
         </>
       )}
-      {view === "dash" && <ReceivingDash onIssue={(id) => { setIssuePick(id); setView("issues"); }} trucks={searched.map((x) => ({ key: x.key, number: x.number, href: x.href, who: x.who, boxes: x.boxes, supplier: x.supplier, at: x.at, state: x.state, sub: x.sub, trks: x.trks.map((k) => ({ carrier: k.carrier, tracking: k.tracking, status: k.status, delivered: k.delivered })) }))} localDay={localDay} onTruck={() => setTruck(true)} />}
+      {view === "dash" && <ReceivingDash onIssue={(id) => { setIssuePick(id); setView("issues"); }} trucks={searched.map((x) => ({ key: x.key, number: x.number, href: x.href, who: x.who, boxes: x.boxes, supplier: x.supplier, at: x.at, state: x.state, sub: x.sub, trks: x.trks.map((k) => ({ carrier: k.carrier, tracking: k.tracking, status: k.status, delivered: k.delivered })), late: x.late || (x.state !== "arrived" && !!x.at && localDay(x.at) < t0), deliveredAt: x.deliveredAt, problem: x.state === "problem" ? (x.noScan ? "Never scanned" : TRACK[x.trks.map((k) => k.status).find((st) => PROBLEM.includes(st)) || ""] || "Problem") : undefined }))} localDay={localDay} onTruck={() => setTruck(true)} />}
       {view === "settings" && <ReceivingSettings upBusy={upBusy} onUpload={upload} />}
       {view === "goods" && (
         <section className="rv-day">
