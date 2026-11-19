@@ -77,7 +77,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
     const slots = (sl || []) as { id: string; source?: string | null; day: string; sides_done?: string[] | null; order_id: string; machine: string; position: number; start_min: number | null; minutes: number; status: CrewJob["status"]; label: string; started_at: string | null; finished_at: string | null }[];
     const ids = [...new Set(slots.map((x) => x.order_id))];
     const [{ data: os }, { data: gc }] = await Promise.all([
-      ids.length ? admin.from("orders").select("id, number, nickname, qty, due_date, rush, priority, status, customers(company, name)").in("id", ids) : Promise.resolve({ data: [] }),
+      ids.length ? admin.from("orders").select("id, number, nickname, qty, due_date, production_date, rush, priority, status, customers(company, name)").in("id", ids) : Promise.resolve({ data: [] }),
       ids.length ? admin.from("goods_checkins").select("order_id, status, resolved_at, created_at").in("order_id", ids).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
     ]);
     // what each job's press timer is on right now (the side being set up or printed)
@@ -92,7 +92,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
     const enm = new Map(((en || []) as { id: string; first_name: string }[]).map((e) => [e.id, e.first_name || ""]));
     const nowBy = new Map(jts.map((r) => [r.order_id, enm.get(r.employee_id) || ""]));
     const posted = new Set(((pc || []) as { order_id: string }[]).map((r) => r.order_id));
-    type O = { id: string; number: number; nickname: string; qty: number; due_date: string | null; rush: boolean; priority?: boolean; status: string; customers: { company: string; name: string } | null };
+    type O = { id: string; number: number; nickname: string; qty: number; due_date: string | null; production_date?: string | null; rush: boolean; priority?: boolean; status: string; customers: { company: string; name: string } | null };
     const om = new Map(((os || []) as unknown as O[]).map((o) => [o.id, o]));
     const counted = new Map<string, CrewJob["counted"]>();
     for (const g of (gc || []) as { order_id: string; status: string; resolved_at: string | null }[]) if (!counted.has(g.order_id)) counted.set(g.order_id, g.status === "issue" && !g.resolved_at ? "issue" : "yes");
@@ -101,8 +101,14 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
       id: m.id, name: m.name,
       jobs: slots.filter((x) => x.machine === m.id && om.has(x.order_id) && !om.get(x.order_id)!.status.match(/^(completed)$/))
         .sort((a, b) => rank(a.status) - rank(b.status) || (a.start_min ?? 9999) - (b.start_min ?? 9999) || a.position - b.position)
-        .map((x) => { const o = om.get(x.order_id)!; return { orderId: o.id, slotId: x.id, run: x.source === "weekly_run" ? { machine: x.machine, day: x.day } : null, sidesDone: x.sides_done || [], onNow: nowOn.get(x.order_id) || "", onBy: nowBy.get(x.order_id) || "", posted: posted.has(x.order_id), minutes: x.minutes || 0, startMin: x.start_min, number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, status: x.status, due: o.due_date, label: x.label || "", started: x.started_at, finished: x.finished_at, counted: counted.get(x.order_id) || "no", rush: !!o.rush , priority: !!o.priority}; }),
+        .map((x) => { const o = om.get(x.order_id)!; return { orderId: o.id, slotId: x.id, run: o.production_date ? { machine: x.machine, day: String(o.production_date) } : null, sidesDone: x.sides_done || [], onNow: nowOn.get(x.order_id) || "", onBy: nowBy.get(x.order_id) || "", posted: posted.has(x.order_id), minutes: x.minutes || 0, startMin: x.start_min, number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, status: x.status, due: o.due_date, label: x.label || "", started: x.started_at, finished: x.finished_at, counted: counted.get(x.order_id) || "no", rush: !!o.rush , priority: !!o.priority}; }),
     }));
+    // a weekly run (Nick, Nov 19 2026): 2+ jobs on one press for one run day (the orders' production date), worked as one job
+    for (const p of out.presses) {
+      const n = new Map<string, number>();
+      for (const j of p.jobs) if (j.run) n.set(j.run.day, (n.get(j.run.day) || 0) + 1);
+      for (const j of p.jobs) if (j.run && (n.get(j.run.day) || 0) < 2) j.run = null;
+    }
   }
 
   })());

@@ -36,7 +36,7 @@ export default function WeeklyRun({ machine, day, title, pos, onChanged, t = pla
   const running = left.some((p) => p.status === "running"), paused = !running && left.some((p) => p.status === "paused");
   const go = async (action: string) => {
     setBusy(action); setErr("");
-    const r = await post({ machine, day, action });
+    const r = await post({ ids: pos.map((p) => p.slotId), machine, day, action });
     setBusy("");
     if (!r.ok) { setErr(r.error); return; }
     onChanged(action === "start" ? t("{0} started", title) : action === "pause" ? t("{0} paused", title) : t("{0} resumed", title));
@@ -63,7 +63,7 @@ function RunDone({ title, machine, day, pos, t, onClose, onSaved }: { title: str
   const nextWeek = (() => { const x = new Date(day + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + 7); return x.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }); })();
   async function save() {
     setBusy(true); setErr("");
-    const r = await post({ machine, day, action: "done", printed: pos.filter((p) => chk[p.slotId]).map((p) => p.slotId), notPrinted: miss.map((p) => p.slotId) });
+    const r = await post({ ids: pos.map((p) => p.slotId), machine, day, action: "done", printed: pos.filter((p) => chk[p.slotId]).map((p) => p.slotId), notPrinted: miss.map((p) => p.slotId) });
     setBusy(false);
     if (!r.ok) { setErr(r.error); return; }
     onSaved(miss.length ? t("{0} POs printed · {1} moved to next week's run", n, miss.length) : t("{0} POs printed", n));

@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * tell me all the POs that you completed and printed… check them off the list"; a PO left unchecked is confirmed not
  * printed and moves to next week's run). The run = the weekly-run bookings (source weekly_run) on one press and day.
  * Used by the crew phone's menu and the schedule (components/WeeklyRun.tsx).
- * POST { machine, day, action: "start" | "pause" | "resume" | "done", printed?: slot ids, notPrinted?: slot ids }
+ * POST { ids: the run's slot ids, day: its run day, action: "start" | "pause" | "resume" | "done", printed?: slot ids, notPrinted?: slot ids }
  */
 const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 
@@ -20,10 +20,10 @@ export async function POST(req: Request) {
   if (!who) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   if (who.viewAs) return NextResponse.json({ error: "Looking only (View as): nothing saves." }, { status: 403 });
   const b = await req.json().catch(() => ({}));
-  const machine = String(b.machine || ""), day = String(b.day || ""), action = String(b.action || "");
-  if (!machine || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return NextResponse.json({ error: "Which run?" }, { status: 400 });
+  const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).filter(Boolean).slice(0, 200), day = String(b.day || ""), action = String(b.action || "");
+  if (!ids.length || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return NextResponse.json({ error: "Which run?" }, { status: 400 });
   const admin = createAdminClient(), now = new Date().toISOString();
-  const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, day, status, started_at").eq("machine", machine).eq("day", day).eq("source", "weekly_run");
+  const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, day, status, started_at").in("id", ids);
   const run = (sl || []) as { id: string; order_id: string; machine: string; day: string; status: string; started_at: string | null }[];
   if (!run.length) return NextResponse.json({ error: "That run isn't on the schedule." }, { status: 404 });
   const log = (rows: typeof run, act: string, note: string, progress?: number) =>
@@ -53,6 +53,8 @@ export async function POST(req: Request) {
     const next = runDayFrom(addDay(day, 1), new Date(day + "T12:00:00Z").getUTCDay());
     for (const x of not) await admin.from("production_slots").update({ status: "scheduled", started_at: null, finished_at: null, progress: 0, day: next, start_min: null, locked: "press", rolled_from: day, updated_at: now }).eq("id", x.id);
     await log(not, "not_started", `Not printed on the weekly run; moved to ${next}`);
+    // and they belong to next week's run (its production date), so the run there picks them up
+    if (not.length) await admin.from("orders").update({ production_date: next }).in("id", [...new Set(not.map((x) => x.order_id))]).lte("production_date", day);
     const moved: string[] = [];
     for (const oid of [...new Set(printed.map((x) => x.order_id))]) if (await moveOnIfPrinted(admin, oid, who.name).catch(() => null)) moved.push(oid);
     return NextResponse.json({ ok: true, printed: printed.length, movedTo: not.length ? next : null, notPrinted: not.length, onward: moved.length });

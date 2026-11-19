@@ -166,7 +166,7 @@ const runName = (cs: { job: { name: string; customer: string; prod?: string | nu
   const words = cs.map((c) => (c.job.name || "").split(/\s+/));
   let k = 0; while (words.every((w) => w[k] && w[k].toLowerCase() === words[0][k].toLowerCase() && k < w.length - 1)) k++;
   const pre = words[0].slice(0, k).join(" "), weekly = cs.every((c) => !!c.job.prod);
-  return { pre, k, title: `${pre || abbrCo(cs[0].job.customer || "")}${weekly ? " weekly run" : " run"}` };
+  return { pre, k, weekly, title: `${pre || abbrCo(cs[0].job.customer || "")}${weekly ? " weekly run" : " run"}` };
 };
 const firstWord = (t?: string | null) => (t || "").trim().split(/\s+/)[0].toLowerCase();
 const clock = (min: number) => { const h = Math.floor(min / 60) % 24, m = Math.round(min % 60); const hh = h % 12 || 12, ap = h >= 12 ? "p" : "a"; return m ? `${hh}:${String(m).padStart(2, "0")}${ap}` : `${hh}${ap}`; };
@@ -1802,7 +1802,7 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                       const rows = blocks.map((b0) => {
                         if (b0.length > 1) {
                           const c0 = b0[0].g.c, end = b0[b0.length - 1].end, mins = b0.reduce((t, x) => t + x.g.c.minutes, 0), pcs = b0.reduce((t, x) => t + x.g.c.need.qty, 0);
-                          const { pre, k, title: t0 } = runName(b0.map((x) => x.g.c));
+                          const { pre, k, weekly, title: t0 } = runName(b0.map((x) => x.g.c));
                           // booked for an earlier day and pushed here by the day before running long: the same run, continued
                           const title = b0.every((x) => x.g.c.day < d) ? `${t0} · continued` : t0;
                           return (
@@ -1811,8 +1811,8 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                                 <b>{title}</b><span>{clock(b0[0].start)}–{clock(end)} · {fmtMin(mins)} · {b0.length} POs · {pcs.toLocaleString()} pcs</span>
                               </div>
                               {/* a customer's weekly run is worked as one job: Start / Pause / Done with its PO checklist (components/WeeklyRun.tsx) */}
-                              {c0.slot && b0.every((x) => x.g.c.slot?.source === "weekly_run" && x.g.c.slot?.day === c0.slot!.day) && (
-                                <div className="mwp-run-go"><WeeklyRun compact machine={c0.slot.machine} day={c0.slot.day} title={t0} onChanged={(m) => { setMsg(m); void load(); }}
+                              {c0.slot && weekly && b0.every((x) => x.g.c.slot) && (
+                                <div className="mwp-run-go"><WeeklyRun compact machine={c0.slot.machine} day={c0.job.prod || d} title={t0} onChanged={(m) => { setMsg(m); void load(); }}
                                   pos={b0.map(({ g }) => ({ slotId: g.c.slot!.id, number: String(g.c.job.number), name: (g.c.job.name || "").trim(), qty: g.c.need.qty, status: g.c.slot!.status }))} /></div>
                               )}
                               {b0.map(({ g }) => { const c = g.c, done = c.slot?.status === "done", late = segLate((segs.ofCard.get(c.key) || []).slice(-1)[0] || g); return (
@@ -3213,21 +3213,24 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
         </div>
         <div className="mzc-askw">
                   <div className="msa-box">
-                                        <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
-                      <input ref={askIn} value={askQ} onChange={(e) => setAskQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
-                      {/* say it instead of typing it (Nick, Nov 13): the shop's one microphone button, asked when they stop talking */}
-                      <MicButton target={() => askIn.current} append keepListening label="Tell the schedule out loud (microphone)" className="msa-mic" onDone={(t) => { if (t.trim()) void askSchedule(t.trim()); }} />
-                      <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
-                    </form>
-                    {!askPlan && !askBusy && (() => {
-                      // ideas to tap, from what's there now (Nick, Nov 13: "add all Dear Hearts… all jobs that are counted… clear Monday for Miguel, he's out")
+                    {(() => {
+                      // ideas from what's there now (Nick, Nov 13: "add all Dear Hearts… all jobs that are counted… clear Monday for Miguel, he's out"),
+                      // shown inside the box as its hint, one at a time; Tab (or →) puts it in (Nick, Nov 19 2026: "make that try in that actual search bar")
                       const by = new Map<string, number>(); for (const t of trayV) if (t.job.customer && t.job.kind === "o") by.set(t.job.customer, (by.get(t.job.customer) || 0) + 1);
                       const top = [...by].sort((a, b) => b[1] - a[1])[0]?.[0];
                       const counted = trayV.filter((t) => t.job.kind === "o" && goodsSt.get(t.job.id) === "received").length;
                       const nx = (() => { let d = addDay(today, 1); for (let g = 0; g < 7 && !machines.some((m) => shiftOn(m, d)); g++) d = addDay(d, 1); return d; })(), lead = machines.map((m) => crewOf(m)?.leader).find(Boolean);
                       const ideas = [top && `Book all ${top} jobs`, counted && `Book every job that's counted`, lead && `${lead} is out ${dayLbl(nx).split(",")[0]}: clear the day`, "Book the late jobs first thing tomorrow"].filter(Boolean) as string[];
-                      const idea = ideas[ideaI % Math.max(1, ideas.length)];
-                      return idea ? <div className="mzc-try">Try: <button type="button" className="linkbtn" title="Ask this" onClick={() => setAskQ(idea)}>“{idea}”</button></div> : null;
+                      const idea = !askPlan && !askBusy ? ideas[ideaI % Math.max(1, ideas.length)] : "";
+                      return (
+                    <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void (askQ.trim() ? askSchedule() : idea ? askSchedule(idea) : null); }}>
+                      <input ref={askIn} value={askQ} onChange={(e) => setAskQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); else if (idea && !askQ && (e.key === "Tab" || e.key === "ArrowRight")) { e.preventDefault(); setAskQ(idea); } }}
+                        placeholder={idea ? `Try: ${idea}` : "Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…"} title={idea ? "Press Tab to use this idea, or type your own" : undefined} aria-label="Ask the schedule's assistant" />
+                      {/* say it instead of typing it (Nick, Nov 13): the shop's one microphone button, asked when they stop talking */}
+                      <MicButton target={() => askIn.current} append keepListening label="Tell the schedule out loud (microphone)" className="msa-mic" onDone={(t) => { if (t.trim()) void askSchedule(t.trim()); }} />
+                      <button type="submit" className="btn sm" disabled={askBusy || (!askQ.trim() && !idea)} title={!askQ.trim() && idea ? `Ask: ${idea}` : undefined}>{askBusy ? "Thinking…" : "Ask"}</button>
+                    </form>
+                      );
                     })()}
                   </div>
               {/* the assistant's plan, under its box: check it, book it */}
