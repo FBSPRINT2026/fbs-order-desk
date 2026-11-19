@@ -565,3 +565,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 3:50pm · 1.3.808 · Nick · Pay a bill without signing in: Send a bill's Pay button opens the order's own page with a Pay your bill step (card, bank, Zelle, Venmo right there, sign-in link at the top); an older bill link's sign-in page offers 'Just paying your bill? Pay without signing in'. Schedule: a job with a sample is just its name (no 'Production run ·')
 - Nov 19 3:51pm · 1.3.809 · Nick · Schedule: Week | Next 12h small on each view's own bar, a divider, Show weekends, a divider, the day arrows (off the top); on Week the tools sit under the shop assistant again
 - Nov 19 3:51pm · 1.3.810 · Nick · Shop assistant: a tip's button sits at the right of the tip's own line, so the box doesn't jump as tips take turns
+- Nov 19 3:52pm · 1.3.811 · Nick · Schedule: a closed Issue never comes back as a job to schedule (only as the card where its pieces printed); #40478 off for good
