@@ -24112,3 +24112,8 @@ main.main .rvg-sub{margin-bottom:10px}
 .lbr-m.bad{background:color-mix(in srgb,var(--warn) 14%,var(--surface));color:var(--warn)}
 .lbr-a{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .lbr-h .btn.primary{white-space:nowrap}
+/* a bill's Pay link on the sign-in page: pay without signing in (Nick, Nov 19 2026) */
+.lgn-pay{display:flex;flex-direction:column;gap:2px;margin:0 0 14px;padding:12px 14px;border-radius:8px;background:var(--accent);color:#fff;text-decoration:none}
+.lgn-pay b{font-size:15px}
+.lgn-pay span{font-size:13px;opacity:.92}
+.lgn-pay:hover{filter:brightness(1.05)}

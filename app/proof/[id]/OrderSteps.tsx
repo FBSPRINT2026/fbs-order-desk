@@ -102,7 +102,7 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
               : <Result tone="ok" title="All approved" line="Thank you!" who={whoWhen(step)} />)
             : step.kind === "deposit" && (step.state === "done"
               ? <Result tone="ok" title={step.title} line={step.sub} />
-              : <div className="pfl-ans"><div style={{ fontSize: 14 }}><b>{m(step.amount || 0)}</b> {step.title === "Pay now" ? "is due to start your order" : "starts production"}.</div>
+              : <div className="pfl-ans"><div style={{ fontSize: 14 }}><b>{m(step.amount || 0)}</b> {step.key === "bill" ? "is due on this invoice" : step.title === "Pay now" ? "is due to start your order" : "starts production"}.</div>
                   <PayNow orderId={orderId} label={step.title} /></div>)}
           {!doneMsg && !showFinal && last && !(step.key in ok) && idx >= 0 && <div className="pfl-fine pfl-stepof" style={{ marginTop: 8 }}>Step {idx + 1} of {todo.length}. You&apos;ll approve everything together at the end.</div>}
         </div>

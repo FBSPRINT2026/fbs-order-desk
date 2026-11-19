@@ -302,7 +302,9 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
     const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
     const amount = Math.round(Math.min(c.balance, pick.bill.kind === "deposit" ? Math.max(0, +(pick.bill.amount || 0)) : c.balance) * 100) / 100;
     const label = pick.bill.kind === "deposit" ? "Deposit" : pick.bill.kind === "final" ? "Final bill" : "Your bill";
-    bill = { amount, label, url: `${siteUrl()}/portal?area=payments&pay=${o.id}${pick.bill.kind === "deposit" ? `&amt=${amount.toFixed(2)}` : ""}` };
+    // the order's own page, paid right there with no sign-in (Nick, Nov 19 2026: Stephanie's Pay button asked her to sign
+    // in); a sign-in link is on that page for anyone who wants their portal
+    bill = { amount, label, url };
     blocks.push({ k: "bill", title: `${label} · ${m(amount)}`, sub: [
       `Invoice #${o.number}${o.nickname ? ` · ${o.nickname}` : ""} · ${m(c.total)}${c.paid > 0.004 ? `, ${m(c.paid)} paid` : ""}`,
       pick.bill.kind === "deposit" ? `The rest (${m(Math.max(0, c.balance - amount))}) is billed later, with shipping or anything added` : pick.bill.kind === "final" ? "What's left on your order" : "",
@@ -599,6 +601,16 @@ export async function orderSteps(admin: SupabaseClient, linkId: string) {
     const dep = Math.round(c.total * upNow.pct) / 100;
     const paid = c.paid || 0;
     steps.push({ key: "deposit", kind: "deposit", title: paid >= dep - 0.005 ? (c.balance <= 0.005 ? "Paid in full" : "Deposit paid") : upNow.pay, sub: paid >= dep - 0.005 ? `Balance ${money(Math.max(0, c.balance))}` : upNow.kind === "full" ? `${money(dep)} due` : `${money(dep)} to start`, state: paid >= dep - 0.005 ? "done" : "todo", pdf: `${base}?${q}`, amount: dep });
+  }
+  // a bill sent for it (Send a bill): pay it here, no sign-in (Nick, Nov 19 2026), unless a payment up front is already asked
+  if (o.type === "invoice" && !steps.some((x) => x.kind === "deposit")) {
+    const { data: bl } = await admin.from("bills").select("total, sent_at").contains("order_ids", [o.id]).order("sent_at", { ascending: false }).limit(1);
+    const b = ((bl || []) as { total: number | null; sent_at: string }[])[0];
+    if (b) {
+      const due = Math.round(Math.min(Math.max(0, c.balance), b.total && b.total > 0 ? +b.total : c.balance) * 100) / 100;
+      const done = c.balance <= 0.005;
+      steps.push({ key: "bill", kind: "deposit", title: done ? "Paid in full" : "Pay your bill", sub: done ? `Invoice #${o.number} · thank you` : `${money(due)} · Invoice #${o.number}`, state: done ? "done" : "todo", pdf: `${base}?${q}`, amount: due });
+    }
   }
   return { link, o, customer, settings, steps, total: c.total };
 }

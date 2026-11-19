@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { emailOnFile } from "@/app/login/actions";
 
-export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, linkError, onShop = false }: { shopName: string; logoUrl: string; /** the light logo for a dark bar, the same as the portal's top bar */ sideLogoUrl?: string; next: string; linkError: boolean; /** on the shop's network: the employee and shop computer sign-ins show */ onShop?: boolean }) {
+export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, linkError, onShop = false, payLink = null }: { /** a bill's Pay link: pay it without signing in */ payLink?: { href: string; label: string } | null; shopName: string; logoUrl: string; /** the light logo for a dark bar, the same as the portal's top bar */ sideLogoUrl?: string; next: string; linkError: boolean; /** on the shop's network: the employee and shop computer sign-ins show */ onShop?: boolean }) {
   const supabase = createClient();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -95,6 +95,7 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
       ) : stage === "email" ? (
         <form onSubmit={sendCode} className="stack">
           <div>
+            {payLink && <a className="lgn-pay" href={payLink.href}><b>Just paying your bill?</b><span>Pay invoice {payLink.label} without signing in</span></a>}
             <h1>Sign In</h1>
             <p className="muted" style={{ margin: "6px 0 0" }}>Enter the email we have on file for you. {staff ? "Type your password, or leave it empty and we'll email you a code." : <>We&apos;ll email you a sign-in link and a code. No password needed.</>}</p>
           </div>

@@ -19,9 +19,23 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     logoUrl = s.shop.logoUrl || "";
     sideLogoUrl = s.brand.sideLogoUrl || "";
   } catch {}
+  // a bill's Pay link sent before bills opened the order's own page (/portal?area=payments&pay=<order>): pay it without
+  // signing in, or sign in (Nick, Nov 19 2026: Stephanie's bill asked her to sign in)
+  let payLink: { href: string; label: string } | null = null;
+  const pm = /^\/portal\?(?:.*&)?pay=([0-9a-f-]{36})(?:&|$)/i.exec(sp.next || "");
+  if (pm) {
+    try {
+      const admin = createAdminClient();
+      const { data: o } = await admin.from("orders").select("id, number, type").eq("id", pm[1]).is("discarded_at", null).maybeSingle();
+      if (o && o.type === "invoice") {
+        const { proofLinkFor, proofUrl } = await import("@/lib/proofLinks");
+        payLink = { href: proofUrl(await proofLinkFor(admin, { kind: "order", orderId: o.id as string })), label: `#${o.number}` };
+      }
+    } catch { /* the sign-in still works */ }
+  }
   return (
     <div className="auth-wrap">
-      <LoginForm shopName={shopName} logoUrl={logoUrl} sideLogoUrl={sideLogoUrl} next={sp.next || "/"} linkError={sp.error === "link"} onShop={onShop} />
+      <LoginForm shopName={shopName} logoUrl={logoUrl} sideLogoUrl={sideLogoUrl} next={sp.next || "/"} linkError={sp.error === "link"} onShop={onShop} payLink={payLink} />
     </div>
   );
 }
