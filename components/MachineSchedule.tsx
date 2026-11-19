@@ -1835,8 +1835,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           <div key={m.id} className={"ms-dv-col" + (over === m.id + day ? (canDrop(m) ? " over" : " no") : "")} style={{ height: (rng / 60) * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}
             onDragOver={(e) => { e.preventDefault(); setOver(m.id + day); }} onDragLeave={() => setOver("")}
             onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, day, vS + ((e.clientY - r.top) / HOUR_PX) * 60); }}
-            onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button, .ms-warm, .ms-lunch, .msar-box")) return; const r = e.currentTarget.getBoundingClientRect(); setDownEdit({ machine: m.id, day, start: Math.floor((vS + ((e.clientY - r.top) / HOUR_PX) * 60) / 30) * 30 }); }}
-            title="Click an open time to add downtime here">
+            /* no downtime pop-up from a click on open space (Nick, Nov 19 2026: "I don't like that function"): Downtime is in the tools */>
             {shade(m).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
             {/* a firm job's deadline is said on its card ("Firm Wed 12p"), not as a line on the calendar (Nov 9, Nick) */}
             {(() => { const sh = shiftOn(m, day), oa = sh ? otOn(m, day) : null; if (!sh || oa == null) return null; const a = Math.max(oa, vS), b = Math.min(sh[1], vE); return b > a ? <div className="ms-ot" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`}><span>Overtime</span></div> : null; })()}
@@ -2519,8 +2518,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   if (drag && !drag.group && pv && pv.mid === m.id) { const c = drag.card ? { card: drag.card } : { job: drag.job, need: drag.need }; setPv(null); place(c, m, pv.d, pv.before || undefined); return; }
                   const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); drop(m, p.d, p.min);
                 }}
-                onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button, .msf-card, .msf-run, .msf-from, .msf-slot, .msf-menu")) return; if (Date.now() - dragAt.current < 600 || (window.getSelection()?.toString() || "").trim()) return; const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); setDownEdit({ machine: m.id, day: p.d, start: Math.floor(p.min / 30) * 30 }); }}
-                title="Click an open time to add downtime here">
+                /* a click on open space does nothing (Nick, Nov 19 2026: the downtime pop-up came up by accident); Downtime is in the tools */>
                 {pinAt && drag?.pin && pinAt.mid === m.id && (() => { const mins = drag.card?.minutes || (drag.need ? estimate(s, drag.need, m).minutes : 60); return <>
                   <div className="msf-pinline" style={{ top: pinAt.y }} />
                   <div className="msf-pintip" style={{ top: Math.max(0, pinAt.y - 46) }}><b>{wkd(pinAt.d)} {clockLong(pinAt.min)}</b><small>{shortName(m)}{crewOf(m)?.leader ? " · " + crewOf(m)!.leader : ""} · ends {clockLong(pinAt.min + mins)}</small></div>

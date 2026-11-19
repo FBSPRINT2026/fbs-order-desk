@@ -517,3 +517,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 11:52am · 1.3.760 · Nick · Goods & Receiving A+: Shipments' list headings in soft bands too
 - Nov 19 12:04pm · 1.3.761 · Nick · Schedule week view tells time: white days, each day's shift as a thin bar with its jobs and a red now mark (open / left / over), every job's start and length, a red Now line today; one run (AMS weekly run) is one box with a row per PO
 - Nov 19 12:16pm · 1.3.762 · Nick · Ready's sub statuses: Ready for Pickup, Ready for Delivery, Shipping (Ready when delivery is TBD); production marks a job Printed, never Complete/Done (schedule right-click, job card, press timer, crew phones; Spanish Impreso), and the order moves to Ready by its delivery method
+- Nov 19 12:16pm · 1.3.763 · Nick · Schedule: a click on open space no longer opens Add Downtime (main and Day views); Downtime stays in the tools
