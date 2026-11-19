@@ -552,3 +552,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 2:46pm · 1.3.795 · Nick · Create labels: on for the owner's login (it checked one email address), and its hover says what's missing when it's gray
 - Nov 19 2:57pm · 1.3.796 · Nick · Create labels on for every staff login (the shipping computer too), still asking before it buys; on a customer's own account (no prices) only Fastest shows under Default shipping
 - Nov 19 3:05pm · 1.3.797 · Nick · Create labels: a ship-to with no phone uses the customer's, else ours (FedEx refused #50026's label); a suite on the street line goes in Suite / unit everywhere an address is read, and in the ship window for one saved before
+- Nov 19 3:06pm · 1.3.798 · Nick · Create labels: Phone stays optional; a blank one goes to FedEx as our shop's number only (not the customer's), saved nowhere
