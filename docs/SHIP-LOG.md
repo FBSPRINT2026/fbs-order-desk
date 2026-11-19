@@ -544,3 +544,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 2:26pm · 1.3.787 · Nick · + Tracking's ship-to: compact lines, a tiny copy icon right after each line's text
 - Nov 19 2:26pm · 1.3.788 · Nick · + Tracking's copy: just the little symbol after the text, no button look
 - Nov 19 2:29pm · 1.3.789 · Nick · Outbound: Ship | Pickup shelf | Delivery larger, level with the title; Shipping settings is a small gear left of the tabs
+- Nov 19 2:32pm · 1.3.790 · Nick · + Tracking's ship-to: a suite on the street line is its own line; city, state ZIP on one line whose copy is the ZIP; no reference line; the count, Cancel and Done at the bottom right, in line with Ship

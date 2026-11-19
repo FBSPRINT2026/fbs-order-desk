@@ -316,7 +316,15 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
       {/* the ship-to, a line at a time with a copy button each, to type into FedEx's site (Nick, Nov 19 2026) */}
       <div className="trk-ad" data-notranslate>
         <div className="trk-ad-h">Ship to</div>
-        {([["Company", x.to.company], ["Attention", x.to.name], ["Street", x.to.street1], ["Suite", x.to.street2], ["City", x.to.city], ["State", x.to.state], ["ZIP", x.to.zip], ["Phone", x.to.phone], ["Reference", `#${x.number}`]] as const).filter(([, v]) => (v || "").trim()).map(([k, v]) => <CopyLine key={k} k={k} v={String(v).trim()} />)}
+        {(() => {
+          // a suite written on the street line is its own line to copy (Nick, Nov 19 2026: "if there's a secondary line like a
+          // suite, it has to be its own line"); city, state and ZIP are one line whose copy is the ZIP (FedEx fills the rest)
+          const m = !x.to.street2 && (x.to.street1 || "").match(/^(.*[a-z].*?)[,\s]+((?:(?:suite|ste|unit|apt|bldg|building|floor|fl|room|rm)\b\.?|#)\s*(?:[\w-]*\d[\w-]*|[a-z]))$/i);
+          const street = m ? m[1].trim() : x.to.street1, suite = m ? m[2].trim() : x.to.street2;
+          const csz = [[x.to.city, x.to.state].filter(Boolean).join(", "), x.to.zip].filter(Boolean).join(" ");
+          return ([["Company", x.to.company, ""], ["Attention", x.to.name, ""], ["Street", street, ""], ["Suite", suite, ""], ["City, state, ZIP", csz, x.to.zip], ["Phone", x.to.phone, ""]] as const)
+            .filter(([, v]) => (v || "").trim()).map(([k, v, c]) => <CopyLine key={k} k={k} v={String(v).trim()} copy={c || undefined} />);
+        })()}
         {!addressReady(x.to) && <div className="pv-err">The address isn&apos;t complete: open Ship to fill it in.</div>}
       </div>
       <div className="trk-fs">
@@ -336,7 +344,6 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
         </select>
         <div className="trk-b">
           <span className="faint">{filled.length} number{filled.length === 1 ? "" : "s"}</span>
-          <span className="spacer" />
           <button type="button" className="btn sm ghost" onClick={onCancel} disabled={busy}>Cancel</button>
           <button type="button" className="btn sm primary" onClick={() => void done()} disabled={busy}>{busy ? "Saving…" : "Done"}</button>
         </div>
@@ -346,12 +353,12 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
   );
 }
 /** one line of the address with a small copy button; a check for a moment once it's copied */
-function CopyLine({ k, v }: { k: string; v: string }) {
+function CopyLine({ k, v, copy: what }: { k: string; v: string; /** what the copy puts on the clipboard, when not the line itself */ copy?: string }) {
   const [ok, setOk] = useState(false);
-  const copy = async () => { try { await navigator.clipboard.writeText(v); setOk(true); setTimeout(() => setOk(false), 1200); } catch { /* the text can still be selected */ } };
+  const copy = async () => { try { await navigator.clipboard.writeText(what || v); setOk(true); setTimeout(() => setOk(false), 1200); } catch { /* the text can still be selected */ } };
   return (
     <div className="trk-ad-l">{k === "Attention" ? <span className="faint">Attn: </span> : null}{v}
-      <button type="button" className={"trk-cp" + (ok ? " ok" : "")} onClick={() => void copy()} aria-label={`Copy ${k.toLowerCase()}`} title={ok ? "Copied" : `Copy ${k.toLowerCase()}`}>
+      <button type="button" className={"trk-cp" + (ok ? " ok" : "")} onClick={() => void copy()} aria-label={`Copy ${what ? "the ZIP" : k.toLowerCase()}`} title={ok ? "Copied" : `Copy ${what ? "the ZIP" : k.toLowerCase()}`}>
         {ok ? <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12l5 5 9-10" /></svg> : <svg viewBox="0 0 24 24" aria-hidden><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></svg>}
       </button>
     </div>
