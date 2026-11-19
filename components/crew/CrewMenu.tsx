@@ -1,4 +1,5 @@
 "use client";
+import CrewSignOut from "@/components/job/CrewSignOut";
 import { shortLabel } from "@/lib/jobLabel";
 import { countSections } from "@/lib/checkinShared";
 import { useEffect, useRef, useState } from "react";
@@ -63,7 +64,7 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
 
   return (
     <div className="jm cr" translate="no">
-      <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="cr-where">{where}</span><LangToggle /></header>
+      <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="cr-where">{where}</span><LangToggle /><CrewSignOut /></header>
       {home.viewAs && <ViewAsBar name={home.name} />}
       <main className="jm-main cr-main">
         {screen !== "home" && <button type="button" className="cr-backbtn" onClick={() => history.back()}><Svg d={IC.menu} size={18} />{t("Main menu")}</button>}

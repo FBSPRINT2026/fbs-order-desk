@@ -1,4 +1,5 @@
 "use client";
+import CrewSignOut from "@/components/job/CrewSignOut";
 import LabelPrinterPick from "@/components/LabelPrinterPick";
 import { myPrinter } from "@/lib/labelPrinter";
 import { ViewAsBar } from "@/components/crew/ViewAs";
@@ -89,7 +90,7 @@ export default function JobMobile(p: {
 
 
   if (!card) return (
-    <div className="jm" translate="no"><header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
+    <div className="jm" translate="no"><header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /><CrewSignOut /></header>
       <main className="jm-main"><div className="jm-card"><h1 className="jm-h">{t("No job #{0}", p.missing || "")}</h1><p>{t("This code doesn't match a job in the portal or in Printavo. Check the number on the label.")}</p></div></main></div>
   );
   const job = { kind: card.kind, id: card.id };
@@ -97,7 +98,7 @@ export default function JobMobile(p: {
 
   return (
     <div className="jm" translate="no">
-      <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
+      <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /><CrewSignOut /></header>
       {who.viewAs && <ViewAsBar name={who.name} />}
       <section className={"jm-job" + (view === "checkin" ? " slim" : "")}>
         <div className="jm-navrow">

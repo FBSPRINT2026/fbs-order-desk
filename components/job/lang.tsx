@@ -148,6 +148,7 @@ const ES: Record<string, string> = {
   "Start job": "Empezar trabajo",
   "Start with setup": "Empezar con la preparación",
   "Main menu": "Menú principal",
+  "Sign out": "Cerrar sesión",
   "Crew": "Equipo",
   "Hi, {0}": "Hola, {0}",
   "Time card": "Tarjeta de tiempo",

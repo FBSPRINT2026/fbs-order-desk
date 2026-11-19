@@ -646,3 +646,8 @@
 .jm-fc-done{align-items:center;text-align:center}
 .jm-fc-big{font-size:48px;font-weight:800;color:var(--ok)}
 .jm-tm-rewhy{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;font-size:12px;font-weight:800;color:var(--ink-3)}
+/* Sign out at the top right (Nick, Nov 19 2026) */
+.jm-out{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.jm-out:hover{background:rgba(255,255,255,.1)}
+.jm-out svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+@media (max-width:420px){.jm-out span{display:none}}
