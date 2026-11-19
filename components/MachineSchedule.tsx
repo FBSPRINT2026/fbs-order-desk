@@ -167,6 +167,8 @@ const runName = (cs: { job: { name: string; customer: string; prod?: string | nu
   const pre = words[0].slice(0, k).join(" "), weekly = cs.every((c) => !!c.job.prod);
   return { pre, k, weekly, title: `${pre || abbrCo(cs[0].job.customer || "")}${weekly ? " weekly run" : " run"}` };
 };
+/** a printed run on the week lists its first few POs, then "▾ 15 more" (Nick, Nov 19 2026) */
+const RUN_FOLD = 5;
 const firstWord = (t?: string | null) => (t || "").trim().split(/\s+/)[0].toLowerCase();
 const clock = (min: number) => { const h = Math.floor(min / 60) % 24, m = Math.round(min % 60); const hh = h % 12 || 12, ap = h >= 12 ? "p" : "a"; return m ? `${hh}:${String(m).padStart(2, "0")}${ap}` : `${hh}${ap}`; };
 const clockLong = (min: number) => { const h = Math.floor(min / 60) % 24, m = Math.round(min % 60); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
@@ -1807,14 +1809,13 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                           // booked for an earlier day and pushed here by the day before running long: the same run, continued
                           const title = b0.every((x) => x.g.c.day < d) ? `${t0} · continued` : t0;
                           // printed: folded to its header and one line of its POs' goods tees, open on a click (remembered)
-                          const allDone = b0.every((x) => x.g.c.slot?.status === "done"), fold = allDone && !runsOpen.includes(c0.key);
+                          const allDone = b0.every((x) => x.g.c.slot?.status === "done"), fold = allDone && b0.length > RUN_FOLD && !runsOpen.includes(c0.key);
                           return (
                             <div key={"run" + c0.key} className={"mwp-run" + (fold ? " fold" : "")}>
-                              <div className="mwp-run-h" draggable title={allDone ? (fold ? "Printed. Click to see its POs" : "Click to fold it up") : "Drag to move the whole run"} onClick={allDone ? () => setRunsOpen(fold ? [...runsOpen, c0.key] : runsOpen.filter((x) => x !== c0.key)) : undefined} onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: b0.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }}>
-                                <b>{allDone && <span className="mwp-run-car" aria-hidden>{fold ? "▸" : "▾"}</span>}{title}{allDone ? " · printed" : ""}</b><span>{clock(b0[0].start)}–{clock(end)} · {fmtMin(mins)} · {b0.length} POs · {pcs.toLocaleString()} pcs</span>
-                                {fold && <span className="mwp-run-tees" title={b0.map(({ g }) => `#${g.c.job.number} ${g.c.job.name || ""}`).join("\n")}>{b0.map(({ g }) => <i key={g.c.key}>{dotEl(g.c, g)}</i>)}</span>}
+                              <div className="mwp-run-h" draggable title="Drag to move the whole run" onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: b0.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }}>
+                                <b>{title}{allDone ? " · printed" : ""}</b><span>{clock(b0[0].start)}–{clock(end)} · {fmtMin(mins)} · {b0.length} POs · {pcs.toLocaleString()} pcs</span>
                               </div>
-                              {!fold && b0.map(({ g }) => { const c = g.c, done = c.slot?.status === "done", late = segLate((segs.ofCard.get(c.key) || []).slice(-1)[0] || g); return (
+                              {(fold ? b0.slice(0, RUN_FOLD) : b0).map(({ g }) => { const c = g.c, done = c.slot?.status === "done", late = segLate((segs.ofCard.get(c.key) || []).slice(-1)[0] || g); return (
                                 <button key={c.key} type="button" draggable data-key={c.key} className={"mwp-row" + (done ? " done" : "") + (!done && dotOf(c, ord(g.day) * 1440 + g.start)?.k !== "g" ? " nc" : "") + (c.slot?.status === "running" ? " run" : "") + (late && !done ? " late" : "") + (isHit(c.job) ? " ms-hit" : "")}
                                   title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); setOpen(c); }}
                                   onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
@@ -1822,6 +1823,7 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                                   {printBand(c)}
                                 </button>
                               ); })}
+                              {allDone && b0.length > RUN_FOLD && <button type="button" className="mwp-run-more" aria-expanded={!fold} onClick={() => setRunsOpen(fold ? [...runsOpen, c0.key] : runsOpen.filter((x) => x !== c0.key))}>{fold ? `▾ ${b0.length - RUN_FOLD} more` : "▴ Show less"}</button>}
                             </div>
                           );
                         }
