@@ -134,3 +134,18 @@ export async function labelZpl(box: { ep_id?: string; zpl_url?: string }): Promi
   if (!t) throw new Error("Couldn't load the label from FedEx. Try again.");
   return t;
 }
+
+/** the EasyPost shipment a tracking number was bought on (labels bought before their shipment id was kept) */
+export async function shipmentIdByTracking(tracking: string): Promise<string> {
+  const j = await epGet<{ trackers?: { shipment_id?: string | null; tracking_code?: string }[] }>(`/trackers?tracking_codes[]=${encodeURIComponent(tracking)}&page_size=5`).catch(() => null);
+  return (j?.trackers || []).find((t) => t.shipment_id && (!t.tracking_code || t.tracking_code === tracking))?.shipment_id || "";
+}
+
+/** a bought label as a 4×6 picture (PNG), to make a 4×6 PDF from (app/api/shipping/label) */
+export async function labelPng(epShipmentId: string): Promise<ArrayBuffer | null> {
+  const sh = await epGet<{ postage_label?: { label_url?: string } }>(`/shipments/${epShipmentId}/label?file_format=PNG`).catch(() => null);
+  const u = sh?.postage_label?.label_url || "";
+  if (!/\.png(\?|$)/i.test(u)) return null;
+  const r = await fetch(u, { cache: "no-store" }).catch(() => null);
+  return r && r.ok ? await r.arrayBuffer() : null;
+}

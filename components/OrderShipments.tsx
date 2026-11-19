@@ -45,7 +45,7 @@ export default function OrderShipments({ orderId, method, status }: { orderId: s
               {word && <em>{st === "delivered" && s.delivered_at ? `Delivered ${when(s.delivered_at)}` : word}</em>}
             </div>
             {boxes.map((b, i) => (
-              <div key={b.n + ":" + i} className="osh-b"><span>Box {i + 1}</span><a href={trackingLink(b.tracking!)} target="_blank" rel="noreferrer" data-notranslate>{b.tracking}</a>{b.label_url && <a className="osh-l" href={b.label_url} target="_blank" rel="noreferrer">Label</a>}</div>
+              <div key={b.n + ":" + i} className="osh-b"><span>Box {i + 1}</span><a href={trackingLink(b.tracking!)} target="_blank" rel="noreferrer" data-notranslate>{b.tracking}</a>{(b.label_url || b.ep_id || b.zpl_url) && <a className="osh-l" href={`/api/shipping/label?s=${s.id}&b=${i + 1}`} target="_blank" rel="noreferrer" title="The label as a 4×6 PDF">Label 4×6</a>}</div>
             ))}
             {s.track_detail && st !== "delivered" && <div className="osh-n">{s.track_detail}</div>}
             {s.boxes.some((b) => b.zpl_url || b.ep_id) && <div className="osh-n"><button type="button" className="linkbtn" onClick={() => void reprint(s.id)}>Reprint labels</button>{msg[s.id] ? ` · ${msg[s.id]}` : ""}</div>}
