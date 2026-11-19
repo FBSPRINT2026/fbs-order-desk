@@ -24182,3 +24182,15 @@ main.main .rvg-sub{margin-bottom:10px}
 .sbl-ask{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:var(--r);border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 10%,var(--surface))}
 .sbl-ask b{font-size:14px;color:var(--ink)}
 .sbl-ask p{margin:0;font-size:13.5px;color:var(--ink-2)}
+/* the named tiles fit the panel's width: Planning 3 and Sales 2 share the first line, Press & crew's 5 the second */
+.mzc-tools.shut .msk-row{grid-template-columns:minmax(0,3fr) minmax(0,2fr)}
+.mzc-tools.shut .msk-g{display:grid;align-content:start;column-gap:2px}
+.mzc-tools.shut .msk-g.plan{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mzc-tools.shut .msk-g.sales{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mzc-tools.shut .msk-g.press{grid-template-columns:repeat(5,minmax(0,1fr))}
+.mzc-tools.shut .msk-gl{grid-column:1/-1}
+.mzc-tools.shut .msk-g .msk-b{width:auto;min-width:0;overflow-wrap:anywhere}
+/* Live clock at the top right of Tools, on its title line (Nick, Nov 19 2026) */
+.mzc-th .msk-live{all:unset;cursor:pointer;margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.mzc-th .msk-live:disabled{cursor:default;opacity:.6}
+.mzc-th .msk-live:focus-visible{outline:2px solid var(--accent)}

@@ -3256,7 +3256,9 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
       {/* the tools, folding to a row of icons (remembered) */}
       <section className={"mzc-tools" + (toolsOpen ? "" : " shut")}>
         <div className="mzc-th"><button type="button" className="mzc-tt" onClick={() => setToolsOpen(!toolsOpen)} aria-expanded={toolsOpen}><span className="car">{toolsOpen ? "▾" : "▸"}</span>Tools</button>
-{view === "day" && <><span className="spacer" /><Link className="linkbtn" href="/shop/settings/production">Edit crews</Link></>}</div>
+{view === "day" && <><span className="spacer" /><Link className="linkbtn" href="/shop/settings/production">Edit crews</Link></>}
+{/* Live clock, top right of Tools (Nick, Nov 19 2026) */}
+<button type="button" className={"msk-live" + (s.liveClock ? " on" : "")} disabled={!canEquip} onClick={() => void setLiveClock(!s.liveClock)} title={s.liveClock ? "Live clock is on: the schedule follows the time clock and press timers (not started moves up to now, unfinished days roll to today). Click to plan by hand." : "Live clock is off: the schedule is a plan made by hand, like Printavo; nothing moves on its own. Click to follow the time clock."}><span>Live clock</span><span className="msk-sw" aria-hidden><i /></span></button></div>
               <div className="msk-row">
                 <span className="msk-g plan"><span className="msk-gl">Planning</span>
                   
@@ -3264,8 +3266,7 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                   <button type="button" className="btn msk-b" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}><SkIco d="norm" />Renormalize</button>
                   <button type="button" className="btn msk-b" title="Set what's really done: counted, printed, ready, completed" onClick={() => setStandOpen(true)}><SkIco d="prog" />Where things stand</button>
                 </span>
-                <span className="msk-g press"><span className="msk-gl">Press &amp; crew
-<button type="button" className={"msk-live" + (s.liveClock ? " on" : "")} disabled={!canEquip} onClick={() => void setLiveClock(!s.liveClock)} title={s.liveClock ? "Live clock is on: the schedule follows the time clock and press timers (not started moves up to now, unfinished days roll to today). Click to plan by hand." : "Live clock is off: the schedule is a plan made by hand, like Printavo; nothing moves on its own. Click to follow the time clock."}><span>Live clock</span><span className="msk-sw" aria-hidden><i /></span></button></span>
+                <span className="msk-g press"><span className="msk-gl">Press &amp; crew</span>
                   <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Progress</button>
                   <button type="button" className="btn msk-b" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}><SkIco d="ot" />Overtime</button>
                   <button type="button" className="btn msk-b" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}><SkIco d="shift" />Shift</button>
