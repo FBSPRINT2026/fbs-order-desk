@@ -83,9 +83,16 @@ export function addressFromText(text: string, name = "", company = ""): ShipAddr
  * address read from text and by the ship window for a shipment saved before this.
  */
 export function splitSuite(a: ShipAddress): ShipAddress {
-  if ((a.street2 || "").trim()) return a;
-  const m = (a.street1 || "").match(/^(.*[a-z].*?)[,\s]+((?:(?:suite|ste|unit|apt|bldg|building|floor|fl|room|rm)\b\.?|#)\s*(?:[\w-]*\d[\w-]*|[a-z]))$/i);
-  return m ? { ...a, street1: m[1].trim().replace(/,$/, ""), street2: m[2].trim() } : a;
+  const KW = "(?:suite|ste|unit|apt|bldg|building|floor|fl|room|rm)";
+  const s1 = (a.street1 || "").trim(), s2 = (a.street2 || "").trim();
+  // already split in the wrong place: "2120 Servomation Road, Bldg" + "#2" (Nick, Nov 19 2026) → the word goes with its number
+  const tail = s1.match(new RegExp(`^(.*[a-z].*?)[,\\s]+(${KW}\\b\\.?)$`, "i"));
+  if (tail && s2) return { ...a, street1: tail[1].trim().replace(/,$/, ""), street2: `${tail[2]} ${s2}` };
+  if (s2) return a;
+  // "…, Bldg #2", "… Suite 220", "… Ste. 3", "… Unit B", "… #4", "… Bldg 2 Suite 100": one or more, at the end
+  const one = `(?:${KW}\\b\\.?\\s*#?|#)\\s*(?:[\\w-]*\\d[\\w-]*|[a-z])`;
+  const m = s1.match(new RegExp(`^(.*?[a-z].*?)[,\\s]+((?:${one}[,\\s]*)+)$`, "i"));
+  return m ? { ...a, street1: m[1].trim().replace(/,$/, ""), street2: m[2].trim().replace(/,$/, "") } : a;
 }
 
 export const addressReady = (a: ShipAddress) => !!(a.street1 && a.city && a.state && a.zip && (a.name || a.company));

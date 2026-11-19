@@ -558,3 +558,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 3:13pm · 1.3.801 · Nick · After Create labels: a labels pop-up in the middle (a 4x6 picture and tracking per box, Print this one, Print all at the top, whether they reached the Zebra, Open 4x6 PDF of every box, Done)
 - Nov 19 3:20pm · 1.3.802 · Nick · + Tracking's ship-to shows the customer's PO under the address (its copy is the PO number)
 - Nov 19 3:20pm · 1.3.803 · Nick · + Tracking: the PO line's copy says it copies the PO number
+- Nov 19 3:23pm · 1.3.804 · Nick · Addresses: the building word goes on the second line with its number ("Bldg #2", "Bldg 2 Suite 100"), and one split in the wrong place before is put right
