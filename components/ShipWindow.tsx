@@ -78,6 +78,8 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const [note, setNote] = useState(existing?.note || "");
   const [rates, setRates] = useState<Rate[] | null>(existing?.rates || null);
   const [pick, setPick] = useState<string>(existing?.service ? `${existing.carrier}|${existing.service}` : "");
+  // why it isn't going Ground (Nick, Nov 19 2026: "you should have to override it to go out of ground")
+  const [why, setWhy] = useState("");
   const [tracking, setTracking] = useState(false);
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const [scan, setScan] = useState("");
@@ -345,12 +347,30 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
               {busy === "rates" && !rates && <div className="faint" style={{ fontSize: 13 }}>Comparing UPS, FedEx and USPS from {settings.from.zip || "our ZIP"}…</div>}
               {rates ? (plan ? (
                 <>
-                  {/* the two quick picks */}
+                  {/* Default shipping: Ground, always picked to start, with when it gets there against the in-hands date
+                      (Nick, Nov 19 2026: "by default it should just say default shipping FedEx ground") */}
+                  {plan.ground && (() => { const g = plan.ground, on = pick === g.k; return <>
+                    <button type="button" tabIndex={-1} className={"sw-def" + (on ? " on" : "") + (g.late ? " late" : "")} onClick={() => { setPick(g.k); setWhy(""); }}>
+                      <input type="radio" readOnly checked={on} tabIndex={-1} aria-label={`${g.r.carrier} ${niceService(g.r.service)}`} />
+                      <span className="sw-def-n"><small>Default shipping</small><b>{g.r.carrier} {niceService(g.r.service)}</b><span>Arrives {g.at ? dayName(g.at) : "(no estimate)"}{bill === "fbs" ? ` · ${money(g.r.price)}` : " · their account"}</span></span>
+                      {plan.need && <em className={g.late ? "late" : "ok"}>{g.late ? `${Math.max(1, Math.round(((g.at ? +g.at : 0) - +plan.need) / 86400000))} day${Math.round(((g.at ? +g.at : 0) - +plan.need) / 86400000) > 1 ? "s" : ""} late` : "Arrives on time"}</em>}
+                    </button>
+                    {g.late && plan.need && <div className="sw-warn">Ground won&apos;t arrive before the in-hands date ({dayName(plan.need)}). Pick one below to get it there on time, or keep Ground.</div>}
+                    {asked && !/ground/i.test(asked) && <div className="faint" style={{ fontSize: 12.5 }}>The order says {asked}.</div>}
+                    {!on && pick && (() => { const o = plan.days.flatMap((d) => d.opts).concat(plan.beaten).find((x) => x.k === pick); return o ? (
+                      <div className="sw-over">
+                        <b>Not Ground: {o.r.carrier} {niceService(o.r.service)}</b>
+                        <span>Only about 1 in 100 boxes ships faster than Ground. Why this one?</span>
+                        <div>{["Customer asked for it", "Ground is too late"].map((w) => <button key={w} type="button" className={"btn sm" + (why === w ? " on" : "")} onClick={() => setWhy(w)}>{w}{why === w ? " ✓" : ""}</button>)}<button type="button" className="btn sm" onClick={() => { setPick(g.k); setWhy(""); }}>Back to Ground</button></div>
+                      </div>
+                    ) : null; })()}
+                  </>; })()}
+                  {/* the quick picks, always shown */}
                   <div className="sw-picks">
                     {[
+                      ...(plan.need && plan.cheapestOnTime ? [{ o: plan.cheapestOnTime, t: "Cheapest on time" }] : []),
                       { o: plan.cheapest, t: "Cheapest" },
                       { o: plan.fastest, t: "Fastest" },
-                      ...(plan.need && plan.cheapestOnTime && plan.cheapestOnTime !== plan.cheapest && plan.cheapestOnTime !== plan.fastest ? [{ o: plan.cheapestOnTime, t: "Cheapest on time" }] : []),
                     ].map(({ o, t: title }) => (
                       <button key={title} type="button" tabIndex={-1} className={"sw-pick" + (pick === o.k ? " on" : "") + (o.late ? " late" : "")} onClick={() => setPick(o.k)}>
                         <span className="sw-pick-t">{title}{o.late ? " · late" : ""}</span>
@@ -462,7 +482,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
           <button type="button" className="btn" disabled={!!busy} onClick={async () => { if (await save("draft")) onDone(`Saved #${t.number}.`); }}>{busy === "save" ? "Saving…" : "Save for later"}</button>
           {tracking
             ? <button type="button" className="btn primary" disabled={!!busy || !boxes.some((b) => b.tracking)} onClick={async () => { if (await save("shipped")) onDone(`#${t.number} marked shipped.`); }}>Mark shipped</button>
-            : <button type="button" className="btn primary" disabled title="Buying labels is the next step: rates work now">{chosen ? `Create labels · ${chosen.carrier} ${chosen.service}` : "Create labels"}</button>}
+            : <button type="button" className={"btn primary" + (chosen && plan?.ground && pick !== plan.ground.k ? " danger" : "")} disabled title="Buying labels is the next step: rates work now">{chosen ? `Create labels · ${chosen.carrier} ${niceService(chosen.service)}` : "Create labels"}</button>}
         </div>
       </div>
     </div>

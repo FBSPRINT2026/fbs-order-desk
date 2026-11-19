@@ -24005,3 +24005,20 @@ main.main .rvg-sub{margin-bottom:10px}
 .trk-b{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:420px;margin-top:2px}
 .trk-b select{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:13px;color:var(--ink);padding:0 6px}
 @media (max-width:700px){.trk{padding-left:14px}}
+/* the ship window's Default shipping (Ground) card and the "Not Ground" check (Nick, Nov 19 2026) */
+.sw-def{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 14px;border:2px solid var(--line);border-radius:12px;background:var(--surface)}
+.sw-def.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.sw-def.late{border-color:var(--warn)}
+.sw-def input{margin:0}
+.sw-def-n{display:flex;flex-direction:column;gap:1px;min-width:0}
+.sw-def-n small{font-size:11.5px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+.sw-def-n b{font-size:15px}
+.sw-def-n span{font-size:12.5px;color:var(--ink-3)}
+.sw-def em{font-style:normal;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap}
+.sw-def em.ok{background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok)}
+.sw-def em.late{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:var(--warn)}
+.sw-over{display:flex;flex-direction:column;gap:5px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--danger) 45%,var(--line));border-radius:8px;background:color-mix(in srgb,var(--danger) 7%,var(--surface));font-size:12.5px;color:var(--danger)}
+.sw-over b{font-size:13px}
+.sw-over > div{display:flex;gap:6px;flex-wrap:wrap}
+.sw-over .btn.on{border-color:var(--danger);color:var(--danger)}
+.btn.primary.danger{background:var(--danger);border-color:var(--danger);color:#fff}
