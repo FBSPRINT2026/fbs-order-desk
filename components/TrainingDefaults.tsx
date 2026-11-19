@@ -15,6 +15,9 @@ export default function TrainingDefaults({ trainingId }: { trainingId: string })
   const sb = createClient();
   const [d, setD] = useState<Defaults | null>(null);
   const [state, setState] = useState("");
+  // the presses a weekly run can be on (Settings → Production)
+  const [presses, setPresses] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => { void sb.from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setPresses((((data?.data as { production?: { machines?: { id: string; name: string; active?: boolean }[] } } | null)?.production?.machines) || []).filter((m) => m.active !== false).map((m) => ({ id: m.id, name: m.name })))); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let on = true;
     void sb.from("order_trainings").select("defaults").eq("id", trainingId).maybeSingle().then(({ data }) => { if (on) setD(((data?.defaults || {}) as Defaults)); });
@@ -50,10 +53,11 @@ export default function TrainingDefaults({ trainingId }: { trainingId: string })
   const shipV = val("ship_method") as string | undefined;
   // a weekly run (Nick, Nov 16 2026, All My Sons: in by Thursday, runs the next Tuesday, due that Friday)
   const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const saveRun = async (k: "cutoff" | "day" | "due", v: string) => {
+  const saveRun = async (k: "cutoff" | "day" | "due" | "press", v: string) => {
     const r = { ...(d.run || { cutoff: 4, day: 2, due: 5 }) };
     const next: Defaults = { ...d };
-    if (v === "") delete next.run; else { r[k] = +v; next.run = r; }
+    if (k === "press") { if (v) r.press = v; else delete r.press; next.run = r; }
+    else if (v === "") delete next.run; else { r[k] = +v; next.run = r; }
     setD(next); setState("Saving…");
     const { error } = await sb.from("order_trainings").update({ defaults: next }).eq("id", trainingId);
     setState(error ? `Couldn't save: ${error.message}` : "Saved");
@@ -100,6 +104,13 @@ export default function TrainingDefaults({ trainingId }: { trainingId: string })
         {runSel("cutoff", "Weekly run: in by")}
         {d.run && runSel("day", "Runs on")}
         {d.run && runSel("due", "Due")}
+        {d.run && <div className="field tdf-f">
+          <label htmlFor={`tdf-run-press-${trainingId}`}>Runs on press</label>
+          <select id={`tdf-run-press-${trainingId}`} value={d.run.press || ""} onChange={(e) => void saveRun("press", e.target.value)} title="Its orders book themselves on this press on the run day, never Ready to schedule">
+            <option value="">Booked by hand</option>
+            {presses.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </div>}
       </div>
     </div>
   );

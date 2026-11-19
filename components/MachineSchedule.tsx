@@ -160,6 +160,13 @@ const dayShort = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en
 /** 420 → "7a", 510 → "8:30a" */
 /** how a job prints, for "one run": its print spots and their color counts, once each ("full back|1,left chest|1") */
 const printSig = (n: Need) => [...new Set(n.steps.map((x) => `${(x.location || "").trim().toLowerCase()}|${x.colors}`))].sort().join(",");
+/** a run's name: what its jobs' names start with ("AMS"), else the customer, and "weekly run" when they have a run day */
+const runName = (cs: { job: { name: string; customer: string; prod?: string | null } }[]) => {
+  const words = cs.map((c) => (c.job.name || "").split(/\s+/));
+  let k = 0; while (words.every((w) => w[k] && w[k].toLowerCase() === words[0][k].toLowerCase() && k < w.length - 1)) k++;
+  const pre = words[0].slice(0, k).join(" "), weekly = cs.every((c) => !!c.job.prod);
+  return { pre, k, title: `${pre || abbrCo(cs[0].job.customer || "")}${weekly ? " weekly run" : " run"}` };
+};
 const firstWord = (t?: string | null) => (t || "").trim().split(/\s+/)[0].toLowerCase();
 const clock = (min: number) => { const h = Math.floor(min / 60) % 24, m = Math.round(min % 60); const hh = h % 12 || 12, ap = h >= 12 ? "p" : "a"; return m ? `${hh}:${String(m).padStart(2, "0")}${ap}` : `${hh}${ap}`; };
 const clockLong = (min: number) => { const h = Math.floor(min / 60) % 24, m = Math.round(min % 60); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`; };
@@ -814,6 +821,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       return { job, machine: mach, day: d0, startMin: sane ? st0!.min : null, minutes: block };
     }).filter(Boolean) as typeof pvLane);
   }, [today]);
+  // a customer's weekly run books itself (lib/weeklyRun.ts: All My Sons on Kelsy's press every Tuesday; Nick, Nov 19 2026):
+  // checked each time the schedule opens, and redrawn when it moved anything
+  useEffect(() => { void fetch("/api/schedule/weekly-runs", { method: "POST" }).then((r) => r.json()).then((j) => { if ((j.booked || 0) + (j.moved || 0) + (j.removed || 0) > 0) void load(); }).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
 
   const byKey = useMemo(() => new Map((jobs || []).map((j) => [j.key, j])), [jobs]);
@@ -1764,6 +1774,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     {(() => {
                       // the day's jobs, each listed once on the day it starts (a job running into later days says where it ends)
                       const js = joined(m, d).filter(({ g }) => !(segs.ofCard.get(g.c.key) || []).some((x) => x.day < d));
+                      // work carried over from the day before on this press: one line, "continued" (Nick, Nov 19 2026)
+                      const carried = joined(m, d).filter(({ g }) => (segs.ofCard.get(g.c.key) || []).some((x) => x.day < d));
                       // one run (the same art and in-hands date, or orders run together: AMS's weekly run) is one box (Nick, Nov 19)
                       const blocks: (typeof js)[] = [];
                       for (const x of js) { const lb = blocks[blocks.length - 1], p = lb?.[lb.length - 1]; if (p && (oneRun(p.g.c, x.g.c) || x.g.c.sameArt?.with === p.g.c.job.number)) lb.push(x); else blocks.push([x]); }
@@ -1775,20 +1787,17 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       const rows = blocks.map((b0) => {
                         if (b0.length > 1) {
                           const c0 = b0[0].g.c, end = b0[b0.length - 1].end, mins = b0.reduce((t, x) => t + x.g.c.minutes, 0), pcs = b0.reduce((t, x) => t + x.g.c.need.qty, 0);
-                          const names = b0.map((x) => x.g.c.job.name || ""), words = names.map((n) => n.split(/\s+/));
-                          let k = 0; while (words.every((w) => w[k] && w[k].toLowerCase() === words[0][k].toLowerCase() && k < w.length - 1)) k++;
-                          const pre = words[0].slice(0, k).join(" "), weekly = b0.every((x) => !!x.g.c.job.prod);
-                          const title = `${pre || abbrCo(c0.job.customer || "")}${weekly ? " weekly run" : " run"}`;
+                          const { pre, k, title } = runName(b0.map((x) => x.g.c));
                           return (
                             <div key={"run" + c0.key} className="mwp-run">
                               <div className="mwp-run-h" draggable title="Drag to move the whole run" onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: b0.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }}>
                                 <b>{title}</b><span>{clock(b0[0].start)}–{clock(end)} · {fmtMin(mins)} · {b0.length} POs · {pcs.toLocaleString()} pcs</span>
                               </div>
                               {b0.map(({ g }) => { const c = g.c, done = c.slot?.status === "done", late = segLate((segs.ofCard.get(c.key) || []).slice(-1)[0] || g); return (
-                                <button key={c.key} type="button" draggable data-key={c.key} className={"mwp-row" + (done ? " done" : "") + (c.slot?.status === "running" ? " run" : "") + (late && !done ? " late" : "") + (isHit(c.job) ? " ms-hit" : "")}
+                                <button key={c.key} type="button" draggable data-key={c.key} className={"mwp-row" + (done ? " done" : "") + (!done && dotOf(c, ord(g.day) * 1440 + g.start)?.k !== "g" ? " nc" : "") + (c.slot?.status === "running" ? " run" : "") + (late && !done ? " late" : "") + (isHit(c.job) ? " ms-hit" : "")}
                                   title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); setOpen(c); }}
                                   onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
-                                  <b>{(pre ? (c.job.name || "").split(/\s+/).slice(k).join(" ") : c.job.name) || shortLabel(c.need.label)}</b><span>#{c.job.number}{done ? " ✓" : ""}</span><i>{fmtMin(c.minutes)}</i>
+                                  <b>{dotEl(c, g)}{(pre ? (c.job.name || "").split(/\s+/).slice(k).join(" ") : c.job.name) || shortLabel(c.need.label)}</b><span>#{c.job.number}{done ? " ✓" : ""}</span><i>{fmtMin(c.minutes)}</i>
                                 </button>
                               ); })}
                             </div>
@@ -1818,6 +1827,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                           </div>
                           <span className={u > cap ? "over" : ""}>{u > cap ? `${fmtMin(u - cap)} over` : isToday ? `${fmtMin(left)} left` : `${fmtMin(Math.max(0, cap - u))} open`}</span>
                         </div>}
+                        {carried.length > 0 && <button type="button" className="mwp-cont" onClick={() => setOpen(carried[0].g.c)} title={carried.map((x) => `#${x.g.c.job.number} ${x.g.c.job.name || ""}`).join("\n")}>↳ <b>{carried.length > 1 ? runName(carried.map((x) => x.g.c)).title : carried[0].g.c.job.name || `#${carried[0].g.c.job.number}`}</b> continued · until {clock(Math.max(...carried.map((x) => x.end)))}{carried.length > 1 ? ` · ${carried.length} POs` : ""}</button>}
                         {rows}
                       </>;
                     })()}

@@ -24,7 +24,7 @@ export type TrainingDefaults = {
   /** a weekly run (Nick, Nov 16 2026: Nine18's All My Sons orders "if they came in last Thursday… this week's… after
    *  Thursday… next Tuesday, with the due date at the end of the week"): weekdays, 0 = Sunday. A job in by the cutoff day
    *  runs on the run day after it and is due on the due day after that (lib/orderTrainings.ts runDates) */
-  run?: { cutoff: number; day: number; due: number };
+  run?: { cutoff: number; day: number; due: number; /** the press the run is on (Nick, Nov 19 2026: Kelsy's, Tuesday, all day): its orders book themselves there (lib/weeklyRun.ts) */ press?: string };
   /** these orders get the simple work order (Nick, Nov 17 2026: "Simple work order should really just be Cedar Promo's
    *  cart orders… and All My Sons"): the whole job on a page, a card per group as on the order screen, no prices. Set
    *  by staff only, never learned (app/print/[id]/Docs.tsx CartWorkOrder) */ simple_wo?: boolean;

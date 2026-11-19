@@ -44,12 +44,14 @@ async function go(admin: ReturnType<typeof createAdminClient>, opts: { force?: b
     const portalInbox = await (await import("@/lib/portalInbox")).checkPortalInbox(admin, { deadline: Date.now() + 60000 }).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // 0b. One Stop doesn't email manifests: its tracking for our open One Stop orders, from their API
     const onestop = await osTrackingPass(admin).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    // 0c. customers' weekly runs book themselves (lib/weeklyRun.ts: All My Sons on Kelsy's press every Tuesday)
+    const weeklyRuns = await (await import("@/lib/weeklyRun")).keepWeeklyRuns(admin).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     // and its catalog copy for the garment search, when it's a week old (a bit each pass until done)
     if (await osCatalogDue(admin).catch(() => false)) await osCatalogSync(admin, Date.now() + 30_000).catch(() => null);
     const tracking = await goodsCheck(admin, Date.now() + 40000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const rules = await resolvePending(admin, Date.now() + 70000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const ai = await aiMatchPending(admin, end, { max: opts.max ?? 25, force: opts.force });
-    return NextResponse.json({ ...ai, rules, tracking, onestop, portalInbox });
+    return NextResponse.json({ ...ai, rules, tracking, onestop, portalInbox, weeklyRuns });
   }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   finally { await admin.rpc("printavo_sync_release", { p_job: "goods-ai" }); }

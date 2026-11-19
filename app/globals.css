@@ -23818,3 +23818,8 @@ main.main .rvg-sub{margin-bottom:10px}
 .mzc-top > .mzc-ai{margin:0}
 @media (max-width:1100px){.mzc-top{grid-template-columns:minmax(0,1fr)}}
 .mwp-nav{display:inline-flex;gap:6px;flex-wrap:wrap}
+/* Weekly: a run carried over from the day before is one "continued" line; a run's PO not counted yet is grayed (Nov 19) */
+.mwp-cont{all:unset;box-sizing:border-box;cursor:pointer;display:block;padding:4px 8px;border-radius:6px;border:1px dashed color-mix(in srgb,var(--pt) 45%,var(--line));background:color-mix(in srgb,var(--pt) 6%,var(--surface));color:color-mix(in srgb,var(--pt) 70%,var(--ink));font-size:12px;line-height:1.35;min-width:0}
+.mwp-cont b{font-weight:700}
+.mwp-row.nc b,.mwp-row.nc i{color:var(--ink-3)}
+.mwp-row b .gtee,.mwp-row b svg{margin-right:4px;vertical-align:-1px}
