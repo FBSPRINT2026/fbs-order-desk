@@ -22,6 +22,7 @@ import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { newQuote } from "@/lib/quickNew";
 import { bulkDeleteOrders } from "@/app/shop/bulk-delete-actions";
+import { markPrinted } from "@/app/shop/parts-actions";
 import RowLink from "@/components/RowLink";
 import { useUrlSearch } from "@/lib/useUrlSearch";
 
@@ -215,6 +216,8 @@ export default function OrdersPage() {
         {picked.size > 0 && <button type="button" className="linkbtn" onClick={() => setPicked(new Set())}>Clear</button>}
         <span className="spacer" />
         <span className="faint" style={{ fontSize: 12.5 }}>Orders made here only. Printavo history, paid orders and orders sent to Printavo are never deleted.</span>
+        {/* printed already, never marked (Nick, Nov 19 2026): mark a part printed on every order picked (lib/partsPrinted.ts) */}
+        {(["screen", "embroidery", "heat"] as MachineType[]).map((k) => <button key={"mp" + k} type="button" className="btn" disabled={!picked.size || bulkBusy} onClick={async () => { setBulkBusy(true); setBulkMsg(""); const r = await markPrinted([...picked], k); setBulkBusy(false); if (!r.ok) { setBulkMsg(r.error); return; } setBulkMsg(`${MIX_WORD[k]} marked printed on ${r.done} order${r.done === 1 ? "" : "s"}${r.moved ? `; ${r.moved} moved on to Ready (everything printed)` : ""}.`); reload(); }}>Mark {MIX_WORD[k].toLowerCase()} printed</button>)}
         <button type="button" className={"btn danger" + (bulkArm ? " armed" : "")} disabled={!picked.size || bulkBusy} onClick={() => void bulkDelete()}>{bulkBusy ? "Deleting…" : bulkArm ? `Click again to delete ${picked.size} order${picked.size === 1 ? "" : "s"}` : `Delete ${picked.size || ""}`.trim()}</button>
         <button type="button" className="btn ghost" onClick={stopPicking}>Cancel</button>
       </div>}

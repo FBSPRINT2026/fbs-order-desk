@@ -182,21 +182,10 @@ export async function POST(req: Request) {
         if ((s as { issue_id?: string | null }).issue_id) await admin.from("production_issues").update({ status: "done", done_at: now }).eq("id", (s as { issue_id?: string | null }).issue_id!);
         await admin.from("production_slot_log").insert({ slot_id: s.id, order_id: s.order_id, machine: s.machine, action: "done", progress: 1, note: "Finished on the phone", by: who.name });
       }
-      // its last job on the schedule: the order goes on to Fulfillment (as the schedule's Complete does), unless pieces are
-      // still to print (an open Issue) or another part (embroidery, heat press) isn't done
-      const [{ data: rest }, { data: oi }, { data: o }] = await Promise.all([
-        admin.from("production_slots").select("id").eq("order_id", job.id).neq("status", "done").limit(1),
-        admin.from("production_issues").select("id").eq("order_id", job.id).eq("status", "open").limit(1),
-        admin.from("orders").select("status").eq("id", job.id).maybeSingle(),
-      ]);
-      const cur = (o?.status as string) || "";
-      if (!(rest || []).length && !(oi || []).length && ["approved", "art", "blanks", "production"].includes(cur)) {
-        // straight on to Ready (pickup / ship / deliver), as the schedule's Complete does to start with (Nick, Nov 16 2026:
-        // "as soon as Miguel marks it done… it moves to the next step"); the catcher's count comes after and reports
-        // anything short as a problem
-        const up = await admin.from("orders").update({ status: "ready", type: "invoice" }).eq("id", job.id);
-        if (!up.error) await admin.from("order_events").insert({ order_id: job.id, kind: "status", detail: "ready", actor: who.name });
-      }
+      // its last part printed: the order goes on to Ready (Ready for Pickup / Ready for Delivery / Shipping), unless pieces
+      // are still to print (an open Issue) or another part (embroidery, heat press) isn't printed, booked or not
+      // (lib/partsPrinted.ts; Nick, Nov 19 2026: "if screen printing is done and embroidery's not done… it stays in production")
+      await (await import("@/lib/partsPrinted")).moveOnIfPrinted(admin, job.id, who.name);
     }
   } else err = "Pick what you're doing.";
   if (err) return NextResponse.json({ error: err }, { status: 409 });

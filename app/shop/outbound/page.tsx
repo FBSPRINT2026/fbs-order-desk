@@ -10,6 +10,7 @@ import { custLabel } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { mergeSettings } from "@/lib/pricing";
 import { estimateBoxes } from "@/lib/shipping";
+import ShipCheck from "@/components/ShipCheck";
 import ShippingCenter from "@/components/shipping/ShippingCenter";
 import { markPickedUp, outboundLookup, type LookupJob, type Where } from "./actions";
 
@@ -38,6 +39,9 @@ export default function Outbound() {
   const [q, setQ] = useState(""), [found, setFound] = useState<LookupJob[] | null>(null), [looking, setLooking] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [shipReq, setShipReq] = useState<{ n: string; at: number } | null>(null);
+  // Ship on a job not ready to ship yet asks first (components/ShipCheck.tsx; Nick, Nov 19 2026); the Shipping Center loads
+  // again after, with it on the list
+  const [checkN, setCheckN] = useState(""), [shipKey, setShipKey] = useState(0);
   const [labelFor, setLabelFor] = useState<{ n: string; at: number } | null>(null);
   const [scanned, setScanned] = useState<string>("");
   const [busy, setBusy] = useState("");
@@ -102,7 +106,7 @@ export default function Outbound() {
   function startShipping(n: string): string {
     const num = n.trim().replace(/^#/, "").match(/\d{3,7}/)?.[0];
     if (!num) return "Type or scan a job #.";
-    if (!of("ship").some((r) => r.number === num)) return `#${num} isn't ready to ship. It has to be Ready, with delivery by shipping.`;
+    if (!of("ship").some((r) => r.number === num)) { setCheckN(num); return ""; }
     setMsg(null); setTab("ship"); setShipReq({ n: num, at: Date.now() });
     return "";
   }
@@ -158,7 +162,7 @@ export default function Outbound() {
                     <td className="r">
                       <button type="button" className="btn sm" onClick={() => label(j.number)}>Label</button>{" "}
                       {j.where === "shelf" && !j.printavo && <button type="button" className="btn sm" disabled={!!busy} onClick={() => void pickedUp([j.id])}>{busy === j.id ? "…" : "Picked up"}</button>}
-                      {j.where === "ship" && <button type="button" className="btn sm primary" onClick={() => shipOrSay(j.number)}>Ship</button>}
+                      {(j.where === "ship" || j.where === "printing" || j.where === "packing") && !j.printavo && <button type="button" className={"btn sm" + (j.where === "ship" ? " primary" : "")} onClick={() => shipOrSay(j.number)} title={j.where === "ship" ? undefined : "Not ready to ship yet: asks what you're shipping"}>Ship</button>}
                     </td>
                   </tr>
                 ))}</tbody>
@@ -172,7 +176,8 @@ export default function Outbound() {
             <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)}><span className="ot-l">{l}</span>{rows && n > 0 && <span className="aa-n">{n}</span>}</button>)}
         </nav>
         {/* the Shipping Center stays mounted so its ship window can open from a scan on any tab */}
-        <div hidden={tab !== "ship"}><ShippingCenter embedded shipReq={shipReq} /></div>
+        <div hidden={tab !== "ship"}><ShippingCenter key={shipKey} embedded shipReq={shipReq} /></div>
+        {checkN && <ShipCheck number={checkN} onClose={() => setCheckN("")} onReady={() => { const n = checkN; setCheckN(""); void load(); setShipKey((k) => k + 1); setMsg(null); setTab("ship"); setShipReq({ n, at: Date.now() }); }} />}
         {tab !== "ship" && (!rows ? <div className="faint">Loading…</div> : list(of(tab), tab))}
       </div>
 

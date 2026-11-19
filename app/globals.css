@@ -23829,3 +23829,14 @@ main.main .rvg-sub{margin-bottom:10px}
 .spt-amt input{height:36px;width:110px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
 .spt-bill .spt-seg{grid-template-columns:repeat(3,minmax(0,1fr));max-width:480px;flex:1 1 320px}
 .spt-bill .spt-seg button:last-child{border-right:0}
+/* Ship with a part not printed (components/ShipCheck.tsx; Nick, Nov 19 2026) */
+.shc{max-width:520px}
+.shc-l{font-size:13px;font-weight:700;color:var(--ink);margin:4px 0 8px}
+.shc-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (max-width:560px){.shc-opts{grid-template-columns:minmax(0,1fr)}}
+.shc-opt{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:3px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.shc-opt b{font-size:14px;color:var(--ink)}
+.shc-opt span{font-size:12.5px;color:var(--ink-3);line-height:1.4}
+.shc-opt.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+.shc-opt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mxs-pp{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--warn-soft);color:color-mix(in srgb,var(--warn) 75%,var(--ink));white-space:nowrap;margin-right:4px}

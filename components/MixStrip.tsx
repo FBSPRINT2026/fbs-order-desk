@@ -11,7 +11,9 @@ import { kindsOf, mixParts, MIX_ABBR, type MixPart, type MixSlot } from "@/lib/m
  */
 export function MixStrip({ parts }: { parts: MixPart[] | undefined }) {
   if (!parts || parts.length < 2) return null;
-  return <div className="mxs" data-notranslate>{parts.map((p) => <span key={p.kind} className={"mxs-p " + p.state} title={p.note}>{MIX_ABBR[p.kind]}{p.state === "ok" ? <svg viewBox="0 0 12 12" aria-hidden><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg> : null}</span>)}</div>;
+  // some parts printed, some not: In Production · Partly printed (Nick, Nov 19 2026; staff only, never the customer)
+  const partly = parts.some((p) => p.state === "ok") && parts.some((p) => p.state !== "ok");
+  return <div className="mxs" data-notranslate>{partly && <span className="mxs-pp" title="Some parts printed, the rest still to go: it ships when everything's printed (or Ship asks)">Partly printed</span>}{parts.map((p) => <span key={p.kind} className={"mxs-p " + p.state} title={p.note}>{MIX_ABBR[p.kind]}{p.state === "ok" ? <svg viewBox="0 0 12 12" aria-hidden><path d="M2.5 6.3l2.3 2.3 4.7-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg> : null}</span>)}</div>;
 }
 
 type O = { id: string; status?: string | null; groups?: unknown };

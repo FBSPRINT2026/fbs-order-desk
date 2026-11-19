@@ -201,6 +201,14 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
       // the customer's Shipped email with tracking, if they get it (lib/customerEmailServer.ts)
       const sid = (saved as { id?: string } | null)?.id || existing?.id;
       if (sid) void shipmentShipped(sid).catch(() => null);
+      // part of it shipped, the rest still printing (components/ShipCheck.tsx): the order stays In Production, partly
+      // shipped, and this shipment is the part (the rest ships as its own when it's printed)
+      if (sid) {
+        const { data: od } = await sb.from("orders").select("status, flags").eq("id", t.id).maybeSingle();
+        const fl = (Array.isArray(od?.flags) ? od!.flags : []) as { key: string; note?: string }[];
+        const pf = fl.find((f) => f.key === "partial");
+        if (pf && od?.status !== "ready" && !(pf.note || "").startsWith("shipped:")) await sb.from("orders").update({ flags: fl.map((f) => (f === pf ? { ...f, note: `shipped:${sid}` } : f)) }).eq("id", t.id);
+      }
     }
     setBusy("");
     return true;

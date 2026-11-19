@@ -58,20 +58,27 @@ export default function ShippingCenter({ embedded = false, shipReq = null }: { e
   const scanRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
-    const [n, p, st] = await Promise.all([
-      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party").is("discarded_at", null).eq("status", "ready").eq("delivery_method", "ship").order("due_date", { ascending: true, nullsFirst: false }),
+    const [n, p, st, pt] = await Promise.all([
+      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party, flags").is("discarded_at", null).eq("status", "ready").eq("delivery_method", "ship").order("due_date", { ascending: true, nullsFirst: false }),
       sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, po_number, status_name, ship:data->shippingAddress, delivery:data->deliveryMethod, contact:data->contact").is("removed_at", null).ilike("status_name", "%ready to ship%").gte("due_date", oldLiveSince()).order("due_date", { ascending: true, nullsFirst: false }).limit(300),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
+      // shipping part of it now, the rest still printing (components/ShipCheck.tsx; Nick, Nov 19 2026)
+      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party, flags").is("discarded_at", null).in("status", ["approved", "production", "fulfillment"]).not("flags", "is", null),
     ]);
     const s = mergeSettings(st.data?.data); setSettings(s);
-    const news = (n.data || []) as NewRow[], pvs = (p.data || []) as unknown as PvRow[];
+    type Fl = { key: string; note?: string }[] | null;
+    const partOf = (o: { flags?: unknown }) => ((Array.isArray(o.flags) ? o.flags : []) as NonNullable<Fl>).find((f) => f.key === "partial");
+    const parts = ((pt.data || []) as (NewRow & { flags?: unknown })[]).filter((o) => { const f = partOf(o); return !!f && !(f.note || "").startsWith("shipped:"); });
+    const news = [...((n.data || []) as NewRow[]), ...parts], pvs = (p.data || []) as unknown as PvRow[];
     const custIds = [...new Set([...news.map((o) => o.customer_id), ...pvs.map((o) => o.customer_id)].filter(Boolean))] as string[];
     const [{ data: cs }, { data: ships }] = await Promise.all([
       custIds.length ? sb.from("customers").select("*").in("id", custIds) : Promise.resolve({ data: [] }),
       sb.from("shipments").select("*").neq("status", "void").or([news.length ? `order_id.in.(${news.map((o) => o.id).join(",")})` : "", pvs.length ? `archived_order_id.in.(${pvs.map((o) => o.id).join(",")})` : ""].filter(Boolean).join(",") || "id.is.null"),
     ]);
     const cust = Object.fromEntries(((cs || []) as Customer[]).map((c) => [c.id, c]));
-    const shipOf = (key: "order_id" | "archived_order_id", id: string) => ((ships || []) as Shipment[]).filter((x) => x[key] === id).sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] || null;
+    // a part already shipped isn't this shipment (the rest goes as its own)
+    const partShipped = new Set(news.map((o) => (partOf(o as { flags?: unknown })?.note || "").replace(/^shipped:/, "")).filter((x) => x && !x.startsWith("Shipping")));
+    const shipOf = (key: "order_id" | "archived_order_id", id: string) => ((ships || []) as Shipment[]).filter((x) => x[key] === id && !partShipped.has(x.id)).sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] || null;
     const list: Item[] = [
       ...news.map((o): Item => {
         const c = cust[o.customer_id || ""];

@@ -2357,7 +2357,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         }
       }
     }
-    setMsg(`#${c.job.number} complete${moved}.`);
+    setMsg(`#${c.job.number} ${TYPE_WORD[c.need.type] || ""} printed${moved}.`.replace("  ", " "));
     load();
   }
   /** Rush / Firm from the right click (the order's flags, as the job card's were) */

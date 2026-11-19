@@ -63,6 +63,9 @@ import ProjectPicker from "@/components/ProjectPicker";
 import { Pill } from "@/components/bits";
 import { MixStrip, useMixParts } from "@/components/MixStrip";
 import { IssueTag, useOpenIssues } from "@/components/IssueTag";
+import ShipCheck from "@/components/ShipCheck";
+import { markPrinted } from "@/app/shop/parts-actions";
+import { kindsOf, MIX_WORD } from "@/lib/mixParts";
 import SendProofTool from "@/components/tools/SendProofTool";
 import { acceptRequest, requestProofApproval, staffMessage } from "../../actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
@@ -235,6 +238,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<Order | null>(null);
+  // Ship… from the Production menu (components/ShipCheck.tsx)
+  const [shipAsk, setShipAsk] = useState(false);
   // the saved version of the order on screen (its updated_at): an unsaved copy belongs to it (lib/unsavedCopy)
   const baseAt = useRef("");
   useEffect(() => { watchPerson(); }, []);
@@ -1698,6 +1703,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer"><MenuItem icon="clipboard" tone="orange" title="Work order" sub="What the press crew runs from" /></a>
             </div>
           </details>
+          {shipAsk && <ShipCheck number={String(o.number)} onClose={() => setShipAsk(false)} onReady={() => { setShipAsk(false); window.location.href = `/shop/outbound?scan=${o.number}`; }} />}
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">Production ▾</summary>
             <div className="ot-menu">
@@ -1705,6 +1711,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer"><MenuItem icon="clipboard" tone="orange" title="Work order" sub="What the press crew runs from" /></a>
               <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer"><MenuItem icon="label" tone="green" title="Box labels" sub="Print the labels for the boxes" /></a>
               <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)"><MenuItem icon="phone" tone="blue" title="Phone menu" sub="What scanning the QR code opens" /></a>
+              {/* printed by part, after the fact, and Ship (Nick, Nov 19 2026: "mark printed for each… then it'll just say screen
+                  printed"; lib/partsPrinted.ts, components/ShipCheck.tsx) */}
+              {!o.draft && o.type === "invoice" && ["approved", "production", "fulfillment"].includes(o.status) && kindsOf(orderGroups(o)).map((k) => (
+                <button key={"mp" + k} type="button" onMouseDown={(e) => e.preventDefault()} onClick={async (e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); await save(); const r = await markPrinted([o.id], k); if (!r.ok) return say(r.error); say(r.done ? `${MIX_WORD[k]} marked printed${r.moved ? "; everything's printed, so the order moved on to Ready" : ""}.` : `${MIX_WORD[k]} was already printed.`); const { data } = await sb.from("orders").select("status").eq("id", o.id).maybeSingle(); if (data) setO((p) => (p ? { ...p, status: data.status } : p)); loadSide(); }}>
+                  <MenuItem icon="press" tone="green" title={`Mark ${MIX_WORD[k].toLowerCase()} printed`} sub="Printed already: off its schedule" /></button>))}
+              {!o.draft && o.type === "invoice" && ["approved", "production", "fulfillment", "ready"].includes(o.status) && <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={async (e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); await save(); setShipAsk(true); }}>
+                <MenuItem icon="label" tone="orange" title="Ship…" sub="Asks first if a part isn't printed" /></button>}
               {/* a pre-production sample run inside this order (Nov 11, Nick; lib/samples.ts) */}
               {/* a Sample order: start the real order from it, linked both ways (the sample's credited charges come off it) */}
               {!o.draft && o.order_type === "sample" && <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={async (e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); await save(); const r = await fetch("/api/orders/from-sample", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: o.id, group: "all" }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." })); if (r.id) router.push(`/shop/orders/${r.id}`); else if (r.error) setFlash(r.error); }}><MenuItem icon="invoice" tone="green" title="Make the order" sub="The real order from this sample, linked to it" /></button>}
