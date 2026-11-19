@@ -3166,8 +3166,8 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
               return (
                 <div className={"msai " + tp.lvl} aria-label="Shop AI Assistant" onMouseEnter={() => setTipHold(true)} onMouseLeave={() => setTipHold(false)}>
                   <div className="msai-h"><span aria-hidden>✦</span> Shop assistant<span className="spacer" />{tips.length > 1 && <><span className="msai-dots">{tips.map((_, k) => <i key={k} className={k === i ? "on" : ""} />)}</span><button type="button" className="msai-nav" aria-label="Previous tip" onClick={() => setTipI((i - 1 + tips.length) % tips.length)}>‹</button><button type="button" className="msai-nav" aria-label="Next tip" onClick={() => setTipI((i + 1) % tips.length)}>›</button></>}</div>
-                  <div className="msai-b"><div className="msai-t">{tp.t}</div><div className="msai-s">{tp.s}</div></div>
-                  {tp.act && <button type="button" className="btn primary sm msai-go" onClick={tp.act[1]}>{tp.act[0]}</button>}
+                  {/* the tip's button at the right of its own line, so the box never jumps as the tips take turns (Nick, Nov 19 2026) */}
+                  <div className="msai-b"><div className="msai-tl"><div className="msai-t">{tp.t}</div>{tp.act && <button type="button" className="btn sm msai-go" onClick={tp.act[1]}>{tp.act[0]}</button>}</div><div className="msai-s">{tp.s}</div></div>
                 </div>
               );
             })()}

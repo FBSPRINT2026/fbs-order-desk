@@ -24127,3 +24127,6 @@ main.main .rvg-sub{margin-bottom:10px}
 .mzc-wks{display:flex;flex-direction:column;gap:12px;min-width:0}
 .mzc-wks .mzc-ai{margin:0}
 .mzc-wks .mzc-side{display:flex;flex-direction:column;gap:12px}
+.msai-tl{display:flex;align-items:flex-start;gap:10px}
+.msai-tl .msai-t{flex:1;min-width:0}
+.msai-tl .msai-go{flex:none;white-space:nowrap;margin:0}
