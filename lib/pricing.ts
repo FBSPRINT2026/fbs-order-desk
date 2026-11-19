@@ -80,10 +80,12 @@ export const ST: Record<string, (typeof STATUSES)[number]> = { ...Object.fromEnt
 
 /**
  * Ready, in the words of how the order leaves (Nov 11, Nick: "ready to pick up, ready to deliver, ready to ship… the status
- * will just be whatever's in the job"): the order's delivery method. THE one place every status label comes from
+ * will just be whatever's in the job"): the order's delivery method. Its sub statuses (Nick, Nov 19 2026: "Ready, the sub
+ * status of ready pickup, ready for delivery, shipping… when a job is TBD it just becomes ready"): Ready for Pickup,
+ * Ready for Delivery, Shipping, or Ready. THE one place every status label comes from
  * (statusText); a page that has the order passes its delivery_method.
  */
-export const readyLabel = (delivery?: string | null) => (delivery === "ship" ? "Ready to Ship" : delivery === "deliver" ? "Ready to Deliver" : delivery === "pickup" ? "Ready for Pickup" : "Ready");
+export const readyLabel = (delivery?: string | null) => (delivery === "ship" ? "Shipping" : delivery === "deliver" ? "Ready for Delivery" : delivery === "pickup" ? "Ready for Pickup" : "Ready");
 export const statusText = (status: string, delivery?: string | null, portal = false) => (status === "ready" ? readyLabel(delivery) : (ST[status] || ST.quote)[portal ? "portal" : "label"]);
 /** the statuses an order is being worked on in the shop (approved through ready): one list for every "open work" filter */
 export const IN_WORK_STATUSES = ["approved", "art", "blanks", "production", "fulfillment", "ready"];

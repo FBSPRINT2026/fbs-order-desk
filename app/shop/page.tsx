@@ -364,7 +364,7 @@ export default function Dashboard() {
               {panel("Today", "orange", null, (
                 <div className="db-kpis db-kpis-2">
                   <a href="#dash-prod"><span>Due today · late</span><b>{v.today.length}<small> · {v.late.length}</small></b></a>
-                  <Link href="/shop/shipping"><span>Ready to ship</span><b>{v.ship.length}</b></Link>
+                  <Link href="/shop/shipping"><span>Shipping</span><b>{v.ship.length}</b></Link>
                   <Link href="/shop/receiving"><span>Goods arriving</span><b>{goods.today}</b></Link>
                   <Link href="/shop/receiving"><span>Goods arrived</span><b>{goods.arrived}</b></Link>
                   <Link href="/shop/separations"><span>Separations in work</span><b>{seps.length}</b></Link>

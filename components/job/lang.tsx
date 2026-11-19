@@ -141,6 +141,8 @@ const ES: Record<string, string> = {
   "Nothing ready to deliver.": "Nada listo para entregar.",
   "Ready": "Listo",
   "Complete job": "Terminar trabajo",
+  "Printed": "Impreso",
+  "#{0} printed? The whole job is done.": "¿#{0} impreso? Todo el trabajo está terminado.",
   "Complete #{0}? The whole job is printed.": "¿Terminar #{0}? Todo el trabajo está impreso.",
   "Finish this spot only": "Terminar solo esta ubicación",
   "Start job": "Empezar trabajo",

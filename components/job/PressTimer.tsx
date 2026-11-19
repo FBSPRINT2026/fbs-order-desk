@@ -133,11 +133,11 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
               {cur!.phase === "run" && leftAfter.length > 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => setFinishing(runQty(cur!.loc))}>✓ {sameNext
                 ? t("{0} done · set up {1}", t(cur!.loc.replace(/^.* · /, "")), t(sameNext.replace(/^.* · /, "")))
                 : t("{0} done · next group ({1} left)", curG != null ? gname(curG) : t(cur!.loc), groupsLeft)}</button>}
-              {cur!.phase !== "setup" && leftAfter.length === 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => (cur!.phase === "run" ? setFinishing(runQty(cur!.loc)) : act("done", { pieces: card.qty }))}>✓ {t("Complete job")}</button>}
+              {cur!.phase !== "setup" && leftAfter.length === 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => (cur!.phase === "run" ? setFinishing(runQty(cur!.loc)) : act("done", { pieces: card.qty }))}>✓ {t("Printed")}</button>}
               <div className="jm-row">
                 <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => setPausing(true)}>{t("Pause")}</button>
                 {cur!.phase === "setup" && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => act("finish")}>{t("Stop setup")}</button>}
-                {cur!.phase === "run" && leftAfter.length > 0 && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>}
+                {cur!.phase === "run" && leftAfter.length > 0 && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => { if (confirm(t("#{0} printed? The whole job is done.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Printed")}</button>}
               </div>
             </div>
           )}
@@ -204,7 +204,7 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
             {/* a side or two now, the rest another day: one job, paused with what's printed (Nick, Nov 16 2026) */}
             {doneRuns.size > 0 && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => { const left = locs.filter((l) => !doneRuns.has(l)); act("later", { done: doneRuns.size / Math.max(1, locs.length), why: t("{0} later", left.map((l) => t(l)).join(", ")) }); }}>{t("{0} later · not now", locs.filter((l) => !doneRuns.has(l)).map((l) => t(l)).join(", "))}</button>}
           </>}
-          <button type="button" className="jm-ghost done" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>
+          <button type="button" className="jm-ghost done" disabled={!!busy} onClick={() => { if (confirm(t("#{0} printed? The whole job is done.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Printed")}</button>
         </div>
       )}
       {err && <div className="jm-err">{err}</div>}

@@ -25,7 +25,7 @@ const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLoc
 const daysSince = (iso: string | null) => (iso ? Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 86400000)) : null);
 const howOf = (s: string) => (/pick/i.test(s) ? "pickup" : /deliver|courier|drop/i.test(s) ? "deliver" : "ship") as Row["how"];
 const WHERE: Record<Where, [string, string]> = {
-  shelf: ["On the pickup shelf", "ob-w-shelf"], ship: ["Ready to ship", "ob-w-ship"], deliver: ["Ready to deliver", "ob-w-ship"],
+  shelf: ["On the pickup shelf", "ob-w-shelf"], ship: ["Shipping", "ob-w-ship"], deliver: ["Ready for delivery", "ob-w-ship"],
   packing: ["Being packed", "ob-w-pack"], printing: ["Still printing", "ob-w-print"], waiting: ["Not started", "ob-w-print"],
 };
 const ORDER: Where[] = ["shelf", "ship", "deliver", "packing", "printing", "waiting"];
