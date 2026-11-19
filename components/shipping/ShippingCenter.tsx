@@ -6,9 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { custLabel } from "@/lib/format";
-import { mergeSettings, type Customer, type Settings, type ShipAddress } from "@/lib/pricing";
+import { mergeSettings, type Customer, type Group, type Settings, type ShipAddress } from "@/lib/pricing";
 import { addressFromText, addressReady, carrierOf, emptyAddress, estimateBoxes, oneLine, trackingLink, BILL_LABEL, type BillTo, type Shipment } from "@/lib/shipping";
 import { addTracking } from "@/app/shop/tracking-actions";
+import { shipPart } from "@/app/shop/parts-actions";
+import { kindsOf, mixParts, MIX_ABBR, type MixPart, type MixSlot } from "@/lib/mixParts";
 import type { PvAddress } from "@/lib/archive";
 import ShipWindow, { type ShipTarget } from "@/components/ShipWindow";
 import SearchInput from "@/components/SearchInput";
@@ -21,7 +23,7 @@ import { useUrlSearch } from "@/lib/useUrlSearch";
 
 type NewRow = { third_party?: ThirdParty | null; id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
-type Item = ShipTarget & { printavo: boolean; shipment: Shipment | null };
+type Item = ShipTarget & { printavo: boolean; shipment: Shipment | null; /** the rest of an order shipped in parts */ rest?: boolean };
 
 const fromPv = (a: PvAddress, c: PvRow["contact"], company: string): ShipAddress => ({
   ...emptyAddress(), company: a?.companyName || company, name: a?.customerName || c?.fullName || "",
@@ -52,7 +54,10 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
   const [items, setItems] = useState<Item[] | null>(null);
   const [shipped, setShipped] = useState<(Shipment & { label: string; customer: string })[]>([]);
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
-  const [tab, setTab] = useSticky<"overview" | "ready" | "shipped" | "transit">("shipping.tab", "overview");
+  // Ready to ship / Shipped / Transit map; no Overview (Nick, Nov 19 2026)
+  const [tab, setTab] = useSticky<"ready" | "shipped" | "transit">("shipping.tab2", "ready");
+  // mixed jobs with a part printed and a part not: they can ship part now (Nick, Nov 19 2026)
+  const [partly, setPartly] = useState<{ item: Item; parts: MixPart[]; went: Shipment | null }[]>([]);
   const [open, setOpen] = useState<{ item: Item; box: number | null } | null>(null);
   const [q, setQ] = useState(""), [scan, setScan] = useState(""), [note, setNote] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -66,14 +71,18 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
       sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party, flags").is("discarded_at", null).eq("status", "ready").eq("delivery_method", "ship").order("due_date", { ascending: true, nullsFirst: false }),
       sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, po_number, status_name, ship:data->shippingAddress, delivery:data->deliveryMethod, contact:data->contact").is("removed_at", null).ilike("status_name", "%ready to ship%").gte("due_date", oldLiveSince()).order("due_date", { ascending: true, nullsFirst: false }).limit(300),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
-      // shipping part of it now, the rest still printing (components/ShipCheck.tsx; Nick, Nov 19 2026)
-      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party, flags").is("discarded_at", null).in("status", ["approved", "production", "fulfillment"]).not("flags", "is", null),
+      // still in production with a part printed: Partly printed · can ship part (Nick, Nov 19 2026)
+      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party, flags, groups").is("discarded_at", null).in("status", ["production", "fulfillment"]).eq("delivery_method", "ship").limit(400),
     ]);
     const s = mergeSettings(st.data?.data); setSettings(s);
     type Fl = { key: string; note?: string }[] | null;
     const partOf = (o: { flags?: unknown }) => ((Array.isArray(o.flags) ? o.flags : []) as NonNullable<Fl>).find((f) => f.key === "partial");
-    const parts = ((pt.data || []) as (NewRow & { flags?: unknown })[]).filter((o) => { const f = partOf(o); return !!f && !(f.note || "").startsWith("shipped:"); });
-    const news = [...((n.data || []) as NewRow[]), ...parts], pvs = (p.data || []) as unknown as PvRow[];
+    // the mixed ones with at least one part printed and one not
+    const prod = (pt.data || []) as (NewRow & { flags?: unknown; groups?: Group[] })[];
+    const mixed = prod.filter((o) => kindsOf(o.groups).length > 1);
+    const { data: msl } = mixed.length ? await sb.from("production_slots").select("order_id, kind, status, day, machine, finished_at").in("order_id", mixed.map((o) => o.id)) : { data: [] };
+    const partRows = mixed.map((o) => ({ o, parts: mixParts(o.groups, ((msl || []) as MixSlot[]).filter((x) => x.order_id === o.id)) })).filter((x) => x.parts.some((q) => q.state === "ok") && x.parts.some((q) => q.state !== "ok"));
+    const news = [...((n.data || []) as NewRow[]), ...partRows.map((x) => x.o)], pvs = (p.data || []) as unknown as PvRow[];
     const custIds = [...new Set([...news.map((o) => o.customer_id), ...pvs.map((o) => o.customer_id)].filter(Boolean))] as string[];
     const [{ data: cs }, { data: ships }] = await Promise.all([
       custIds.length ? sb.from("customers").select("*").in("id", custIds) : Promise.resolve({ data: [] }),
@@ -83,11 +92,12 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
     // a part already shipped isn't this shipment (the rest goes as its own)
     const partShipped = new Set(news.map((o) => (partOf(o as { flags?: unknown })?.note || "").replace(/^shipped:/, "")).filter((x) => x && !x.startsWith("Shipping")));
     const shipOf = (key: "order_id" | "archived_order_id", id: string) => ((ships || []) as Shipment[]).filter((x) => x[key] === id && !partShipped.has(x.id)).sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] || null;
+    const restOf = (o: { flags?: unknown }) => (partOf(o)?.note || "").startsWith("shipped:");
     const list: Item[] = [
       ...news.map((o): Item => {
         const c = cust[o.customer_id || ""];
         return { kind: "order", printavo: false, id: o.id, number: String(o.number), job: o.nickname, customerId: o.customer_id, customer: custLabel(c) || "—", pieces: o.qty || 0, due: o.due_date,
-          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipOn: c?.ship_on || "", shipment: shipOf("order_id", o.id) };
+          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipOn: c?.ship_on || "", shipment: shipOf("order_id", o.id), rest: restOf(o as { flags?: unknown }) };
       }),
       ...pvs.map((o): Item => {
         const c = cust[o.customer_id];
@@ -95,7 +105,13 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
           to: fromPv(o.ship, o.contact, c?.company || ""), service: /ups|fedex|usps/i.test(o.delivery || "") ? o.delivery || "" : "", ...billOf(c), shipOn: c?.ship_on || "", shipment: shipOf("archived_order_id", o.id) };
       }),
     ].filter((x) => x.shipment?.status !== "shipped");
-    setItems(list);
+    const partIds = new Set(partRows.map((x) => x.o.id));
+    setItems(list.filter((x) => !partIds.has(x.id)));
+    setPartly(partRows.map(({ o, parts }) => {
+      const item = list.find((x) => x.id === o.id) || null;
+      const went = ((ships || []) as Shipment[]).filter((x) => x.order_id === o.id && x.status === "shipped").sort((a, b) => (b.shipped_at || "").localeCompare(a.shipped_at || ""))[0] || null;
+      return item ? { item, parts, went } : null;
+    }).filter(Boolean) as { item: Item; parts: MixPart[]; went: Shipment | null }[]);
 
     const { data: done } = await sb.from("shipments").select("*").eq("status", "shipped").order("shipped_at", { ascending: false }).limit(50);
     const d = (done || []) as Shipment[];
@@ -124,22 +140,32 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
     setNote(""); setOpen({ item: it, box: m[2] ? +m[2] : null });
   }
 
+  // Outbound's Search / filter, else this page's own search: every word has to be somewhere on the job
+  const words = (embedded ? filter : q).trim().toLowerCase().replace(/^#/, "").split(/\s+/).filter(Boolean);
+  const matches = (x: Item) => !words.length || words.every((w) => [x.number, x.customer, x.job, x.to.city, x.to.company, x.to.name].some((v) => String(v || "").toLowerCase().includes(w)));
+  /** Ship part: the order is flagged partly shipped (it stays In Production), then the ship window opens */
+  async function shipPartOf(x: Item) {
+    const r = await shipPart(x.id);
+    if (!r.ok) { setNote(r.error); return; }
+    setOpen({ item: x, box: null });
+  }
+
   const list = useMemo(() => {
     // Outbound's Search / filter, else this page's own search: every word has to be somewhere on the job
-    const ws = (embedded ? filter : q).trim().toLowerCase().replace(/^#/, "").split(/\s+/).filter(Boolean);
-    return (items || []).filter((x) => !ws.length || ws.every((w) => [x.number, x.customer, x.job, x.to.city, x.to.company, x.to.name].some((s) => String(s || "").toLowerCase().includes(w))));
-  }, [items, q, filter, embedded]);
+    return (items || []).filter(matches);
+  }, [items, q, filter, embedded]); // eslint-disable-line react-hooks/exhaustive-deps
   const ready = list.filter((x) => !missingOf(x).length), missing = list.filter((x) => missingOf(x).length);
 
   return (
     <>
-      <div className={embedded ? "ob-sc-head" : "page-head"}>
-        {embedded ? <h2>Shipping Center</h2> : <div><div className="eyebrow">Shipping</div><h1>Shipping Center</h1></div>}
+      {/* inside Outbound the page's own top says it's shipping; Settings sits at the end of the tabs */}
+      {!embedded && <div className="page-head">
+        <div><div className="eyebrow">Shipping</div><h1>Shipping Center</h1></div>
         <div className="row" style={{ gap: 8 }}>
           {!embedded && <input ref={scanRef} className="sc-scan" type="text" autoFocus placeholder="Scan a box label or type an order #" value={scan} onChange={(e) => setScan(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onScan(scan); } }} aria-label="Scan a box label" />}
           <button type="button" className="btn" onClick={() => setShowSettings((x) => !x)}>Settings</button>
         </div>
-      </div>
+      </div>}
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       {showSettings && <ShipSettingsPanel s={settings} onSaved={(s) => { setSettings(s); setShowSettings(false); }} />}
       {showSettings && <LabelPrinterPanel />}
@@ -147,17 +173,15 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
 
       <div className="sc-tabrow">
         <div className="aa-sub sc-tabs" role="tablist">
-          <button type="button" className={tab === "overview" ? "on" : ""} onClick={() => setTab("overview")}>Overview</button>
           <button type="button" className={tab === "ready" ? "on" : ""} onClick={() => setTab("ready")}>Ready To Ship<span className="aa-n">{items?.length ?? "…"}</span></button>
           <button type="button" className={tab === "shipped" ? "on" : ""} onClick={() => setTab("shipped")}>Shipped<span className="aa-n">{shipped.length}</span></button>
           <button type="button" className={tab === "transit" ? "on" : ""} onClick={() => setTab("transit")}>Transit Map</button>
         </div>
+        {embedded && <button type="button" className="btn sm sc-setb" onClick={() => setShowSettings((x) => !x)}>Settings</button>}
         {tab === "ready" && !embedded && <label className="aa-search"><SearchInput placeholder="Search orders" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
       </div>
 
-      {tab === "overview" ? (
-        <Overview items={items} shipped={shipped} perBox={settings.ship.perBox} onOpen={(x) => setOpen({ item: x, box: null })} go={setTab} />
-      ) : tab === "transit" ? (
+      {tab === "transit" ? (
         <div className="sc-transit sc-stack">
           <section className="db-card db-blue"><div className="db-card-h"><h2>Transit Time Map</h2><span className="faint db-h-note">business days from our shop</span></div><TransitMap /></section>
           <section className="db-card db-orange"><div className="db-card-h"><h2>Rate &amp; Transit Calculator</h2></div><QuickShipQuote /></section>
@@ -188,6 +212,16 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
                 </section>
               );
             })}
+            {partly.length > 0 && (
+              <section className="scr part">
+                <div className="scr-h"><b>Partly printed · can ship part</b><span className="aa-n">{partly.length}</span><span className="faint">a part is printed, the rest isn&apos;t yet</span></div>
+                {partly.filter(({ item: x }) => matches(x)).map(({ item: x, parts, went }) => {
+                  const k = "p" + x.id;
+                  return <ShipLine key={k} x={x} perBox={settings.ship.perBox} showCust onOpen={() => void shipPartOf(x)} parts={parts} went={went}
+                    trk={trkOpen === k} onTrk={() => setTrkOpen(trkOpen === k ? "" : k)} onTracked={(m) => { setTrkOpen(""); setNote(m); void load(); }} />;
+                })}
+              </section>
+            )}
           </div>
         )
       ) : (
@@ -219,67 +253,9 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
   );
 }
 
-/** The shipping dashboard: what to ship next, what went out, and the rate / transit tools. */
-function Overview({ items, shipped, perBox, onOpen, go }: { items: Item[] | null; shipped: (Shipment & { label: string; customer: string })[]; perBox: number; onOpen: (x: Item) => void; go: (t: "overview" | "ready" | "shipped" | "transit") => void }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const all = items || [];
-  const missing = all.filter((x) => missingOf(x).length);
-  const late = all.filter((x) => x.due && x.due.slice(0, 10) < today);
-  const next = [...all].sort((a, b) => (a.due || "9").localeCompare(b.due || "9")).slice(0, 8);
-  const weekAgo = Date.now() - 7 * 86400000, monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
-  const week = shipped.filter((x) => x.shipped_at && Date.parse(x.shipped_at) >= weekAgo);
-  const month = shipped.filter((x) => x.shipped_at && Date.parse(x.shipped_at) >= monthStart);
-  const billed = month.reduce((a, x) => a + (+(x.price || 0)), 0), cost = month.reduce((a, x) => a + (+(x.cost || 0)), 0);
-  const kpi = (label: string, value: React.ReactNode, sub: string, tone = "", onClick?: () => void) => (
-    <button type="button" className={"sc-kpi " + tone} onClick={onClick} disabled={!onClick}><span>{label}</span><b>{value}</b><small>{sub}</small></button>
-  );
-  return (
-    <div className="sc-ov">
-      <div className="sc-kpis">
-        {kpi("Ready To Ship", items ? all.length - missing.length : "…", "everything filled in", "blue", () => go("ready"))}
-        {kpi("Missing Info", items ? missing.length : "…", "address, account or pieces", missing.length ? "warn" : "", () => go("ready"))}
-        {kpi("Late", items ? late.length : "…", "past the in-hands date", late.length ? "bad" : "", () => go("ready"))}
-        {kpi("Shipped This Week", week.length, `${week.reduce((a, x) => a + (x.boxes?.length || 0), 0)} boxes`, "teal", () => go("shipped"))}
-        {kpi("Shipping This Month", money(billed), cost ? `our cost ${money(cost)}` : "billed to customers", "orange")}
-      </div>
-      <div className="dash-row dash-2-1">
-        <div className="dash-col">
-          <section className="db-card db-blue">
-            <div className="db-card-h"><h2>Ship Next</h2><span className="faint db-h-note">soonest in-hands date first</span><span className="spacer" /><button type="button" className="linkbtn" onClick={() => go("ready")}>All ready to ship →</button></div>
-            {items === null ? <div className="db-empty">Loading…</div> : !next.length ? <div className="db-empty">Nothing waiting to ship. When an order is marked Ready with delivery by shipping, it shows up here.</div> : (
-              <ul className="db-list">{next.map((x) => { const m = missingOf(x); const lt = x.due && x.due.slice(0, 10) < today; const bx = x.shipment?.boxes?.length || estimateBoxes(x.pieces, perBox); return (
-                <li key={x.kind + x.id} className="db-row sc-next">
-                  <span className="db-num">#{x.number}</span>
-                  <span className="db-main"><b>{x.customer}</b><span className="faint">{[addressReady(x.to) ? `${x.to.city}, ${x.to.state}` : "", `${x.pieces || "?"} pcs · ${bx} box${bx === 1 ? "" : "es"}`].filter(Boolean).join(" · ")}</span>{m.length ? <span className="sc-miss-s">Missing: {m.join(", ")}</span> : null}</span>
-                  <span className="db-side"><span className={"sc-due" + (lt ? " late" : "")}>{lt ? "Late · " : ""}{day(x.due)}</span><button type="button" className={"btn sm" + (m.length ? "" : " primary")} onClick={() => onOpen(x)}>{m.length ? "Fill In" : "Ship"}</button></span>
-                </li>
-              ); })}</ul>
-            )}
-          </section>
-          <section className="db-card db-teal">
-            <div className="db-card-h"><h2>Recently Shipped</h2><span className="spacer" /><button type="button" className="linkbtn" onClick={() => go("shipped")}>All shipments →</button></div>
-            {!shipped.length ? <div className="db-empty">Nothing shipped from here yet.</div> : (
-              <ul className="db-list">{shipped.slice(0, 6).map((x) => (
-                <li key={x.id} className="db-row">
-                  <span className="db-num">#{x.label}</span>
-                  <span className="db-main"><b>{x.customer}</b><span className="faint">{[x.carrier, x.service].filter(Boolean).join(" ") || "—"} · {x.boxes.length} box{x.boxes.length === 1 ? "" : "es"} · {x.ship_to?.city ? `${x.ship_to.city}, ${x.ship_to.state}` : ""}</span></span>
-                  <span className="db-side"><span className="faint">{x.shipped_at ? new Date(x.shipped_at).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}</span>{x.boxes.find((b) => b.tracking) && <a className="btn sm" href={trackingLink(x.boxes.find((b) => b.tracking)!.tracking!)} target="_blank" rel="noreferrer">Track</a>}</span>
-                </li>
-              ))}</ul>
-            )}
-          </section>
-        </div>
-        <div className="dash-col">
-          <section className="db-card db-salmon"><div className="db-card-h"><h2>Transit Map</h2><span className="spacer" /><button type="button" className="linkbtn" onClick={() => go("transit")}>Full map →</button></div><TransitMap compact /></section>
-          <section className="db-card db-orange"><div className="db-card-h"><h2>Rate &amp; Transit Calculator</h2></div><QuickShipQuote compact /></section>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** One job on Ready to ship: click it to ship; + Tracking beside Ship for one shipped some other way (Nick, Nov 19 2026) */
-function ShipLine({ x, perBox, missing, showCust, onOpen, trk, onTrk, onTracked }: { x: Item; perBox: number; missing?: string[]; showCust: boolean; onOpen: () => void; trk: boolean; onTrk: () => void; onTracked: (msg: string) => void }) {
+function ShipLine({ x, perBox, missing, showCust, onOpen, trk, onTrk, onTracked, parts, went }: { x: Item; perBox: number; missing?: string[]; showCust: boolean; onOpen: () => void; trk: boolean; onTrk: () => void; onTracked: (msg: string) => void;
+  /** a mixed job partly printed: its parts, and the part that already went */ parts?: MixPart[]; went?: Shipment | null }) {
   const late = !!x.due && x.due.slice(0, 10) < new Date().toISOString().slice(0, 10);
   const boxes = x.shipment?.boxes?.length || estimateBoxes(x.pieces, perBox);
   return (
@@ -288,12 +264,14 @@ function ShipLine({ x, perBox, missing, showCust, onOpen, trk, onTrk, onTracked 
         <button type="button" className="scr-main" onClick={onOpen} title={missing?.length ? "Fill in what's missing and ship it" : "Ship it"}>
           <b className="scr-n">#{x.number}</b>
           <span className="scr-j">{showCust && <b>{x.customer}</b>}{showCust && x.job ? " · " : ""}{x.job || (!showCust ? x.customer : "")}{x.printavo && <em className="sc-tag">Printavo</em>}{x.shipment && <em className="sc-tag draft">Started</em>}</span>
-          <span className="scr-m">{missing?.length ? <em className="scr-need">Needs {missing.join(", ").toLowerCase()}</em> : <>{x.pieces || "?"} pcs · {boxes} box{boxes === 1 ? "" : "es"}{addressReady(x.to) ? ` · ${x.to.city}, ${x.to.state}` : ""}</>}</span>
+          <span className="scr-m">{parts ? <span className="scr-parts">{parts.map((q) => <em key={q.kind} className={q.state === "ok" ? (went ? "went" : "ok") : ""} title={q.note}>{MIX_ABBR[q.kind]} {q.state === "ok" ? (went ? `shipped ${went.shipped_at ? new Date(went.shipped_at).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}` : "printed") : q.state === "run" ? "printing" : q.state === "wt" ? "on the schedule" : "not booked"}</em>)}</span>
+            : missing?.length ? <em className="scr-need">Needs {missing.join(", ").toLowerCase()}</em> : <>{x.rest && <em className="scr-rest">The rest · part shipped</em>}{x.pieces || "?"} pcs · {boxes} box{boxes === 1 ? "" : "es"}{addressReady(x.to) ? ` · ${x.to.city}, ${x.to.state}` : ""}</>}</span>
           <span className={"scr-d" + (late ? " late" : "")}>{late ? "Late · " : ""}{day(x.due)}</span>
         </button>
         <span className="scr-a">
-          <button type="button" className={"btn sm" + (trk ? " on" : "")} onClick={onTrk} aria-expanded={trk} title="Shipped some other way (FedEx's site, their account): paste the tracking">+ Tracking</button>
-          <button type="button" className={"btn sm" + (missing?.length ? "" : " primary")} onClick={onOpen}>{missing?.length ? "Fill in" : "Ship"}</button>
+          {!(parts && went) && <button type="button" className={"btn sm" + (trk ? " on" : "")} onClick={onTrk} aria-expanded={trk} title="Shipped some other way (FedEx's site, their account): paste the tracking">+ Tracking</button>}
+          {parts && went ? <span className="faint scr-wait">Waiting on the rest</span>
+            : <button type="button" className={"btn sm" + (missing?.length || parts ? "" : " primary")} onClick={onOpen}>{missing?.length ? "Fill in" : parts ? "Ship part" : "Ship"}</button>}
         </span>
       </div>
       {trk && <TrackForm x={x} onDone={onTracked} onCancel={onTrk} />}

@@ -24025,3 +24025,34 @@ main.main .rvg-sub{margin-bottom:10px}
 .sw-over .btn.on{border-color:var(--danger);color:var(--danger)}
 .btn.primary.danger{background:var(--danger);border-color:var(--danger);color:#fff}
 .sw-buy{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:600;color:var(--ink)}
+.scr.part{border-color:var(--line)}
+.scr.part .scr-h{background:var(--surface-2)}
+.scr-parts{display:flex;gap:5px;flex-wrap:wrap}
+.scr-parts em{font-style:normal;font-size:11.5px;font-weight:600;padding:2px 7px;border-radius:6px;background:var(--surface-2);color:var(--ink-3);white-space:nowrap}
+.scr-parts em.ok{background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok)}
+.scr-parts em.went{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent)}
+.scr-rest{font-style:normal;font-size:11.5px;font-weight:600;padding:1px 6px;border-radius:6px;margin-right:6px;background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:var(--warn);white-space:nowrap}
+.scr-wait{font-size:12.5px;white-space:nowrap}
+
+/* ---------- Outbound's top (Nick, Nov 19 2026): Ship | Pickup shelf | Delivery at the top right, each with its own tabs;
+   Search / filter over Box label on the right ---------- */
+.obx-head{align-items:flex-end}
+.obx-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.obx-seg button{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:7px;font-size:14px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+.obx-seg button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.obx-seg button:hover{color:var(--ink)}
+.obx-seg button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(20,30,50,.12)}
+.obx-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@media (max-width:700px){.obx-seg{width:100%}.obx-seg button{flex:1;justify-content:center;padding:7px 6px}.obx-seg button > span:not(.aa-n){display:none}}
+.obx-sub{margin:0}
+.sc-tabrow .sc-setb{margin-left:auto}
+.obx-f{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.obx-f > span:first-child{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.obx-fi{display:flex;align-items:center;gap:8px;height:40px;border:2px solid var(--accent);border-radius:8px;background:var(--surface);padding:0 10px}
+.obx-fi svg{width:18px;height:18px;flex:none;fill:none;stroke:var(--ink-3);stroke-width:2.2;stroke-linecap:round}
+.obx-fi input{flex:1;min-width:0;border:0;outline:0;background:none;font:inherit;font-size:15px;color:var(--ink);height:100%}
+.obx-fi .linkbtn{font-size:12.5px;font-weight:700;text-decoration:none}
+.obx-stops{list-style:none;margin:0;padding:0}
+.obx-stops li{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;align-items:start;padding:9px 16px;border-top:1px solid var(--line-2)}
+.obx-stops li > b{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px}
+.obx-stops small{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px}

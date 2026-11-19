@@ -21,7 +21,7 @@ import { markPickedUp, outboundLookup, type LookupJob, type Where } from "./acti
  * The shipping computer's home, by the door (Nov 13, Nick): someone walks in, staff type their name and see every open
  * job of theirs and where it is; Print box label and Start shipping on top; the Shipping Center stays underneath.
  */
-type Row = { key: string; id: string; href: string; number: string; job: string; customer: string; qty: number; due: string | null; since: string | null; printavo: boolean; how: "ship" | "deliver" | "pickup" };
+type Row = { key: string; id: string; href: string; number: string; job: string; customer: string; qty: number; due: string | null; since: string | null; printavo: boolean; how: "ship" | "deliver" | "pickup"; addr?: string };
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "—");
 const daysSince = (iso: string | null) => (iso ? Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 86400000)) : null);
 const howOf = (s: string) => (/pick/i.test(s) ? "pickup" : /deliver|courier|drop/i.test(s) ? "deliver" : "ship") as Row["how"];
@@ -30,10 +30,15 @@ const WHERE: Record<Where, [string, string]> = {
   packing: ["Being packed", "ob-w-pack"], printing: ["Still printing", "ob-w-print"], waiting: ["Not started", "ob-w-print"],
 };
 const ORDER: Where[] = ["shelf", "ship", "deliver", "packing", "printing", "waiting"];
-const Ico = { box: <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z" /><path d="M3 7l9 4 9-4M12 11v10" /></svg>, truck: <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7" /><circle cx="7" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></svg> };
+const Ico = { shelf: <svg viewBox="0 0 24 24"><path d="M3 4v16M21 4v16M3 10h18M3 17h18" /><path d="M7 10V7h4v3M13 17v-4h4v4" /></svg>, pin: <svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>, box: <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z" /><path d="M3 7l9 4 9-4M12 11v10" /></svg>, truck: <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7" /><circle cx="7" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></svg> };
 
 export default function Outbound() {
   const [tab, setTab] = useSticky<"ship" | "pickup" | "deliver">("outbound.tab3", "ship");
+  // each section's own tabs (Nick, Nov 19 2026): Pickup shelf = On the shelf / Being packed / Picked up; Delivery = To
+  // deliver / Route / Delivered (Ship's are the Shipping Center's: Ready to ship / Shipped / Transit map)
+  const [pickSub, setPickSub] = useSticky<"shelf" | "packing" | "done">("outbound.pick", "shelf");
+  const [delSub, setDelSub] = useSticky<"todo" | "route" | "done">("outbound.del", "todo");
+  const [more, setMore] = useState<{ packing: Row[]; done: Row[]; from: string }>({ packing: [], done: [], from: "" });
   const [rows, setRows] = useState<Row[] | null>(null);
   const [perBox, setPerBox] = useState(72);
   const [q, setQ] = useState(""), [found, setFound] = useState<LookupJob[] | null>(null), [looking, setLooking] = useState(false);
@@ -49,20 +54,29 @@ export default function Outbound() {
 
   async function load() {
     const sb = createClient();
-    const [n, p, st] = await Promise.all([
-      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, delivery_method, updated_at").is("discarded_at", null).eq("status", "ready").order("due_date", { ascending: true, nullsFirst: false }).limit(500),
+    const since = new Date(Date.now() - 14 * 86400000).toISOString();
+    const [n, p, st, pk, dn] = await Promise.all([
+      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, delivery_method, updated_at, ship_to").is("discarded_at", null).eq("status", "ready").order("due_date", { ascending: true, nullsFirst: false }).limit(500),
       sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, status_name, updated_at, delivery:data->deliveryMethod").is("removed_at", null).ilike("status_name", "%ready to ship%").gte("due_date", oldLiveSince()).order("due_date", { ascending: true, nullsFirst: false }).limit(500),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
+      // being packed (Fulfillment) for pickup or delivery, and what went out these two weeks
+      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, delivery_method, updated_at, ship_to").is("discarded_at", null).eq("status", "fulfillment").in("delivery_method", ["pickup", "deliver"]).order("due_date", { ascending: true, nullsFirst: false }).limit(300),
+      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, delivery_method, updated_at, ship_to").is("discarded_at", null).is("declined_at", null).eq("status", "completed").in("delivery_method", ["pickup", "deliver"]).gte("updated_at", since).order("updated_at", { ascending: false }).limit(300),
     ]);
-    setPerBox(mergeSettings(st.data?.data).ship.perBox || 72);
-    type N = { id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; delivery_method: string | null; updated_at: string };
+    const ms = mergeSettings(st.data?.data).ship;
+    setPerBox(ms.perBox || 72);
+    type N = { id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; delivery_method: string | null; updated_at: string; ship_to?: string | null };
     type P = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string | null; updated_at: string; delivery: string | null };
     const ns = (n.data || []) as N[], ps = (p.data || []) as unknown as P[];
-    const ids = [...new Set([...ns, ...ps].map((o) => o.customer_id).filter(Boolean))] as string[];
+    const pks = (pk.data || []) as N[], dns = (dn.data || []) as N[];
+    const ids = [...new Set([...ns, ...ps, ...pks, ...dns].map((o) => o.customer_id).filter(Boolean))] as string[];
     const { data: cs } = ids.length ? await sb.from("customers").select("id, company, name").in("id", ids) : { data: [] };
     const cust = new Map(((cs || []) as { id: string; company: string; name: string }[]).map((c) => [c.id, custLabel(c)]));
+    const row = (o: N): Row => ({ key: "o" + o.id, id: o.id, href: `/shop/orders/${o.id}`, number: String(o.number), job: o.nickname || "", customer: cust.get(o.customer_id || "") || "—", qty: o.qty || 0, due: o.due_date, since: o.updated_at, printavo: false, how: howOf(o.delivery_method || "ship"), addr: (o.ship_to || "").trim() });
+    const f = ms.from;
+    setMore({ packing: pks.map(row), done: dns.map(row), from: [f.street1, f.city, f.state, f.zip].filter(Boolean).join(", ") });
     setRows([
-      ...ns.map((o): Row => ({ key: "o" + o.id, id: o.id, href: `/shop/orders/${o.id}`, number: String(o.number), job: o.nickname || "", customer: cust.get(o.customer_id || "") || "—", qty: o.qty || 0, due: o.due_date, since: o.updated_at, printavo: false, how: howOf(o.delivery_method || "ship") })),
+      ...ns.map(row),
       ...ps.map((o): Row => ({ key: "a" + o.id, id: o.id, href: `/shop/archive/${o.id}`, number: o.visual_id, job: o.nickname || "", customer: cust.get(o.customer_id || "") || "—", qty: o.qty || 0, due: o.due_date, since: o.updated_at, printavo: true, how: howOf(String(o.delivery || "ship")) })),
     ]);
   }
@@ -71,7 +85,7 @@ export default function Outbound() {
   // the person at the door: look them up as they're typed
   useEffect(() => {
     const t = q.trim();
-    if (t.length < 2 || jobCode(t)) { setFound(null); return; }
+    if (t.length < 2 || jobCode(t) || tab !== "pickup") { setFound(null); return; }
     setLooking(true);
     const h = setTimeout(async () => {
       const r = await outboundLookup(t);
@@ -79,7 +93,7 @@ export default function Outbound() {
       if (r.ok) setFound(r.jobs); else setMsg({ ok: false, text: r.error });
     }, 300);
     return () => clearTimeout(h);
-  }, [q]);
+  }, [q, tab]);
 
   // a label or work order scanned anywhere (components/ScanWatch.tsx catches the scanner on every page; Nick, Nov 13: "I
   // have the window open and I scanned a label… it's going to ask me what to do"): ask label or ship; a scan from
@@ -113,16 +127,16 @@ export default function Outbound() {
   const shipOrSay = (n: string) => { const why = startShipping(n); if (why) setMsg({ ok: false, text: why }); };
   const label = (n: string) => setLabelFor({ n, at: Date.now() });
 
-  const list = (rs: Row[], kind: "deliver" | "pickup") => (
+  const list = (rs: Row[], kind: "deliver" | "pickup", sub = "") => (
     <div className="tbl-wrap ob-tblw"><table className="tbl">
-      <thead><tr><th>Job</th><th>Customer</th><th>Pieces</th><th>In-hands</th><th>{kind === "pickup" ? "On the shelf" : "Ready since"}</th><th /></tr></thead>
+      <thead><tr><th>Job</th><th>Customer</th><th>Pieces</th><th>In-hands</th><th>{sub === "done" ? (kind === "pickup" ? "Picked up" : "Delivered") : sub === "packing" ? "Packing since" : kind === "pickup" ? "On the shelf" : "Ready since"}</th><th /></tr></thead>
       <tbody>{rs.map((r) => { const d = daysSince(r.since); return (
         <tr key={r.key}><td><Link className="ordno" href={r.href}>#{r.number}</Link><div className="sub">{r.job}</div></td><td>{r.customer}</td><td>{r.qty.toLocaleString()}</td>
           <td className={r.due && r.due.slice(0, 10) < today ? "ob-late" : ""}>{day(r.due)}</td>
           <td className={kind === "pickup" && (d ?? 0) >= 5 ? "ob-late" : ""}>{d == null ? "—" : d === 0 ? "today" : `${d} day${d === 1 ? "" : "s"}`}</td>
-          <td className="r"><button type="button" className="btn sm" onClick={() => label(r.number)}>Label</button>{" "}{kind === "pickup" && !r.printavo && <button type="button" className="btn sm" disabled={!!busy} onClick={() => void pickedUp([r.id])}>{busy === r.id ? "…" : "Picked up"}</button>}</td></tr>
+          <td className="r"><button type="button" className="btn sm" onClick={() => label(r.number)}>Label</button>{" "}{kind === "pickup" && sub !== "done" && sub !== "packing" && !r.printavo && <button type="button" className="btn sm" disabled={!!busy} onClick={() => void pickedUp([r.id])}>{busy === r.id ? "…" : "Picked up"}</button>}</td></tr>
       ); })}
-      {!rs.length && <tr><td colSpan={6} className="faint">{kind === "pickup" ? "Nothing on the pickup shelf." : "Nothing to deliver."}</td></tr>}</tbody>
+      {!rs.length && <tr><td colSpan={6} className="faint">{q.trim() ? "Nothing matches the filter." : sub === "done" ? "Nothing in the last two weeks." : sub === "packing" ? "Nothing being packed." : kind === "pickup" ? "Nothing on the pickup shelf." : "Nothing to deliver."}</td></tr>}</tbody>
     </table></div>
   );
 
@@ -130,21 +144,56 @@ export default function Outbound() {
   const onShelf = sorted.filter((j) => j.where === "shelf" && !j.printavo);
   const names = [...new Set(sorted.map((j) => j.customer))];
 
+  // the Search / filter on the right narrows every list on the page (Nick, Nov 19 2026: "that'll filter everything that's there")
+  const words = q.trim().toLowerCase().replace(/^#/, "").split(/\s+/).filter(Boolean);
+  const hit = (r: Row) => !words.length || words.every((w) => [r.number, r.job, r.customer, r.addr].some((v) => String(v || "").toLowerCase().includes(w)));
+  const counts = { ship: of("ship").length, pickup: of("pickup").length, deliver: of("deliver").length };
+  const subTabs = <T extends string>(opts: readonly (readonly [T, string, number | null])[], cur: T, set: (v: T) => void) => (
+    <div className="aa-sub obx-sub" role="tablist">{opts.map(([k, l, n]) => <button key={k} type="button" role="tab" aria-selected={cur === k} className={cur === k ? "on" : ""} onClick={() => set(k)}>{l}{n != null && <span className="aa-n">{n}</span>}</button>)}</div>
+  );
+  const route = (rs: Row[]) => {
+    const stops = rs.filter((r) => r.addr).sort((x, y) => (x.addr || "").localeCompare(y.addr || ""));
+    const url = stops.length ? `https://www.google.com/maps/dir/${[more.from, ...stops.map((r) => (r.addr || "").replace(/\n+/g, ", "))].filter(Boolean).map((x) => encodeURIComponent(x)).join("/")}` : "";
+    return (
+      <section className="panel obx-route">
+        <div className="panel-h"><h2>Today&apos;s route</h2><span className="faint">{stops.length} stop{stops.length === 1 ? "" : "s"}{rs.length > stops.length ? ` · ${rs.length - stops.length} with no address` : ""}</span><span className="spacer" />{url && <a className="btn" href={url} target="_blank" rel="noreferrer">Open in Google Maps</a>}</div>
+        <ol className="obx-stops">{stops.map((r, i) => <li key={r.key}><b>{i + 1}</b><span><Link className="ordno" href={r.href}>#{r.number}</Link> {r.customer}{r.job ? <span className="faint"> · {r.job}</span> : null}<small>{(r.addr || "").replace(/\n+/g, ", ")}</small></span></li>)}</ol>
+        {!stops.length && <div className="panel-b faint">Nothing to deliver.</div>}
+      </section>
+    );
+  };
+
   return (
     <div className="ob-grid">
-      <div className="page-head ob-head"><div><h1>Outbound</h1><div className="eyebrow">What&apos;s here and ready to leave: who&apos;s picking up, what ships, what we deliver</div></div></div>
+      {/* the top (Nick, Nov 19 2026): the title, and Ship | Pickup shelf | Delivery at the top right */}
+      <div className="page-head ob-head obx-head">
+        <div><h1>Outbound</h1><div className="eyebrow">What&apos;s here and ready to leave: what ships, what&apos;s picked up, what we deliver</div></div>
+        <div className="obx-seg" role="tablist" aria-label="Outbound">
+          {([["ship", "Ship", counts.ship, Ico.truck], ["pickup", "Pickup shelf", counts.pickup, Ico.shelf], ["deliver", "Delivery", counts.deliver, Ico.pin]] as const).map(([k, l, n, ic]) =>
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span>{rows && <span className="aa-n">{n}</span>}</button>)}
+        </div>
+      </div>
       <div className="ob-left">
-        <label className="ob-q">
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
-          <input ref={qRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { const n = jobCode(q); if (n) { e.preventDefault(); setScanned(n); setQ(""); } } }} placeholder="Who's picking up? Customer, job # or PO, or scan a label" aria-label="Look up a customer, job # or PO" />
-          {q && <button type="button" className="linkbtn" onClick={() => { setQ(""); qRef.current?.focus(); }}>Clear</button>}
-        </label>
         {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
 
-        {q.trim().length >= 2 && !jobCode(q) && (
+        {/* the Shipping Center stays mounted so its ship window can open from a scan on any tab */}
+        <div hidden={tab !== "ship"}><ShippingCenter key={shipKey} embedded shipReq={shipReq} filter={q} /></div>
+        {checkN && <ShipCheck number={checkN} onClose={() => setCheckN("")} onReady={() => { const n = checkN; setCheckN(""); void load(); setShipKey((k) => k + 1); setMsg(null); setTab("ship"); setShipReq({ n, at: Date.now() }); }} />}
+
+        {tab === "pickup" && <>
+          {subTabs([["shelf", "On the shelf", of("pickup").filter(hit).length], ["packing", "Being packed", more.packing.filter((r) => r.how === "pickup").filter(hit).length], ["done", "Picked up", null]] as const, pickSub, setPickSub)}
+          {!rows ? <div className="faint">Loading…</div> : list(pickSub === "shelf" ? of("pickup").filter(hit) : more[pickSub === "packing" ? "packing" : "done"].filter((r) => r.how === "pickup").filter(hit), pickSub === "shelf" ? "pickup" : "deliver", pickSub)}
+        </>}
+        {tab === "deliver" && <>
+          {subTabs([["todo", "To deliver", of("deliver").filter(hit).length], ["route", "Route", null], ["done", "Delivered", null]] as const, delSub, setDelSub)}
+          {!rows ? <div className="faint">Loading…</div> : delSub === "route" ? route(of("deliver").filter(hit)) : list(delSub === "todo" ? of("deliver").filter(hit) : more.done.filter((r) => r.how === "deliver").filter(hit), "deliver", delSub)}
+        </>}
+
+        {/* who's at the door: every open job of theirs, wherever it is (searching on Pickup shelf) */}
+        {tab === "pickup" && q.trim().length >= 2 && !jobCode(q) && (
           <section className="panel ob-who">
             <div className="panel-h">
-              <h2>{names.length === 1 ? names[0] : `“${q.trim()}”`}</h2>
+              <h2>Everything open for {names.length === 1 ? names[0] : `“${q.trim()}”`}</h2>
               <span className="faint">{looking && !found ? "Looking…" : `${sorted.length} open job${sorted.length === 1 ? "" : "s"}${onShelf.length ? ` · ${onShelf.length} on the shelf` : ""}`}</span>
               <span className="spacer" />
               {onShelf.length > 1 && <button type="button" className="btn primary" disabled={!!busy} onClick={() => void pickedUp(onShelf.map((j) => j.id))}>Mark all {onShelf.length} picked up</button>}
@@ -170,18 +219,21 @@ export default function Outbound() {
             )}
           </section>
         )}
-
-        <nav className="aa-nav ot-nav ob-nav" aria-label="Outbound">
-          {([["ship", "Ship", of("ship").length], ["pickup", "Pickup shelf", of("pickup").length], ["deliver", "Delivery", of("deliver").length]] as const).map(([k, l, n]) =>
-            <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)}><span className="ot-l">{l}</span>{rows && n > 0 && <span className="aa-n">{n}</span>}</button>)}
-        </nav>
-        {/* the Shipping Center stays mounted so its ship window can open from a scan on any tab */}
-        <div hidden={tab !== "ship"}><ShippingCenter key={shipKey} embedded shipReq={shipReq} /></div>
-        {checkN && <ShipCheck number={checkN} onClose={() => setCheckN("")} onReady={() => { const n = checkN; setCheckN(""); void load(); setShipKey((k) => k + 1); setMsg(null); setTab("ship"); setShipReq({ n, at: Date.now() }); }} />}
-        {tab !== "ship" && (!rows ? <div className="faint">Loading…</div> : list(of(tab), tab))}
       </div>
 
-      <aside className="ob-right"><LabelPanel pick={labelFor} perBox={perBox} /></aside>
+      <aside className="ob-right">
+        {/* Search / filter, over Box label (Nick, Nov 19 2026): narrows everything on the page; a scanned label or a job
+            link pops up what to do with it */}
+        <label className="obx-f">
+          <span>Search / filter</span>
+          <span className="obx-fi">
+            <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+            <input ref={qRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { const n = jobCode(q); if (n && (/\//.test(q) || !(rows || []).some(hit))) { e.preventDefault(); setScanned(n); setQ(""); } } if (e.key === "Escape") setQ(""); }} placeholder="Customer, job #, PO or scan" aria-label="Search and filter Outbound" />
+            {q && <button type="button" className="linkbtn" onClick={() => { setQ(""); qRef.current?.focus(); }}>Clear</button>}
+          </span>
+        </label>
+        <LabelPanel pick={labelFor} perBox={perBox} />
+      </aside>
 
       {scanned && <ScanChoice n={scanned} onClose={() => setScanned("")} onLabel={() => { label(scanned); setScanned(""); }} onShip={() => { const why = startShipping(scanned); if (!why) setScanned(""); return why; }} />}
     </div>

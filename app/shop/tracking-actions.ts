@@ -29,6 +29,11 @@ async function doneShipping(admin: SupabaseClient, orderId: string, shipmentId: 
     await admin.from("orders").update({ flags: fl.map((f) => (f === pf ? { ...f, note: `shipped:${shipmentId}` } : f)) }).eq("id", orderId);
     return "part";
   }
+  // shipped while a part is still printing (+ Tracking on Partly printed): the shipped part is noted, it stays where it is
+  if (!pf && (o?.status === "production" || o?.status === "fulfillment")) {
+    await admin.from("orders").update({ flags: [...fl, { key: "partial", note: `shipped:${shipmentId}`, by, at: new Date().toISOString() }] }).eq("id", orderId);
+    return "part";
+  }
   if (o?.status === "ready") {
     const { error } = await admin.from("orders").update({ status: "completed", flags: fl.filter((f) => f.key !== "partial") }).eq("id", orderId).eq("status", "ready");
     if (!error) { await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "completed", actor: by }); return "completed"; }
