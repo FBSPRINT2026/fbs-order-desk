@@ -781,8 +781,10 @@ export async function applyGroup(admin: SupabaseClient, supplier: string, g: Gro
 }
 
 /** Save a manifest's lines (skipping ones we already have), then match and apply every shipment we can. */
-export async function importManifest(admin: SupabaseClient, supplier: "ss" | "sanmar", lines: ManifestLine[], fileName: string) {
-  const rows = lines.map((l) => ({ ...l, supplier, part: 0, file_name: fileName.slice(0, 200) }));
+export async function importManifest(admin: SupabaseClient, supplier: string, lines: ManifestLine[], fileName: string,
+  /** a vendor's shipping email (lib/portalInbox.ts): its customer, and the job when the email names it ("FBS #50090") */
+  opts: { customerId?: string | null; orderId?: string | null; how?: string } = {}) {
+  const rows = lines.map((l) => ({ ...l, supplier, part: 0, file_name: fileName.slice(0, 200), ...(opts.customerId ? { customer_id: opts.customerId } : {}) }));
   const { data: saved, error } = await admin.from("supplier_manifest_lines").upsert(rows, { onConflict: "supplier,supplier_order,sku,box,tracking,style,color,size,part", ignoreDuplicates: true }).select("*");
   if (error) throw new Error(error.message);
   const fresh = (saved || []) as (ManifestLine & { id: string; kind: string })[];
@@ -794,6 +796,7 @@ export async function importManifest(admin: SupabaseClient, supplier: "ss" | "sa
   }
   const out = { lines: lines.length, new: fresh.length, shipments: groups.size, matched: 0, blanks: 0, suggested: 0, unmatched: 0 };
   for (const g of groups.values()) {
+    if (opts.orderId) { await applyGroup(admin, supplier, g, opts.orderId, "goods", opts.how || "named in the email"); out.matched++; continue; }
     if (isUs(g.customer_name)) {
       const m = await matchBlanks(admin, g).catch(() => null);
       if (m?.sure) { await applyGroup(admin, supplier, g, m.orderId, m.kind, m.how); out.blanks++; }

@@ -46,6 +46,8 @@ export const NO_GOODS: GoodsState = { status: "waiting", issue_type: "", issue_n
 /** Where wholesale customers' goods usually come from. Anything else is stored as its name. */
 export const SUPPLIERS: Record<string, string> = { sanmar: "SanMar", ss: "S&S Activewear", onestop: "One Stop" };
 export const supplierLabel = (s?: string | null) => (s ? SUPPLIERS[s] || s : "");
+/** a manifest's supplier in a list: S&S, SanMar, or the vendor itself (a shipment read from an email: "PCNA", "MJ Luxe") */
+export const shipperShort = (s?: string | null) => (s === "sanmar" ? "SanMar" : s === "ss" ? "S&S" : s || "Vendor");
 /** Nothing known yet about the goods: no supplier and no tracking. */
 export const goodsNeedInfo = (g: GoodsState, shipments: { tracking: string }[]) => g.status === "waiting" && !g.supplier && !shipments.some((x) => x.tracking);
 /** Live tracking status in words. */

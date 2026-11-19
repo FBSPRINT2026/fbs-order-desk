@@ -510,3 +510,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 18 10:03pm · 1.3.753 · Nick · Group editor on a phone: Digitizing, sew-out, inks and embroidery extras stack each row (name and price, the note under, then the tick) instead of squeezing the note a word a line
 - Nov 19 7:30am · 1.3.754 · Nick · Phone: a group's Digitizing / extras box was measuring 0 wide (its column shrank to its contents), crushing every row; the left side of a stacked group footer now takes the full width
 - Nov 19 7:43am · 1.3.755 · Nick · Phone: Ink Room shows two inks a row so names break between words
+- Nov 19 11:24am · 1.3.756 · Nick · Vendor shipping emails to portal@ are manifests like S&S and SanMar: the job the email names (FBS #50090) or read from its PO; on the job's Goods, else on Goods & Receiving under Other vendors to link; live tracking; a too-long PDF no longer fails every hour

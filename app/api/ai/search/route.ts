@@ -1,3 +1,4 @@
+import { shipperShort } from "@/lib/goods";
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { viewerPerms } from "@/lib/access";
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
   const seen = new Set<string>();
   for (const x of (sml.data || []) as { supplier: string; supplier_order: string; customer_name: string; customer_po: string; tracking: string; method: string; track_status: string; est_delivery: string | null; delivered_at: string | null; qty_shipped: number; order_id: string | null; archived_order_id: string | null }[]) {
     const k = `${x.supplier}|${x.supplier_order}|${x.tracking}`; if (seen.has(k)) continue; seen.add(k);
-    lines.push(`${x.supplier === "sanmar" ? "SanMar" : "S&S"} | ${x.supplier_order} | ${x.customer_name} | ${x.customer_po || "-"} | ${x.tracking || x.method} | ${x.track_status || "on the way"} | ${x.est_delivery?.slice(0, 10) || "-"} | ${x.delivered_at?.slice(0, 16) || "-"} | ${x.qty_shipped} | ${x.order_id ? `o:${x.order_id}` : x.archived_order_id ? `a:${x.archived_order_id}` : "not linked"}`);
+    lines.push(`${shipperShort(x.supplier)} | ${x.supplier_order} | ${x.customer_name} | ${x.customer_po || "-"} | ${x.tracking || x.method} | ${x.track_status || "on the way"} | ${x.est_delivery?.slice(0, 10) || "-"} | ${x.delivered_at?.slice(0, 16) || "-"} | ${x.qty_shipped} | ${x.order_id ? `o:${x.order_id}` : x.archived_order_id ? `a:${x.archived_order_id}` : "not linked"}`);
     if (seen.size > 120) break;
   }
   lines.push("\nBIGGEST OPEN BALANCES (ref | # | customer | job | owed):");

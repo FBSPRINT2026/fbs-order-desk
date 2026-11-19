@@ -12,9 +12,11 @@ import { carrierOf } from "@/lib/goods";
  * - goods paperwork (any vendor) is read for the vendor, its order #, carrier, tracking, boxes and what's in it;
  * - the customer is found by the addresses on it (from / to / cc, the forwarder) and the order by its PO, name or
  *   garments among their open orders;
- * - matched: each tracking number becomes a shipment on that order's Goods (live tracking starts), goods go "on the way"
- *   and the order's goods conversation says so;
- * - not matched (or no tracking yet): an alert to whoever owns the account, with what it said.
+ * - the job: the one the email names by number ("FBS #50090"), else read by its PO, name or garments;
+ * - with tracking it's a manifest like S&S's and SanMar's (Nov 19, Nick): saved as the vendor's shipment
+ *   (supplier_manifest_lines, the vendor's name as supplier, live tracking), put on its job's Goods when the job is
+ *   known, else listed on Goods & Receiving under Other vendors to link, and matched again by the hourly pass;
+ * - no tracking yet (a confirmation): an alert to whoever owns the account, with what it said.
  * Anything else in the inbox (replies to the launch email…) is left alone. Nothing is moved, marked or answered.
  */
 const KEY = "portal_inbox";
@@ -61,6 +63,18 @@ async function customersFor(admin: SupabaseClient, emails: string[]) {
   return [...ids];
 }
 
+/**
+ * The job an email names by its number ("FBS #50090", "Job 40199", "#40482"): one of ours, open, and the customer's
+ * when we know the customer. Not a PO or a vendor's order number: only a number that is one of our jobs.
+ */
+async function namedOrder(admin: SupabaseClient, text: string, custIds: string[]) {
+  const nums = [...new Set([...text.matchAll(/(?:\bFBS\s*(?:#|no\.?|job)?\s*|\b(?:job|order|invoice)\s*#?\s*|#\s*)(\d{5})\b/gi)].map((m) => +m[1]))].filter((n) => n >= 30000 && n < 60000).slice(0, 10);
+  if (!nums.length) return null;
+  const { data } = await admin.from("orders").select("id, number, customer_id, status").in("number", nums).is("discarded_at", null);
+  const hits = ((data || []) as { id: string; number: number; customer_id: string; status: string }[]).filter((o) => o.status !== "void" && (!custIds.length || custIds.includes(o.customer_id)));
+  return hits.length === 1 ? hits[0] : null;
+}
+
 export async function checkPortalInbox(admin: SupabaseClient, opts: { days?: number; deadline?: number } = {}) {
   const a = await acct(admin);
   if (!a) return { skipped: "The portal's mailbox isn't connected (Settings → Site email)." };
@@ -99,9 +113,9 @@ export async function checkPortalInbox(admin: SupabaseClient, opts: { days?: num
           const file = await ewsAttachment(a, attr(all(f.inner, "AttachmentId")[0]?.attrs || "", "Id")).catch(() => null);
           if (file && file.content.length < 8 * 1024 * 1024) documents.push({ data: file.content.toString("base64") });
         }
-        const r = await askClaude<{ is_goods: boolean; vendor: string; order_no: string; carrier: string; tracking: string[]; boxes: number | null; eta: string; what: string; order_id: string; why: string }>({
-          task: "goods_paper_portal_inbox", model: ai.settings.assistant.ai.fastModel || ai.settings.assistant.ai.model, maxTokens: 700, admin, ctx: { by: "portal inbox" }, timeoutMs: 45_000, documents,
-          tool: { name: "shipment", description: "What this email says about goods (blank garments, hats, bags…) a vendor is sending to FBS Print for a customer's order.", input_schema: { type: "object", required: ["is_goods", "vendor", "order_no", "carrier", "tracking", "boxes", "eta", "what", "order_id", "why"], properties: {
+        const ask = (docs: { data: string }[]) => askClaude<{ is_goods: boolean; vendor: string; order_no: string; carrier: string; tracking: string[]; boxes: number | null; eta: string; what: string; pieces: number | null; po: string; order_id: string; why: string }>({
+          task: "goods_paper_portal_inbox", model: ai.settings.assistant.ai.fastModel || ai.settings.assistant.ai.model, maxTokens: 700, admin, ctx: { by: "portal inbox" }, timeoutMs: 45_000, documents: docs,
+          tool: { name: "shipment", description: "What this email says about goods (blank garments, hats, bags…) a vendor is sending to FBS Print for a customer's order.", input_schema: { type: "object", required: ["is_goods", "vendor", "order_no", "carrier", "tracking", "boxes", "eta", "what", "pieces", "po", "order_id", "why"], properties: {
             is_goods: { type: "boolean", description: "True only when this is a vendor's order confirmation, shipping notice or tracking email for goods. False for anything else (a question, a reply, marketing, a print order request)." },
             vendor: { type: "string", description: "Who is selling or shipping the goods (Peter Millar, One Stop, a store…). Empty when not said." },
             order_no: { type: "string", description: "The vendor's order / confirmation number, or the PO on it. Empty when none." },
@@ -110,46 +124,54 @@ export async function checkPortalInbox(admin: SupabaseClient, opts: { days?: num
             boxes: { type: ["integer", "null"], description: "How many boxes or cartons, when said." },
             eta: { type: "string", description: "Expected delivery date YYYY-MM-DD, or empty." },
             what: { type: "string", description: "What's in it in a few words: quantity, style, color." },
+            pieces: { type: ["integer", "null"], description: "How many pieces in all, when said." },
+            po: { type: "string", description: "The customer's PO for these goods when the email gives one (\"PO PETERFMNET73552\"), else empty." },
             order_id: { type: "string", description: "The id of the order below these goods are for, by its PO, name or garments. Empty when you can't tell." },
             why: { type: "string", description: "A few words on why that order. Empty when none." } } } },
           system: `Read an email that came to FBS Print's portal mailbox. Customers copy this address on their vendors' order confirmations and shipping emails so the shop knows goods are coming. Pull out only what it says; never invent numbers. The customer's open orders at the shop:\n${labels.join("\n") || "(none found)"}`,
           prompt: `Subject: ${it.subject}\nFrom: ${it.from}\n\n${body}`,
         });
+        // a PDF too long to read (a 187-package fulfillment list, Nov 13: retried every hour): read the email without it
+        let r = await ask(documents);
+        if (!r.ok && documents.length && /pdf|pages|too large|maximum/i.test(r.error || "")) r = await ask([]);
         if (!r.ok) throw new Error(r.error || "Couldn't read it.");
         const d = r.data;
         if (!d.is_goods) { log.push({ at: new Date().toISOString(), subject: it.subject.slice(0, 120), from: it.from, result: "not goods paperwork" }); continue; }
-        const order = list.find((o) => o.id === d.order_id) || (list.length === 1 ? list[0] : null);
         const tracking = [...new Set((d.tracking || []).map((t) => String(t).replace(/\s+/g, "")).filter(Boolean))].slice(0, 20);
         const from = [d.vendor, d.order_no && `order ${d.order_no}`].filter(Boolean).join(", ");
         const note = [from && `From ${from}`, d.what].filter(Boolean).join(": ").slice(0, 2000) || `From the email "${it.subject.slice(0, 120)}"`;
-        if (order && tracking.length) {
-          const { startTracker } = await import("@/lib/goodsTrack");
-          const { data: have } = await admin.from("goods_shipments").select("tracking").eq("order_id", order.id).in("tracking", tracking);
-          const known = new Set(((have || []) as { tracking: string }[]).map((x) => x.tracking));
-          let n = 0;
-          for (const t of tracking) {
-            if (known.has(t)) continue;
-            const carrier = (d.carrier || carrierOf(t)).slice(0, 40);
-            const { data: row } = await admin.from("goods_shipments").insert({ order_id: order.id, carrier, tracking: t, boxes: d.boxes && d.boxes > 0 ? Math.min(9999, d.boxes) : null, eta: /^\d{4}-\d{2}-\d{2}$/.test(d.eta || "") ? d.eta : null, note, files: [], added_by: "staff", author_name: "Portal inbox" }).select("id").single();
-            if (row) { const f = await startTracker(t, carrier).catch(() => null); if (f) await admin.from("goods_shipments").update(f).eq("id", row.id); }
-            n++;
-          }
-          if (n) {
-            const { data: gs } = await admin.from("order_goods").select("status").eq("order_id", order.id).maybeSingle();
-            if (!gs || gs.status === "waiting") await admin.from("order_goods").upsert({ order_id: order.id, status: "on_way", updated_by: "portal inbox", updated_at: new Date().toISOString() });
-            await admin.from("messages").insert({ order_id: order.id, topic: "goods", author_type: "staff", author_email: a.email, author_name: "FBS Print", body: `📦 ${from || "Your goods"} shipped: ${tracking.join(", ")}${d.eta ? ` · expected ${d.eta}` : ""}. We'll let you know when they're here.` });
-            out.added += n;
-          }
-          log.push({ at: new Date().toISOString(), subject: it.subject.slice(0, 120), from: it.from, result: n ? `added ${n} tracking to #${order.number}` : `#${order.number}: tracking already on it` });
-        } else {
-          // the shop decides: which order, or no tracking yet (a confirmation)
+        // the job: the one the email names ("Inbound blanks: FBS #50090 | PO …", Nov 19: five of Cedar's went unmatched
+        // though each named its job), else the AI's pick by PO, name or garments, else the customer's only open job
+        const named = await namedOrder(admin, `${it.subject}\n${body.slice(0, 6000)}`, custIds);
+        const order = named || list.find((o) => o.id === d.order_id) || (list.length === 1 ? list[0] : null);
+        if (tracking.length) {
+          // a vendor's shipment is a manifest like S&S's and SanMar's (Nov 19, Nick: "treat those just like S&S and SanMar
+          // manifests"): Goods & Receiving lists it under Other vendors with live tracking; on its job's Goods when the job
+          // is known, else there to be linked (and matched again by the hourly pass as jobs and POs come in)
+          const cust = order?.customer_id || (custIds.length === 1 ? custIds[0] : null);
+          const { data: c } = cust ? await admin.from("customers").select("company, name").eq("id", cust).maybeSingle() : { data: null };
+          const vendor = (d.vendor || "Vendor").replace(/\s+/g, " ").trim().slice(0, 60);
+          const pcs = d.pieces && d.pieces > 0 ? Math.min(99999, d.pieces) : 0;
+          const lines = tracking.map((t, i) => ({
+            ship_date: new Date().toISOString().slice(0, 10), customer_name: String(c?.company || c?.name || ""), customer_account: "", customer_po: String(d.po || "").slice(0, 80), invoice: "",
+            box: String(i + 1), warehouse: "", method: (d.carrier || carrierOf(t) || "").slice(0, 40), tracking: t, weight: null, sku: "", mill: vendor, style: String(d.what || "").slice(0, 80), color: "", size: "",
+            qty_ordered: i === 0 ? pcs : 0, qty_shipped: i === 0 ? pcs : 0, supplier_order: String(d.order_no || d.po || it.subject).slice(0, 80),
+          }));
+          const { importManifest } = await import("@/lib/manifest");
+          const res = await importManifest(admin, vendor, lines, `Email: ${it.subject}`.slice(0, 200), { customerId: cust, orderId: order?.id || null, how: named ? "the email names the job" : order ? `read from the email${d.why ? `: ${d.why}` : ""}` : "" });
+          out.added += res.new;
+          log.push({ at: new Date().toISOString(), subject: it.subject.slice(0, 120), from: it.from, result: order ? `${tracking.length} tracking on #${order.number} (${vendor})` : res.suggested ? `${tracking.length} tracking from ${vendor}: a job suggested, waiting for an OK on Goods & Receiving` : `${tracking.length} tracking from ${vendor}: on Goods & Receiving to link` });
+          continue;
+        }
+        {
+          // no tracking yet (an order confirmation): whoever owns the account hears what's coming and for which job
           const { data: c } = custIds[0] ? await admin.from("customers").select("company, name").eq("id", order?.customer_id || custIds[0]).maybeSingle() : { data: null };
           const { data: own } = custIds[0] ? await admin.from("customer_private").select("account_owner").eq("customer_id", order?.customer_id || custIds[0]).maybeSingle() : { data: null };
           const { SHOP_NOTIFY_EMAIL } = await import("@/lib/config");
           const ownerName = String(own?.account_owner || "");
           const { data: staff } = ownerName ? await admin.from("staff").select("email").ilike("name", ownerName).maybeSingle() : { data: null };
           const who = String((staff as { email?: string } | null)?.email || SHOP_NOTIFY_EMAIL || "").toLowerCase();
-          const what = order ? `#${order.number}: ${tracking.length ? "" : "no tracking yet"}` : custIds.length ? "which order is it for?" : "whose goods are these?";
+          const what = order ? `#${order.number}: no tracking yet` : custIds.length ? "no tracking yet, which order is it for?" : "whose goods are these?";
           if (who) await admin.from("alerts").insert({ owner: who, kind: "goods", title: `${d.vendor || "Vendor"} email${c ? ` for ${c.company || c.name}` : ""}: ${what}`.slice(0, 120), body: `${note}${tracking.length ? ` · tracking ${tracking.join(", ")}` : ""} · "${it.subject.slice(0, 100)}" in portal@`.slice(0, 400), url: order ? `/shop/orders/${order.id}` : "/shop/receiving", dedupe_key: `portal-inbox:${key}`, order_id: order?.id || null });
           out.alerts++;
           log.push({ at: new Date().toISOString(), subject: it.subject.slice(0, 120), from: it.from, result: `alert: ${what}` });
