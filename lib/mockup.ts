@@ -100,6 +100,30 @@ function drawContained(x: CanvasRenderingContext2D, img: HTMLImageElement, W: nu
 }
 
 /**
+ * Where a hoodie's hood meets its shoulders on the photo (Nov 20 2026), or -1 when no hood shows: the hood is a narrow top
+ * (its width about steady from 4% to 10% of the way down), then the shoulders jump out (30%+ wider, and still wider a
+ * little lower). The garment's top is the narrowest row just above that jump (the neck, where a hood standing up meets the
+ * shoulders), or halfway up the jump when the hood widens straight into them (a hoodie on a form).
+ */
+function hoodBottom(L: Int16Array, R: Int16Array, T: number, B: number): number {
+  const h = B - T, w = (y: number) => (L[y] >= 0 ? R[y] - L[y] : -1), at = (f: number) => Math.round(T + f * h);
+  const top: number[] = []; for (let y = at(0.04); y <= at(0.1); y++) if (w(y) > 0) top.push(w(y));
+  if (top.length < 5) return -1;
+  top.sort((a, b) => a - b);
+  const hood = top[top.length >> 1];
+  if (top[top.length - 1] > 1.35 * top[0]) return -1; // no steady hood: a crew, a tee's collar widening into its shoulders
+  let yJ = -1;
+  for (let y = at(0.08); y <= at(0.4); y++) if (w(y) >= 1.3 * hood && w(Math.min(B, y + Math.round(0.03 * h))) >= 1.4 * hood) { yJ = y; break; }
+  if (yJ < 0) return -1;
+  const a = Math.max(at(0.04), yJ - Math.round(0.06 * h));
+  let m = a; for (let y = a; y <= yJ; y++) if (w(y) > 0 && w(y) < w(m)) m = y;
+  if (m - a > 2) return m;
+  const mid = (w(a) + w(yJ)) / 2;
+  for (let y = a; y <= yJ; y++) if (w(y) >= mid) return y;
+  return yJ;
+}
+
+/**
  * The bottom of the sewn front neckline (Oct 20, Nick: "when we say a drop, we mean it right from [the bottom of the
  * neckline] … on every garment … all you've got to figure each time is where that seam starts"): where the collar rib
  * ends and the body begins; on a hoodie, the bottom of the hood. The neck area is blurred a little (heather speckle
@@ -279,12 +303,19 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   const bodyW = R[yy] - L[yy];
   if (bodyW < 300) return null;
   const ref = REF[view];
+  // a hood: the garment is measured from where the hood meets its shoulders, never from the top of the hood (Nov 20 2026,
+  // Nick on a Port & Co PC90H: "the scaling on this product is way off"; SanMar's hoodies are photographed with the hood
+  // standing up, a fifth of the photo's height, so the hoodie read as a short garment and every print came out ~30% too
+  // big). Every hoodie photo, front or back, flat or on a form: the hood is the narrow top with near-straight sides, then
+  // the shoulders jump out; where they meet (the dip at the neck, else halfway up the jump) is the garment's top.
+  const hps = opts.hood && T > 2 && B < H - 3 ? hoodBottom(L, R, T, B) : -1;
+  const T0 = hps > 0 ? hps : T;
   // how big the photo is drawn, against the reference Gildan 5000: its height and its body width, averaged. When they
   // disagree by more than 10% the garment's cut is different, not the photo's zoom: a fitted Bella 3001 is ~16% narrower
   // at the same height (Oct 16, Nick: "why isn't the 3001 centered like a 5000"; it was blown up 8%), and a long sleeve
   // or hoodie's arms hang beside the body and read as width. Then the height alone sets the scale (unless the photo
   // cuts the garment off at the top or bottom, when the height can't be trusted).
-  const sw = bodyW / ref.bodyW, sh = (B - T) / ref.h, cut = T <= 2 || B >= H - 3;
+  const sw = bodyW / ref.bodyW, sh = (B - T0) / ref.h, cut = T <= 2 || B >= H - 3;
   const s = Math.abs(sw - sh) > 0.1 && !cut ? sh : (sw + sh) / 2;
   // a short-sleeve tee that reads wider than its height: the photo is still shown at its height (Oct 21, Nick: the
   // adult A4 came out "really small" when the whole photo was shrunk to its chest), and prints are sized by the chest
@@ -304,7 +335,8 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   // a hoodie: its photo's height runs from the top of the hood, about 9% more than the garment itself, so every hoodie
   // (whatever color, however its hood lies in the photo) has its prints drawn that much smaller (Oct 23, Nick: "it
   // shouldn't be that big on the hoodies"; the 3719 and 3739 next to the 3945 crew)
-  if (opts.hood && !cut) ps = Math.min(ps, sh * 0.915);
+  // (only when the hood couldn't be found on the photo: its height is the hood's guess)
+  if (opts.hood && !cut && hps < 0) ps = Math.min(ps, sh * 0.915);
   // a hoodie's back: the hood lies over the top of the back, so a print there goes behind it (Oct 23, Nick: "instead of
   // dropping the print way down lower below the hood… clip the art only in the mockup so that it appears to go behind
   // the hood"). The hood's bottom edge is the dark shadow line it casts across the back; everything above it, across the
@@ -483,7 +515,7 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
     const med = (a: number[]) => a.sort((m, n) => m - n)[a.length >> 1];
     return "#" + [med(rs), med(gs), med(bs)].map((v) => v.toString(16).padStart(2, "0")).join("");
   })();
-  return { s: ps, ...(ps !== s ? { zs: s } : {}), cx, top: T, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}), ...(neckLines.length ? { neckLines } : {}), ...(hex ? { hex } : {}) };
+  return { s: ps, ...(ps !== s ? { zs: s } : {}), cx, top: T0, mask, sleeve: { left, right }, body: { l: L[yy], r: R[yy], hem: B }, ...(neck != null ? { neck } : {}), ...(neckLines.length ? { neckLines } : {}), ...(hex ? { hex } : {}) };
 }
 
 /**
@@ -612,7 +644,8 @@ export function measureBag(img: HTMLImageElement, widthIn: number): Fit | null {
  */
 export function normOf(fit: Fit | null | undefined, view: View): { z: number; tx: number; ty: number } {
   if (!fit || fit.flat || !fit.body || !(fit.s > 0)) return { z: 1, tx: 0, ty: 0 };
-  const z = Math.max(0.8, Math.min(1.4, 1 / (fit.zs || fit.s)));
+  // (up to 1.9: a hoodie photographed small with its hood up is drawn much bigger once measured from its shoulders)
+  const z = Math.max(0.8, Math.min(1.9, 1 / (fit.zs || fit.s)));
   // lined up by the neckline seam when it was found (Oct 20, Nick: "just line up the garments so they're all in the
   // same place"): every color shows its seam at the same height, so the art sits in the same spot on each one
   const byTop = REF[view].top - z * fit.top;

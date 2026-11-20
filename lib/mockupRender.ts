@@ -65,7 +65,7 @@ export async function renderMockup(o: { photo: string; art: string; location: st
   const ratio = o.artRatio || (raw.naturalWidth ? raw.naturalHeight / raw.naturalWidth : 1);
   // an upper arm or cuff print is on a long sleeve (Nov 16, #50051)
   const hw = o.garment ? headwearOf(o.garment) : null;
-  const fit = (hw ? measureCap(bg, view, hw === "hat" ? undefined : headwearFit(hw, o.garment?.widthIn)) : null) || measureGarment(bg, view, { long: !!spot.arm });
+  const fit = (hw ? measureCap(bg, view, hw === "hat" ? undefined : headwearFit(hw, o.garment?.widthIn)) : null) || measureGarment(bg, view, { long: !!spot.arm, hood: /\bhood/i.test(o.garment?.description || "") });
   const wIn = o.widthIn ? Math.min(o.widthIn, printWidth("MAX", o.location, ratio)) : printWidth(spot.defW ? `${spot.defW}` : "11", o.location, ratio);
   const p = basePlacement(o.location, wIn, ratio, null, o.youth ? 22 / 18 : 1, view, fit);
   const out = o.size || 900, k = out / PHOTO_W;
