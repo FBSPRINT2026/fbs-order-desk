@@ -80,7 +80,10 @@ export async function PUT(req: Request) {
       const priceOverride = b.price === "last" ? (l.priceOverride ?? each.get(was) ?? null) : l.priceOverride ?? null;
       return { ...l, id: uid(), sizes: sizes as GLine["sizes"], priceOverride };
     });
-    return { ...c, id: uid(), fromGroup: g.id, lines, imprints: c.imprints.map((d) => ({ ...d, id: uid() })) } as Group;
+    // a print the customer already approved on that job is already confirmed here (Nov 20 2026, #50174: a reorder of
+    // #50047's visual mockup wouldn't send until its Full Back was confirmed again)
+    const was = !!(o as { approved_at?: string | null }).approved_at || ["approved", "production", "fulfillment", "ready", "completed"].includes(String((o as { status?: string }).status));
+    return { ...c, id: uid(), fromGroup: g.id, lines, imprints: c.imprints.map((d) => ({ ...d, id: uid(), ...(was && !d.ok ? { ok: { by: `Reorder of #${o.number}`, at: new Date().toISOString() } } : {}) })) } as Group;
   }).filter((g) => g.lines.length);
   // styles on the file that weren't on last time's order: added to the first group
   if (b.mode === "file" && b.add?.length && groups[0]) for (const a of b.add) { const nl = newGLine(); nl.style = a.style; nl.brand = a.brand || ""; nl.garment = a.garment || ""; nl.color = a.color; nl.sizes = a.sizes as GLine["sizes"]; groups[0].lines.push(nl); }
