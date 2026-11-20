@@ -1069,8 +1069,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [rasterAsk, setRasterAsk] = useState<{ imId: string; d: Design } | null>(null);
   const [rasterBg, setRasterBg] = useState(true);
   function askRaster(imId: string, d: Design) {
-    // asked once per logo: its answer is kept on it (Design.specs.bg)
-    if (isVector(d.file_type, d.file_name) || rasterOk[d.id] || ((d.specs || {}) as { bg?: string }).bg) return;
+    // asked once per logo: its answer is kept on it (Design.specs.bg); never for a stitch file (its picture is drawn from the stitches)
+    if (isVector(d.file_type, d.file_name) || /\.(dst|emb)$/i.test(d.file_name || "") || rasterOk[d.id] || ((d.specs || {}) as { bg?: string }).bg) return;
     setRasterBg(!keepBg[d.id]);
     setRasterAsk({ imId, d });
   }
@@ -2151,7 +2151,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
     return out.sort((a, b) => Number(!!b.same) - Number(!!a.same));
   };
-  const swapLogo0 = (x: Imprint, d: Design): Imprint => (x.design_id === d.id ? x : { ...x, design_id: d.id, inks: d.inks && !/^simulated/i.test(d.inks) ? d.inks : "", colors: Math.max(1, Math.round(+(d.colors || 0)) || 1), inkMap: undefined, center: undefined });
+  const swapLogo0 = (x: Imprint, d: Design): Imprint => {
+    if (x.design_id === d.id) return x;
+    const y: Imprint = { ...x, design_id: d.id, inks: d.inks && !/^simulated/i.test(d.inks) ? d.inks : "", colors: Math.max(1, Math.round(+(d.colors || 0)) || 1), inkMap: undefined, center: undefined };
+    // a stitch file (DST / EMB) is embroidery, sewn at its own size: never scaled (Nov 20 2026, Nick: "if you upload a DST…
+    // it automatically just knows it's embroidery… and sets the file as is. You never want to scale a DST")
+    const sew = ((d.specs || {}) as { embroidery?: { files?: { wIn?: number; hIn?: number }[] } }).embroidery?.files?.[0];
+    if (/\.(dst|emb)$/i.test(d.file_name || "") || sew) {
+      const w = +(sew?.wIn || 0);
+      return { ...y, method: "embroidery", ...(w > 0 ? { size: `${Math.round(w * 100) / 100}" wide`, sizeFrom: "film" as const } : {}) };
+    }
+    return y;
+  };
   /** the order's other groups' prints of this logo (the same method), the one at this print's spot first */
   const orderUses = (x: Imprint, designId?: string) => {
     if (!order || !curGroup || !designId) return [] as { g: ReturnType<typeof orderGroups>[number]; gi: number; p: Imprint }[];

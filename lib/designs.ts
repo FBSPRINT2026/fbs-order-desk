@@ -31,6 +31,8 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   // came in seven made-up colors). The ones picked with it, else the customer's files with the same name (sewMates)
   let mates: File[] = (opts.with || []).filter((f) => f !== opts.file && /\.(pdf|emb|dst)$/i.test(f.name));
   let stopHex: string[] | null = null;
+  // a stitch file is embroidery, whatever else is known about it
+  if (/\.(dst|emb)$/i.test(opts.file.name)) opts = { ...opts, method: "embroidery" };
   if (/\.dst$/i.test(opts.file.name) && !opts.preview) {
     if (!mates.length && opts.customer_id) mates = await sewMates(sb, opts.customer_id, opts.file.name).catch(() => []);
     const ws = await worksheetOf(mates).catch(() => null);
@@ -240,32 +242,20 @@ export async function cropPreviews(sb: SupabaseClient, list: Design[], max = 30)
 }
 
 
-/** a sew file's name without its extension and the digitizer's stamps ("DO-5868_westwood_20261119171356_a93afc1c" → "do-5868_westwood") */
-export const sewStem = (n: string) => { let x = n.replace(/\.[^.]+$/, "").toLowerCase(); for (let i = 0; i < 4; i++) x = x.replace(/[ _.-]+(?:[0-9a-f]{6,}|\d{4,})$/i, ""); return x; };
+export { sewStem } from "./sewStem";
 
 /**
- * The files that go with a sew file, found by name among what the customer sent (Nov 20 2026): email attachments
- * (emails/<customer>/…) and portal uploads (requests/<customer>/<order>/…) whose name matches the DST's once the
- * digitizer's date and code stamps are off ("…_20261119171402_3b4a1c2a.pdf" and "…_20261119171356_a93afc1c.DST").
+ * The files that go with a sew file, found by name among what the customer sent (Nov 20 2026): email attachments and
+ * portal uploads whose name matches the DST's once the digitizer's date and code stamps are off
+ * ("…_20261119171402_3b4a1c2a.pdf" and "…_20261119171356_a93afc1c.DST"). Looked up on the server (app/shop/sew-mates-actions.ts).
  */
-export async function sewMates(sb: SupabaseClient, customerId: string, fileName: string): Promise<File[]> {
-  const stem = sewStem(fileName), own = fileName.toLowerCase();
-  if (stem.length < 3) return [];
+export async function sewMates(_sb: SupabaseClient, customerId: string, fileName: string): Promise<File[]> {
+  const { sewMateLinks } = await import("@/app/shop/sew-mates-actions");
+  const links = await sewMateLinks(customerId, fileName);
   const out: File[] = [];
-  const look = async (dir: string) => {
-    const { data } = await sb.storage.from("proofs").list(dir, { limit: 200, sortBy: { column: "created_at", order: "desc" } });
-    for (const o of data || []) {
-      const n = o.name.replace(/^[a-z0-9]{6,10}-/i, ""); // emails/… names carry a short prefix
-      if (!/\.(pdf|emb)$/i.test(n) || n.toLowerCase() === own || sewStem(n) !== stem) continue;
-      if (out.some((f) => f.name.toLowerCase().slice(-4) === n.toLowerCase().slice(-4))) continue; // the newest of each kind
-      const { data: b } = await sb.storage.from("proofs").download(`${dir}/${o.name}`);
-      if (b) out.push(new File([b], n, { type: /\.pdf$/i.test(n) ? "application/pdf" : "application/octet-stream" }));
-    }
-  };
-  await look(`emails/${customerId}`);
-  if (!out.length) {
-    const { data: ods } = await sb.storage.from("proofs").list(`requests/${customerId}`, { limit: 50, sortBy: { column: "created_at", order: "desc" } });
-    for (const d of (ods || []).slice(0, 10)) { await look(`requests/${customerId}/${d.name}`); if (out.length) break; }
+  for (const l of links) {
+    const b = await fetch(l.url).then((r) => (r.ok ? r.blob() : null)).catch(() => null);
+    if (b) out.push(new File([b], l.name, { type: /\.pdf$/i.test(l.name) ? "application/pdf" : "application/octet-stream" }));
   }
   return out;
 }
