@@ -2082,7 +2082,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 else if (p.helperFile) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&helper=1&helperFile=${encodeURIComponent(p.helperFile)}`);
               }} />
           )}
-          {isSimpleKind(o.product_kind) ? <SimpleLines orderId={o.id} customerId={o.customer_id} kind={o.product_kind} groups={o.groups} hidePrices={!seesMoney || undefined} update={(fn) => patch((d) => fn(d.groups))} save={save} /> : <>
+          {isSimpleKind(o.product_kind) ? <SimpleLines orderId={o.id} customerId={o.customer_id} kind={o.product_kind} groups={o.groups} onLogo={o.customer_id ? async (gid) => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&logo=1`); } : undefined} hidePrices={!seesMoney || undefined} update={(fn) => patch((d) => fn(d.groups))} save={save} /> : <>
           <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => g.sample?.follows ? null : (<div key={g.id} className={g.sample ? "smr-grp" : "smr-grp0"}>
             {g.sample && <SampleBar g={g} orderId={o.id} me={who.staffName || who.email || ""} patch={patch} onEdit={() => setSampleTool({ kind: g.sample?.kind || "only", groupId: g.id })} />}
             {/* a pre-production sample of this run is a line in it (GroupSample.follows; Nick, Nov 17 2026, option A) */}

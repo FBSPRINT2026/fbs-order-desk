@@ -17,9 +17,11 @@ type Kind = Exclude<ProductKind, "apparel">;
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PROOF: Record<string, [string, string]> = { sent: ["Proof sent", "wait"], approved: ["Approved", "ok"], changes: ["Needs changes", "no"] };
 
-export default function SimpleLines({ orderId, customerId, kind, groups, update, hidePrices, save }: {
+export default function SimpleLines({ orderId, customerId, kind, groups, update, hidePrices, save, onLogo }: {
   orderId: string; /** the order's customer, for their own card templates */ customerId?: string | null; kind: Kind; groups: Group[]; update: (fn: (groups: Group[]) => void) => void; hidePrices?: boolean;
   /** saves the order now (before the proofs go out, so the server sends what's on screen) */ save: () => Promise<void>;
+  /** Add logo: the Mockup Creator's logo mockup for this item's group (the same tool an apparel group's Add logo opens;
+   *  Nick, Nov 20 2026, #50177 Peticolas patches: "promotional product orders have the add logo feature") */ onLogo?: (groupId: string) => void;
 }) {
   const sb = createClient();
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -28,7 +30,9 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
   /** the business card tool, open for one item */
   const [card, setCard] = useState<{ gi: number; li: number } | null>(null);
   const lines = groups.flatMap((g, gi) => g.lines.map((l, li) => ({ g, gi, l, li })));
-  const paths = lines.map((x) => linePic(x.l.spec)).filter((p): p is string => !!p);
+  // a group's logo mockup (Add logo) is its items' picture when they have none of their own
+  const logoPic = (g: Group) => (g.mockupKind === "logo" && g.mockupThumbs?.[0]) || "";
+  const paths = [...lines.map((x) => linePic(x.l.spec)), ...groups.map(logoPic)].filter((p): p is string => !!p);
   const key = paths.join("|");
   useEffect(() => {
     if (!paths.length) return;
@@ -104,13 +108,15 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
         {!lines.length && <p className="faint">No items yet.</p>}
         {lines.map(({ gi, l, li }) => {
           const s: SimpleSpec = { kind, ...(l.spec || {}) } as SimpleSpec;
-          const q = qtyOf(l), each = +(l.priceOverride || 0) || 0, url = linePic(s) ? urls[linePic(s)] : "";
+          const lp = linePic(s) || (!s.image ? logoPic(groups[gi]) : "");
+          const q = qtyOf(l), each = +(l.priceOverride || 0) || 0, url = lp ? urls[lp] : "";
           const pf = s.proof ? PROOF[s.proof.status] : null;
           const id = `${gi}-${li}`;
           return (
             <div key={l.id} className="sol-ln">
               <label className={"sol-img" + (s.image ? " has" : "")} title={s.image ? "Change the picture" : "Add a picture: what the customer approves"}>
                 {s.image ? (url ? <img src={url} alt={l.garment || "Item"} /> : isPdf(s.image) ? <span className="sol-pdf">PDF<small>{s.imageName}</small></span> : <span className="faint">…</span>)
+                  : url ? <img src={url} alt={l.garment || "Item"} />
                   : <span className="sol-add">{busy === id ? "Uploading…" : "+ Picture"}</span>}
                 <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(gi, li, f); }} />
               </label>
@@ -118,6 +124,9 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
                 <div className="sol-top">
                   <input className="sol-name" aria-label="Item name" placeholder={kind === "signage" ? "Mambo 5K start banner" : kind === "promo" ? "20 oz vacuum tumbler" : "Business cards: Sarah Lee"} value={l.garment} onChange={(e) => edit(gi, li, (x) => { x.garment = e.target.value; })} />
                   {pf && <span className={"sol-pf " + pf[1]} title={s.proof?.note || ""}>{pf[0]}</span>}
+                  {onLogo && kind === "promo" && li === 0 && <button type="button" className="btn sm" title="The logo, its size, spot and colors on a close-up: the same Add logo as an apparel order. It becomes this item's picture and proof" onClick={() => onLogo(groups[gi].id)}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ marginRight: 5, verticalAlign: "-2px" }}><path d="M4 5h11M4 5v14h16v-7M8.5 15.5l3-3 2.5 2.5 2-2 3 3M18 3v6M15 6h6" /></svg>
+                    {groups[gi].mockupKind === "logo" && groups[gi].mockupAt ? "Edit logo" : "Add logo"}</button>}
                   {kind === "paper" && <button type="button" className="btn sm" title="Make the card from the customer's template: type the name, title, address…" onClick={() => setCard({ gi, li })}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden style={{ marginRight: 5, verticalAlign: "-2px" }}><rect x="2.5" y="5.5" width="19" height="13" rx="1.5" /><path d="M6 10h6M6 13.5h9" /></svg>
                     {s.card ? "Edit card" : "Business card"}</button>}
