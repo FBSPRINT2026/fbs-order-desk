@@ -575,6 +575,9 @@ export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; p
       const r = await sanmarPreSubmit(order);
       return { ok: true as const, checked: r, total: Math.round(sub * (1 + fee / 100) * 100) / 100, po: order.poNum };
     }
+    // SanMar's test system (SANMAR_PO=edev) answers "PO Submission successful" but orders nothing and charges nothing:
+    // never shown as ordered (Nov 20 2026, Nick: Fossil #50135's goods "were never ordered yesterday from Sanmar")
+    if (sanmarPOMode() === "edev") return { ok: false as const, error: `SanMar ordering is still on SanMar's test system (SANMAR_PO is "edev" in Vercel), so nothing would really be ordered or charged. Order these on sanmar.com, or set SANMAR_PO to "on" in Vercel for real orders. Nothing was sent.` };
     const r = await sanmarSubmitPO(order);
     await keepShort(admin, p.customerId, order.poNum).catch(() => null);
     const garments = (p.garments || []).filter((g) => g && g.style && goodsPcs(g) > 0).slice(0, 60);
