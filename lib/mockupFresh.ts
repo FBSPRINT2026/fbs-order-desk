@@ -74,6 +74,19 @@ export function mockupStale(g: Group, designs: { id: string; preview_path?: stri
   return (g.imprints || []).some((im) => (im.emb?.file?.at || "") > g.mockupAt!);
 }
 
+/**
+ * Whether a group waits on our Mockup Creator after Create order: it has a logo to draw (not a brand logo shown as is),
+ * and isn't printed from the customer's own separations (their mockup is the mockup: CLAUDE.md "A customer's own
+ * separations"; Nick, Nov 20 2026, Tiger Blue #50130: Create order opened the Mockup Creator on their .ai and saved a
+ * white box as the mockup), nor already has a picture (ours, a visual mockup).
+ */
+export function needsOurMockup(g: Pick<Group, "imprints" | "mockupThumbs" | "visualMockup">): boolean {
+  const ims = g.imprints || [];
+  if ((g.mockupThumbs || []).some(Boolean) || g.visualMockup) return false;
+  if (ims.length && ims.every((im) => im.custSeps)) return false;
+  return ims.some((im) => im.design_id && !im.fromBrand && !im.custSeps);
+}
+
 /** THE link into a group's mockup (the logo builder when it was made there) */
 export function mockupHref(orderId: string, g: Pick<Group, "id" | "mockupKind">, extra = ""): string {
   return `/shop/artwork/mockup?order=${orderId}&group=${g.id}${g.mockupKind === "logo" ? "&logo=1" : ""}${extra}`;

@@ -1,4 +1,5 @@
 "use client";
+import { needsOurMockup } from "@/lib/mockupFresh";
 import { withMethod } from "@/lib/brands";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { makePreview } from "@/lib/artPrep";
@@ -166,7 +167,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
       const gs = ((o?.groups || []) as Group[]);
       if (gs.some((g) => (g.customerMockups || []).length)) { setStep("Saving the customer's mockup to Production files…"); await Promise.race([stampOrderMockups(sb, j.id, gs), new Promise((res) => setTimeout(res, 25_000))]); }
       // our mockup only when a group with art has none yet: a reorder of a portal order brings its mockups along
-      const first = gs.find((g) => g.imprints.some((x) => x.design_id) && !(g.mockupThumbs || []).some(Boolean));
+      const first = gs.find(needsOurMockup);
       if (first) url = `/shop/artwork/mockup?order=${j.id}&group=${first.id}&auto=1`;
     } catch { /* the order page stamps them when it opens */ }
     url = `${url}${url.includes("?") ? "&" : "?"}email=${activityId}&chat=${j.id}`;

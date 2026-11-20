@@ -68,7 +68,7 @@ import { closestThread, isThreadName, threadByName, threadChoices, threadLabel }
 import { needleThreads } from "@/lib/needleThreads";
 import { loadThreadStock } from "@/lib/threadStock";
 import { stitchLook } from "@/lib/stitchLook";
-import { mockupArtStamp } from "@/lib/mockupFresh";
+import { mockupArtStamp, needsOurMockup } from "@/lib/mockupFresh";
 import { mockupContentKey } from "@/lib/mockupFresh";
 import EmbroideryPanel from "@/components/EmbroideryPanel";
 import { rememberEmbroidery } from "@/lib/embroideryLast";
@@ -4085,7 +4085,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       autoState.current = "done";
       if (quiet) { try { window.parent.postMessage({ type: "fbs:mockup-saved", order: o.id, group: groupId }, location.origin); } catch { /* */ } return; }
       const gs = orderGroups(o), at = gs.findIndex((x) => x.id === groupId);
-      const next = gs.slice(at + 1).find((x) => x.imprints.some((d) => d.design_id) && !x.mockupAt);
+      const next = gs.slice(at + 1).find((x) => !x.mockupAt && needsOurMockup(x));
       setMsg(next ? "Saved. On to the next group…" : "Saved. Opening the order…");
       // back to the order you're working on: ?stay=1 so a customer's order request doesn't ask to open it in the Job Center
       // again (Nov 10, Amanda, #50009); orders that aren't requests ignore it

@@ -1,4 +1,5 @@
 "use client";
+import { needsOurMockup } from "@/lib/mockupFresh";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { OrderStart } from "@/components/OrderStartPick";
@@ -94,7 +95,7 @@ export async function partialStep(ctx: PartialCtx, mode: PartKind, into: { id: s
   let url = `/shop/orders/${j.id}?email=${activityId}`;
   if (mode === "mockup") {
     const { data: o } = await createClient().from("orders").select("groups").eq("id", j.id).maybeSingle();
-    const g = ((o?.groups || []) as Group[]).find((x) => x.imprints.some((im) => im.design_id));
+    const g = ((o?.groups || []) as Group[]).find(needsOurMockup);
     if (g) url = `/shop/artwork/mockup?order=${j.id}&group=${g.id}&auto=1&email=${activityId}`;
   }
   step(into ? (mode === "art" ? "Prints and art added" : "Garments and sizes added") : `#${j.number} made`);

@@ -1,6 +1,6 @@
 "use client";
 import { SAMPLE_DEFAULT } from "@/lib/pricing";
-import { remakeMockup } from "@/lib/mockupFresh";
+import { remakeMockup, needsOurMockup } from "@/lib/mockupFresh";
 import { sizeRank } from "@/lib/sizeOrder";
 import { clearPageFile } from "@/lib/inkColors";
 import { pdfText } from "@/lib/printavoArt";
@@ -1071,7 +1071,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       if (gs.some((x) => (x.customerMockups || []).length)) note("Saving the customer's mockup to Production files…");
       if (gs.some((x) => (x.customerMockups || []).length)) await Promise.race([stampOrderMockups(sb, j.id, gs), new Promise((res) => setTimeout(res, 25_000))]);
       // a brand's logo on file needs no mockup (it shows as the logo itself on the order, like #40195)
-      const first = gs.find((x) => x.imprints.some((im) => im.design_id && !im.fromBrand) && !(x.mockupThumbs || []).some(Boolean));
+      const first = gs.find(needsOurMockup);
       if (first) { url = `/shop/artwork/mockup?order=${j.id}&group=${first.id}&auto=1`; mockup = true; }
       else if (gs.some((x) => (x.mockupThumbs || []).some(Boolean))) did.push("Same mockup as last time (nothing new made)");
     } catch { /* the order page stamps them when it opens */ }
