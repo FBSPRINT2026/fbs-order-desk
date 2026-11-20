@@ -583,3 +583,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 20 7:43am · 1.3.826 · Nick · A reorder of an approved job comes with its prints already confirmed, so a visual mockup's reorder sends without confirming each print again (#50174)
 - Nov 20 7:45am · 1.3.827 · Nick · Send's Reply to offers emails that were filed or moved out of the inbox too (David Phillips' email from yesterday, #50174)
 - Nov 20 8:09am · 1.3.828 · Nick · Isacord worksheets run as Madeira Polyneon: Buckets of Ink's Isacord-to-Madeira chart (160 codes, lib/isacordMadeira.ts) picks the Madeira for each Isacord needle, nearest color when the chart has no code
+- Nov 20 8:09am · 1.3.829 · Nick · Sky Blue / Baby Blue read as light blues (a worksheet's Sky Blue went to a dark Madeira)
