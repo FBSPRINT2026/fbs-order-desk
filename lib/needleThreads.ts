@@ -1,6 +1,7 @@
 import { threadByName, threadLabel, threads as allThreads, type Thread } from "@/lib/embroidery";
 import type { SheetThread, Stop, Worksheet } from "@/lib/worksheet";
 import { guessHex } from "@/lib/mockup";
+import { madeiraForIsacord } from "@/lib/isacordMadeira";
 
 /**
  * THE thread on each needle of a stitch file, for every place that names or draws it: the digitizing page (its picture,
@@ -18,7 +19,7 @@ import { guessHex } from "@/lib/mockup";
  * `sewn` (needle → thread name) is what was actually sewn, when a sew-out recorded it, and wins.
  */
 export type NeedleThread = { needle: number; label: string; hex: string; thread: Thread | null; from: "sheet" | "order" | "default" | "ours";
-  /** "ours": what the worksheet said instead ("Madeira 1800 Black") and whether staff picked it or the client's standard did */ sheet?: string; why?: "staff" | "standard";
+  /** "ours": what the worksheet said instead ("Madeira 1800 Black") and whether staff picked it or the client's standard did */ sheet?: string; why?: "staff" | "standard" | "chart";
   /** not sewn on this logo (SheetThread.skip): its stops are left out of the picture, the threads and the stitch count */ skip?: boolean };
 
 const isDefault = (chart: string) => /^default$/i.test(chart || "");
@@ -54,6 +55,12 @@ export function needleThreads(ws: Worksheet | null | undefined, inks: string, se
     if (sewn?.[x.needle]) return fromName(sewn[x.needle], x.needle, "order");
     // the thread we really run (picked on the logo's page, or the client's standard for that color) wins over the sheet
     if (x.ours) { const st = sheetThread(x); return { ...fromName(x.ours, x.needle, "ours"), sheet: st ? threadLabel(st) : `${x.code}${x.name ? ` ${x.name}` : ""}`, why: x.oursFrom || "staff" }; }
+    // an Isacord worksheet: the Madeira Polyneon we run instead (Nov 20 2026, lib/isacordMadeira.ts), the Isacord kept as what the sheet said
+    if (/isacord/i.test(x.chart)) {
+      const m = madeiraForIsacord(x.code, x.name, defaultHex);
+      const st = sheetThread(x);
+      if (m.thread) return { needle: x.needle, label: threadLabel(m.thread), hex: m.thread.hex, thread: m.thread, from: "ours" as const, sheet: st ? threadLabel(st) : `Isacord ${x.code ? x.code + " " : ""}${x.name}`.trim(), why: "chart" as const };
+    }
     if (!isDefault(x.chart)) {
       const t = sheetThread(x);
       return { needle: x.needle, label: t ? threadLabel(t) : `${x.code}${x.name ? ` ${x.name}` : ""}`, hex: t?.hex || defaultHex(x.name), thread: t, from: "sheet" };

@@ -35,10 +35,10 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
     if (!mates.length && opts.customer_id) mates = await sewMates(sb, opts.customer_id, opts.file.name).catch(() => []);
     const ws = await worksheetOf(mates).catch(() => null);
     if (ws?.sequence.length) {
-      const { stopColors } = await import("./needleThreads");
-      const { sheetThreadName } = await import("./worksheet");
+      const { stopColors, needleThreads } = await import("./needleThreads");
       stopHex = stopColors(ws, "");
-      const names = ws.threads.map((x) => sheetThreadName(x));
+      // the threads we run (an Isacord sheet's Madeira equivalents, lib/isacordMadeira.ts)
+      const names = [...new Set(needleThreads(ws, "").filter((t) => !t.skip).map((t) => t.label))];
       opts = { ...opts, method: opts.method || "embroidery", colors: names.length, inks: opts.inks || names.join(", ") };
     }
   }
