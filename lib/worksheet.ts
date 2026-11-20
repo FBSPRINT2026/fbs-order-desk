@@ -55,9 +55,43 @@ function parseHatch(t: string): Worksheet | null {
   };
 }
 
+/**
+ * Wilcom's Designer worksheet (ES-65 and later; Nov 20 2026, A Banner Co's "westwood": its DST came in with seven made-up
+ * colors because this sheet wasn't read): a colorway table "# C St. Descr Code", one row a stop: "1. 15 2172 White 0015
+ * Brand: Isacord 40" (stop, needle, stitches, the color's name, its code when there is one, the thread brand). The header
+ * gives the size as "H: 2.51 in W: 2.52 in" and its counts labels-first ("Stitches: Colors: Color changes: Stops: 12905 3 6 7").
+ */
+function parseDesigner(t: string): Worksheet | null {
+  if (!/Brand:/i.test(t) || !/#\s*C\s+St\.?/i.test(t)) return null;
+  const body = t.slice(t.search(/#\s*C\s+St\.?/i));
+  const row = /(\d{1,3})\.\s+(\d{1,2})\s+([\d,]+)\s+(.*?)\s*Brand:\s*(.+?)(?=\s+\d{1,3}\.\s+\d{1,2}\s+[\d,]+\s|\s+Total Bobbin|\s+Author|\s*$)/gi;
+  const seen = new Set<number>(), seq: Stop[] = [];
+  for (const m of body.matchAll(row)) {
+    const n = +m[1]; if (seen.has(n)) continue; seen.add(n);
+    const d = m[4].trim(), cm = /^(.*?)\s+(\d{3,5}|[A-Z]?\d{3,5}[A-Z]?)$/.exec(d);
+    seq.push({ n, needle: +m[2], stitches: num(m[3]), code: cm ? cm[2] : "", name: (cm ? cm[1] : d).trim(), chart: m[5].trim() });
+  }
+  if (!seq.length) return null;
+  seq.sort((a, b) => a.n - b.n);
+  const threads: SheetThread[] = [];
+  // a thread with no code is told apart by its name ("Sky Blue" twice is one thread)
+  for (const s of seq) {
+    const k = threads.find((x) => x.chart === s.chart && (s.code ? x.code === s.code : !x.code && x.name.toLowerCase() === s.name.toLowerCase()));
+    if (k) { k.stitches += s.stitches; k.stops++; } else threads.push({ needle: s.needle, code: s.code, name: s.name, chart: s.chart, stitches: s.stitches, stops: 1 });
+  }
+  const hw = /H:\s*([\d.]+)\s*in\s+W:\s*([\d.]+)\s*in/i.exec(t);
+  const counts = /Stitches:\s*Colors:\s*Color changes:\s*Stops:\s*([\d,]+)\s+(\d+)\s+(\d+)\s+(\d+)/i.exec(t);
+  const trims = /Trims:\s*(?:\S+\s+)?(\d+)/i.exec(t);
+  return {
+    stitches: counts ? num(counts[1]) : seq.reduce((a, s) => a + s.stitches, 0), wIn: hw ? num(hw[2]) : 0, hIn: hw ? num(hw[1]) : 0,
+    colors: threads.length, changes: counts ? num(counts[3]) : Math.max(0, seq.length - 1), stops: seq.length, trims: trims ? num(trims[1]) : 0,
+    sequence: seq, threads, real: true,
+  };
+}
+
 export function parseWorksheet(text: string): Worksheet | null {
   const t = text.replace(/\s+/g, " ");
-  if (!/Stop Sequence/i.test(t)) return parseHatch(t);
+  if (!/Stop Sequence/i.test(t)) return parseDesigner(t) || parseHatch(t);
   const head = (re: RegExp) => num(re.exec(t)?.[1]);
   const sequence: Stop[] = [];
   const body = t.slice(t.search(/Stop Sequence/i));

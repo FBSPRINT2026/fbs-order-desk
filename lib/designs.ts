@@ -25,7 +25,23 @@ const safe = (n: string) => n.replace(/[^\w.\-]+/g, "_");
 export async function uploadDesign(sb: SupabaseClient, opts: { file: File; preview?: File | null; customer_id: string | null; name?: string; colors?: number; inks?: string; notes?: string; method?: string; by?: string;
   /** saved to the customer's logos (their library: Artwork → Saved logos) because someone chose to (Oct 31, Nick);
    *  else it lives in the background with the mockups and orders that use it */ saved?: boolean; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean;
-  /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; fit?: "cover" | "stretch"; note?: string } }): Promise<Design> {
+  /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; fit?: "cover" | "stretch"; note?: string };
+  /** the files that came with a DST or EMB (its worksheet PDF, the EMB): picked together, or found by name (sewMates) */ with?: File[] }): Promise<Design> {
+  // a DST names no colors: its worksheet (or EMB) says which thread sews each stop (Nov 20 2026, A Banner Co's westwood
+  // came in seven made-up colors). The ones picked with it, else the customer's files with the same name (sewMates)
+  let mates: File[] = (opts.with || []).filter((f) => f !== opts.file && /\.(pdf|emb|dst)$/i.test(f.name));
+  let stopHex: string[] | null = null;
+  if (/\.dst$/i.test(opts.file.name) && !opts.preview) {
+    if (!mates.length && opts.customer_id) mates = await sewMates(sb, opts.customer_id, opts.file.name).catch(() => []);
+    const ws = await worksheetOf(mates).catch(() => null);
+    if (ws?.sequence.length) {
+      const { stopColors } = await import("./needleThreads");
+      const { sheetThreadName } = await import("./worksheet");
+      stopHex = stopColors(ws, "");
+      const names = ws.threads.map((x) => sheetThreadName(x));
+      opts = { ...opts, method: opts.method || "embroidery", colors: names.length, inks: opts.inks || names.join(", ") };
+    }
+  }
   // an EMB alone is a digitized logo (lib/embFile.ts reads it; Nick, Nov 10 + Nov 16 2026: "I just selected the
   // Perkins.emb, and it's just not doing anything"): its TrueView picture is the logo's picture, and the EMB is filed on
   // the logo as its sew file (size, stitches, threads) below
@@ -54,7 +70,7 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   if (up.error) throw new Error(up.error.message);
   // files a browser can't draw (PDF, AI, HEIC, TIFF…) get a PNG preview made automatically when none was given
   // and cropped to the art (Oct 16, Nick: a PDF logo came in as the whole page, the art small in the middle)
-  const made0 = !PREVIEWABLE.test(opts.file.type) && !opts.preview ? await makePreview(opts.file) : null;
+  const made0 = !PREVIEWABLE.test(opts.file.type) && !opts.preview ? await makePreview(opts.file, 2400, 1, stopHex) : null;
   const made = made0 ? (await cropFileToArt(made0)) || made0 : null;
   // a preview that was handed in wins (the shirt designer saves an SVG with a PNG preview)
   const pv = opts.preview && PREVIEWABLE.test(opts.preview.type) ? opts.preview : PREVIEWABLE.test(opts.file.type) ? opts.file : made;
@@ -100,7 +116,7 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   if (/\.(dst|emb)$/i.test(opts.file.name)) {
     try {
       const { takeDigitized } = await import("@/lib/digitizedFiles");
-      await takeDigitized(sb, (data as Design).id, [opts.file]);
+      await takeDigitized(sb, (data as Design).id, [opts.file, ...mates]);
       const { data: again } = await sb.from("designs").select("*").eq("id", (data as Design).id).single();
       if (again) return again as Design;
     } catch { /* the logo is saved; the sew file can be added on Digitizing */ }
@@ -221,4 +237,44 @@ export async function cropPreviews(sb: SupabaseClient, list: Design[], max = 30)
     } catch { /* leave it as it is */ }
   }
   return out;
+}
+
+
+/** a sew file's name without its extension and the digitizer's stamps ("DO-5868_westwood_20261119171356_a93afc1c" → "do-5868_westwood") */
+export const sewStem = (n: string) => { let x = n.replace(/\.[^.]+$/, "").toLowerCase(); for (let i = 0; i < 4; i++) x = x.replace(/[ _.-]+(?:[0-9a-f]{6,}|\d{4,})$/i, ""); return x; };
+
+/**
+ * The files that go with a sew file, found by name among what the customer sent (Nov 20 2026): email attachments
+ * (emails/<customer>/…) and portal uploads (requests/<customer>/<order>/…) whose name matches the DST's once the
+ * digitizer's date and code stamps are off ("…_20261119171402_3b4a1c2a.pdf" and "…_20261119171356_a93afc1c.DST").
+ */
+export async function sewMates(sb: SupabaseClient, customerId: string, fileName: string): Promise<File[]> {
+  const stem = sewStem(fileName), own = fileName.toLowerCase();
+  if (stem.length < 3) return [];
+  const out: File[] = [];
+  const look = async (dir: string) => {
+    const { data } = await sb.storage.from("proofs").list(dir, { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+    for (const o of data || []) {
+      const n = o.name.replace(/^[a-z0-9]{6,10}-/i, ""); // emails/… names carry a short prefix
+      if (!/\.(pdf|emb)$/i.test(n) || n.toLowerCase() === own || sewStem(n) !== stem) continue;
+      if (out.some((f) => f.name.toLowerCase().slice(-4) === n.toLowerCase().slice(-4))) continue; // the newest of each kind
+      const { data: b } = await sb.storage.from("proofs").download(`${dir}/${o.name}`);
+      if (b) out.push(new File([b], n, { type: /\.pdf$/i.test(n) ? "application/pdf" : "application/octet-stream" }));
+    }
+  };
+  await look(`emails/${customerId}`);
+  if (!out.length) {
+    const { data: ods } = await sb.storage.from("proofs").list(`requests/${customerId}`, { limit: 50, sortBy: { column: "created_at", order: "desc" } });
+    for (const d of (ods || []).slice(0, 10)) { await look(`requests/${customerId}/${d.name}`); if (out.length) break; }
+  }
+  return out;
+}
+
+/** the worksheet among a sew file's companions (its PDF), else the EMB's own sequence */
+async function worksheetOf(files: File[]) {
+  const sheet = files.find((f) => /\.pdf$/i.test(f.name)), emb = files.find((f) => /\.emb$/i.test(f.name));
+  const { parseWorksheet } = await import("./worksheet");
+  if (sheet) { try { const { pdfText } = await import("./printavoArt"); const ws = parseWorksheet(await pdfText(await sheet.arrayBuffer())); if (ws?.sequence.length) return ws; } catch { /* the EMB below */ } }
+  if (emb) { const { readEmb } = await import("./embFile"); const e = await readEmb(await emb.arrayBuffer()).catch(() => null); if (e?.ws.sequence.length) return e.ws; }
+  return null;
 }

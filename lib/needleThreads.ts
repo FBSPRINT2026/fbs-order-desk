@@ -23,7 +23,10 @@ export type NeedleThread = { needle: number; label: string; hex: string; thread:
 
 const isDefault = (chart: string) => /^default$/i.test(chart || "");
 const lineOf = (chart: string): Thread["line"] => (/isacord/i.test(chart) ? "Isacord 40" : /classic|rayon/i.test(chart) ? "Classic Rayon 40" : "Polyneon 40");
-export const sheetThread = (x: Pick<SheetThread, "code" | "chart">): Thread | null => (isDefault(x.chart) ? null : allThreads().find((t) => t.line === lineOf(x.chart) && t.code === x.code) || null);
+export const sheetThread = (x: Pick<SheetThread, "code" | "chart"> & { name?: string }): Thread | null => (isDefault(x.chart) ? null
+  : allThreads().find((t) => t.line === lineOf(x.chart) && !!x.code && t.code === x.code)
+  // a sheet that names the color without its code ("Sky Blue · Isacord 40"): that line's thread by name
+  || (!x.code && x.name ? allThreads().find((t) => t.line === lineOf(x.chart) && t.name.toLowerCase() === x.name!.toLowerCase()) || null : null));
 const orderThreads = (inks: string) => (inks || "").split(/\s*,\s*/).map((s) => s.trim()).filter(Boolean);
 /** a default-chart name's color ("Dark Blue", "Black"), else gray */
 const defaultHex = (name: string) => guessHex(name || "") || "#9aa1ab";

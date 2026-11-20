@@ -2777,7 +2777,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     } catch (e) { const m = "Couldn't save the art: " + (e instanceof Error ? e.message : String(e)); if (given) setMsg(m); else setHelper((h) => h && { ...h, busy: "", err: m }); }
   }
 
-  async function uploadNew(im: Imprint, f: File) {
+  /** `others`: files picked with it (a DST's worksheet PDF and EMB, Nov 20 2026) */
+  async function uploadNew(im: Imprint, f: File, others: File[] = []) {
     if (!customerId) return setMsg("Pick the customer first. New art is saved to their account.");
     try {
       let d: Design;
@@ -2793,7 +2794,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         return;
       }
       const { data: u } = await sb.auth.getUser();
-      d = await uploadDesign(sb, { draft: true, file: f, customer_id: customerId, by: u.user?.email || "" });
+      d = await uploadDesign(sb, { draft: true, file: f, customer_id: customerId, by: u.user?.email || "", ...(others.length ? { with: others } : {}) });
       setDesigns((x) => [d, ...x.filter((y) => y.id !== d.id)]);
       setUrls({ ...urls, ...(await previewUrls(sb, [d])) });
       setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
@@ -4905,7 +4906,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {!viewId && <button type="button" className="linkbtn" onClick={() => setNnb({ imId: im.id })}>Edit</button>}
                     </div>}
                     {/* Upload logo right under the location (Oct 9, Nick: no Logo / Text switch; text comes from + Add Text) */}
-                    <label className="btn sm mk-upload" style={{ cursor: "pointer" }}>Upload logo<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; if (qt[im.id]) textMode(im, false); uploadNew(im, f); }} /></label>
+                    <label className="btn sm mk-upload" style={{ cursor: "pointer" }}>Upload logo<input type="file" hidden multiple accept={DESIGN_ACCEPT} onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; if (!l.length) return; if (qt[im.id]) textMode(im, false); const main = l.find((x) => /\.dst$/i.test(x.name)) || l.find((x) => /\.emb$/i.test(x.name)) || l[0]; uploadNew(im, main, l.filter((x) => x !== main)); }} /></label>
                     {canvaReady && (designOf(im) as (Design & { canva_design_id?: string | null }) | undefined)?.canva_design_id && <button type="button" className="btn sm ghost" disabled={!!canvaWait} title="Opens this design in Canva; press Return in Canva to bring the changes back (saved as a new design)" onClick={() => designInCanva(designOf(im), im)}>Edit in Canva</button>}
                     {qt[im.id] ? (() => {
                       const q = qt[im.id];

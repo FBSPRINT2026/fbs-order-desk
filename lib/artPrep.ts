@@ -296,7 +296,7 @@ export async function pdfPageTotal(file: Blob): Promise<number> {
     return (await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise).numPages || 1;
   } catch { return 1; }
 }
-export async function makePreview(file: File, maxPx = 2400, /** a PDF's page (1 = the first) */ pageNo = 1): Promise<File | null> {
+export async function makePreview(file: File, maxPx = 2400, /** a PDF's page (1 = the first) */ pageNo = 1, /** a DST's thread at each stop, from its worksheet */ stopHex?: string[] | null): Promise<File | null> {
   const base = file.name.replace(/\.[^.]+$/, "") || "logo";
   try {
     // an embroidery file (Oct 28, Nick: "When I upload the EMB or the DST to the logo mockup creator… it's just giving a
@@ -305,7 +305,7 @@ export async function makePreview(file: File, maxPx = 2400, /** a PDF's page (1 
     if (/\.dst$/i.test(file.name)) {
       const [{ readDst }, { renderThreads }] = await Promise.all([import("./dst"), import("./dstRender")]);
       const info = readDst(await file.arrayBuffer());
-      const c = renderThreads(info, ["#1F2A44", "#C8102E", "#00843D", "#F2A900", "#5F259F", "#E87722", "#0072CE", "#54585A"], { width: Math.min(maxPx, 1600), fabric: "" });
+      const c = renderThreads(info, stopHex?.length ? stopHex.map((h) => h || "#9aa1ab") : ["#1F2A44", "#C8102E", "#00843D", "#F2A900", "#5F259F", "#E87722", "#0072CE", "#54585A"], { width: Math.min(maxPx, 1600), fabric: "" });
       return c.width > 1 ? canvasToFile(c, `${base}.png`) : null;
     }
     if (/heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name)) {
