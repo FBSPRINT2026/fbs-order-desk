@@ -179,7 +179,9 @@ export async function replyChoices(admin: SupabaseClient, box: Box, emails: stri
   const clean = (x: string) => x.replace(/[,()%*]/g, "");
   const who = [...em.map((e) => `from_email.ilike.${clean(e)}`), ...doms.map((d) => `from_email.ilike.%@${clean(d)}`)].join(",");
   const [{ data: a }, { data: b }] = await Promise.all([
-    admin.from("mail_cache").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).is("gone_at", null).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(40),
+    // filed or moved out of the inbox still counts (Nov 20 2026, Nick: David's email from yesterday, marked done and
+    // filed in Outlook, wasn't offered to reply to); the saved copy has all the reply needs
+    admin.from("mail_cache").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(40),
     admin.from("mail_index").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(40),
   ]);
   const data = [...(a || []), ...(b || [])].sort((x, y) => String(y.sent_at).localeCompare(String(x.sent_at)));
