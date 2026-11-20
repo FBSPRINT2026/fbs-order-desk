@@ -588,3 +588,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 20 8:24am · 1.3.831 · Nick · Knit fabric isn't a specialty item: polos and shirts named "Jersey Knit" / "Flat Knit" no longer get the hat/bag embroidery add-on
 - Nov 20 8:30am · 1.3.832 · Nick · A customer's own stitch file (sew-out charged) skips digitizing and lands on Digitizing at Pending sew-out, like files back from the digitizer, until it has sewn here
 - Nov 20 8:32am · 1.3.833 · Nick · Order goods never shows a SanMar order as placed while SanMar ordering is on their test system (SANMAR_PO=edev): it says so and sends nothing
+- Nov 20 8:34am · 1.3.834 · Nick · SanMar ordering switched to live (SANMAR_PO=on in Vercel): Order goods places real SanMar orders again

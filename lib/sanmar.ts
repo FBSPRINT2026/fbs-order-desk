@@ -284,7 +284,8 @@ export const sanmarStockKey = (color: string, size: string) => pkey(color, size)
  * Ordering is switched on by SanMar's integration team (sanmarintegrations@sanmar.com), then here by Nick in Vercel:
  * SANMAR_PO=edev (their test system) or SANMAR_PO=on (real orders). SANMAR_PO_WHSE=on once SanMar turns on Warehouse
  * Selection (then each line names its warehouse; without it SanMar ships from its closest warehouse that has it all).
- * Paid with the card saved on our sanmar.com account.
+ * Paid with the card saved on our sanmar.com account. Live (on) since Nov 20 2026; while it was edev, Order goods
+ * placed nothing (Fossil #50135), and now refuses to send in edev (app/shop/order-goods/actions.ts placeSanmar).
  */
 export const sanmarPOMode = () => { const v = process.env.SANMAR_PO?.trim().toLowerCase() || ""; return v === "on" || v === "edev" ? v : ""; };
 export const sanmarPOWhse = () => process.env.SANMAR_PO_WHSE?.trim().toLowerCase() === "on";
