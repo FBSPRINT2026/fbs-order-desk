@@ -42,7 +42,7 @@ export const requestOf = (im: Pick<Imprint, "emb">, d: Pick<Design, "specs"> | n
 export const liveSewout = <S extends DgzSewout>(sws: S[], orderId: string, imprintId: string): S | undefined =>
   sws.find((x) => x.order_id === orderId && x.imprint_id === imprintId && !x.archived_at);
 
-export function digitizeState(im: Pick<Imprint, "digitized" | "emb">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean; needDst?: boolean } {
+export function digitizeState(im: Pick<Imprint, "digitized" | "emb" | "sewoutCharge">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean; needDst?: boolean } {
   // the logo's file is only the EMB (Nov 10, Nick: "if we have the EMB, that's good enough… but embroidery has to confirm
   // the DST file… upload it and say this is the right DST"): it counts as digitized, and asks embroidery for the DST
   { const e0 = embSpecsOf(d), f0 = currentSewFile(im, e0.files) || (im.emb?.file as EmbFileLite | undefined); if (f0?.embOnly) { const r = digitizeState0(im, d, live); return { ...r, needDst: true }; }
@@ -51,9 +51,15 @@ export function digitizeState(im: Pick<Imprint, "digitized" | "emb">, d: Pick<De
     if (im.digitized && !f0 && !(e0.files || []).length && !live) { const r = digitizeState0(im, d, live); return { ...r, needDst: true }; } }
   return digitizeState0(im, d, live);
 }
-function digitizeState0(im: Pick<Imprint, "digitized" | "emb">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean } {
+function digitizeState0(im: Pick<Imprint, "digitized" | "emb" | "sewoutCharge">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean } {
   if (live) return { state: live.status === "approved" ? "ok" : live.status === "pending" ? "sent" : "done", repeat: false, changes: false };
   const e = embSpecsOf(d), file = currentSewFile(im, e.files), req = requestOf(im, d);
+  // the customer's own stitch file (a sew-out charged, Imprint.sewoutCharge): no digitizing, but it isn't a repeat either
+  // until it has sewn here. It starts where the digitizer's files would land, at Pending sew-out (Nick, Nov 20 2026, #50171:
+  // "anytime we do a sew out, it should just skip the first part of digitizing, take the DST, and then go through the same
+  // process as if we just got it back from Volikes")
+  const sewnHere = !!file && (!!file.lastUsed || (e.files || []).some((x) => x.lastUsed));
+  if (im.sewoutCharge && !sewnHere && (file || im.emb?.file)) return { state: "done", repeat: false, changes: false };
   // a repeat: marked Already digitized, or the file sewed on an earlier job (Oct 28, Nick: "#40195… that's a repeat")
   if (im.digitized || (file && (file.lastUsed || (e.files || []).some((x) => x.lastUsed)))) return { state: "ok", repeat: true, changes: false };
   // sent back for changes: asked again until the fixed file comes in
