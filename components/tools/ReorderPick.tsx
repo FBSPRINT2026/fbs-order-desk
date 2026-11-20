@@ -55,18 +55,24 @@ const sizeText = (z: Record<string, number>) => Object.entries(z).filter(([, n])
 /** "L 225 · M 225 · S 175" → { L: 225, … } */
 const sizesOf = (t: string) => Object.fromEntries(t.split("·").map((x) => x.trim().split(/\s+/)).filter((p) => p.length === 2 && +p[1] > 0).map(([k, n]) => [k, +n]));
 type Read = { source: string; pieces: number; lines: { style: string; color: string; sizes: Record<string, number>; brand?: string; garment?: string }[]; exact?: boolean };
+import type { OpenRequest } from "@/lib/openRequests";
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 type Data = { job: { visual: string; nickname: string; date: string; qty: number; total: number }; customer: { id: string; company: string | null; name: string | null; moved_at: string | null } | null;
   lines: { style: string; brand: string; color: string; garment: string; qty: number; price: number; sizes: string; /** our order's line id */ ref?: string }[]; files: ReorderFile[];
   /** one of our own orders (app/api/orders/reorder) */ own?: boolean;
-  /** last time's production and customer notes (Printavo's) */ notes?: { production: string; customer: string } };
+  /** last time's production and customer notes (Printavo's) */ notes?: { production: string; customer: string };
+  /** the customer's requests still waiting (lib/openRequests.ts): the reorder can fill one in where it is */ requests?: OpenRequest[] };
 
 export default function ReorderPick({ archivedId = "", orderId = "", onClose, onCreated, into, given }: { archivedId?: string; onClose: () => void; onCreated?: (id: string, number: number, label: string) => void;
   /** one of OUR orders to reorder (Nov 2, Nick: "instead of duplicate… reorder"): the same pop-up, no files to sort */ orderId?: string;
   /** the customer's portal reorder to fill in (keeps its number), and the sizes they gave: shown like a file's, used when you say so (Nov 1) */
   into?: string; given?: { source: string; lines: { style: string; color: string; sizes: Record<string, number> }[] } }) {
   const [d, setD] = useState<Data | null>(null), [err, setErr] = useState(""), [what, setWhat] = useState<Record<string, string>>({});
+  // the request this answers (Nov 19, #50149 stayed in Incoming after its reorder #50170 was made): the one it was opened
+  // from; else picked in the last step from the customer's waiting requests (never guessed: a customer can have several
+  // unrelated ones waiting); "" = a new order
+  const [fill, setFill] = useState(into || "");
   const [price, setPrice] = useState<"last" | "today">("last"), [step, setStep] = useState(""), [look, setLook] = useState<number | null>(null);
   const [ask, setAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
   const [fitAsk, setFitAsk] = useState<{ rows: FitRow[]; done: (r: FitRow[] | null) => void } | null>(null);
@@ -180,7 +186,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
         d.lines.forEach((l, i) => { const m = match.old[i]; if (!l.ref) return; if (m.k >= 0) sizes[l.ref] = { ...read.lines[m.k].sizes }; else if (offOld[i] !== false) drop.push(l.ref); });
         for (const { r, i } of match.extra) if (addNew[i] !== false) add.push({ style: r.style, brand: r.brand || "", garment: r.garment || "", color: r.color, sizes: { ...r.sizes } });
       }
-      const c = await fetch("/api/orders/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: orderId, price, mode: sizeMode === "file" && !readOk ? "same" : sizeMode, sizes, drop, add, files: what, carry: (["production", "customer"] as const).filter((k) => d.notes?.[k] && keepNote[k]) }) });
+      const c = await fetch("/api/orders/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: orderId, ...(fill ? { into: fill } : {}), price, mode: sizeMode === "file" && !readOk ? "same" : sizeMode, sizes, drop, add, files: what, carry: (["production", "customer"] as const).filter((k) => d.notes?.[k] && keepNote[k]) }) });
       const k = await c.json().catch(() => ({})) as { id?: string; number?: number; pcs?: number; groups?: number; files?: number; reprint?: boolean; error?: string };
       if (!c.ok || !k.id) throw new Error(k.error || "Couldn't make the reorder.");
       onCreated?.(k.id, k.number || 0, `Reorder of ${label}`);
@@ -284,7 +290,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
       // a print the old job listed that got no art, when you picked art for that side: it was the same print
       for (const g of x.groups) g.imprints = g.imprints.filter((p, i, all) => p.design_id || !all.some((q) => q !== p && q.design_id && q.location === p.location));
       setStep("Creating the order…");
-      const c = await fetch("/api/archive/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: d.customer.id, draft: x, status: "quote", ...(into ? { into } : {}) }) });
+      const c = await fetch("/api/archive/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: d.customer.id, draft: x, status: "quote", ...(fill ? { into: fill } : {}) }) });
       const k = await c.json().catch(() => ({})) as { id?: string; number?: number; error?: string };
       if (!c.ok || !k.id) throw new Error(k.error || "Couldn't create the order.");
       // every file you kept goes in Production files as what you said it is (the art too, as print art / film)
@@ -459,6 +465,15 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
           {stepBox(4, "Check and make the reorder", step || "Sizes each style comes in and the shirt colors are checked, then the reorder is made", <>
             {fitAsk && <SizeFitAsk inline rows={fitAsk.rows} onDone={(r) => fitAsk.done(r)} onCancel={() => fitAsk.done(null)} />}
             {ask && <ColorCheck inline rows={ask.rows} onDone={(r) => ask.done(r)} onCancel={() => ask.done(null)} />}
+            {!fitAsk && !ask && !into && !!d.requests?.length && (
+              <label className="rop-fill"><span className="rop-fill-k">Their request</span>
+                <select value={fill} onChange={(e) => setFill(e.target.value)} disabled={!!step}>
+                  <option value="">None: make a new order</option>
+                  {d.requests.map((r) => <option key={r.id} value={r.id}>{`Fill in #${r.number}${r.nickname ? ` ${r.nickname}` : ""} · ${new Date(r.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}</option>)}
+                </select>
+                {fill && <span className="faint rop-fill-n">Keeps its number and takes it out of Incoming{d.requests.find((r) => r.id === fill)?.about ? `: "${d.requests.find((r) => r.id === fill)!.about}"` : ""}</span>}
+              </label>
+            )}
             {!fitAsk && !ask && <div className="rop-go">{step ? <span className="rop-step">{step}</span> : <span className="faint">Lines you left off aren&apos;t checked or asked about.</span>}<span className="spacer" />
               <button type="button" className="btn primary" disabled={!!step} onClick={() => void make()}>Make the reorder</button></div>}
           </>, false, "", true)}

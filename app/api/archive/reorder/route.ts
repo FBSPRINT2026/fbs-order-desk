@@ -8,6 +8,7 @@ import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
 import { oldNoteText, type EODraft } from "@/lib/emailOrderShared";
 import { isSupplierPaperwork, looksLikePaperwork } from "@/lib/paperwork";
 import { pvFileName, pvHandle } from "@/lib/printavoNames";
+import { openRequests } from "@/lib/openRequests";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -85,7 +86,9 @@ export async function GET(req: Request) {
   // want me to keep these… these customer notes")
   const od = (r.data || {}) as { customerNote?: string; productionNote?: string };
   const notes = { production: oldNoteText(od.productionNote), customer: oldNoteText(od.customerNote) };
-  return NextResponse.json({ job: { visual: r.visual_id, nickname: String(r.nickname || "").trim(), date: r.order_date || "", qty: r.qty, total: r.total }, customer: c, lines, files: out, notes });
+  // the customer's requests still waiting: the reorder can fill one in where it is (lib/openRequests.ts)
+  const requests = await openRequests(admin, c?.id).catch(() => []);
+  return NextResponse.json({ job: { visual: r.visual_id, nickname: String(r.nickname || "").trim(), date: r.order_date || "", qty: r.qty, total: r.total }, customer: c, lines, files: out, notes, requests });
 }
 
 export async function POST(req: Request) {

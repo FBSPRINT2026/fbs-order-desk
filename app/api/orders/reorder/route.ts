@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupplierPaperwork, looksLikePaperwork } from "@/lib/paperwork";
+import { openRequests, requestToFill } from "@/lib/openRequests";
 import { calcOrder, mergeSettings, newGLine, orderGroups, type GLine, type Group, type Order } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +57,7 @@ export async function GET(req: Request) {
   }
   // our own customer is always "in the new system" for this
   return NextResponse.json({ job: { visual: String(o.number), nickname: o.nickname || "", date: String(o.created_at || "").slice(0, 10), qty: lines.reduce((a, l) => a + l.qty, 0), total: +o.total || 0 },
-    customer: c ? { ...c, moved_at: c.moved_at || new Date().toISOString() } : null, lines, files, own: true,
+    customer: c ? { ...c, moved_at: c.moved_at || new Date().toISOString() } : null, lines, files, own: true, requests: await openRequests(admin, o.customer_id).catch(() => []),
     notes: { production: String(inn?.production_notes || ""), customer: String(o.notes || "") } });
 }
 
@@ -85,11 +86,21 @@ export async function PUT(req: Request) {
   if (b.mode === "file" && b.add?.length && groups[0]) for (const a of b.add) { const nl = newGLine(); nl.style = a.style; nl.brand = a.brand || ""; nl.garment = a.garment || ""; nl.color = a.color; nl.sizes = a.sizes as GLine["sizes"]; groups[0].lines.push(nl); }
   if (!groups.length) groups = [];
   const qty = groups.reduce((a, g) => a + g.lines.reduce((x, l) => x + Object.values(l.sizes || {}).reduce<number>((y, n) => y + (+(n || 0)), 0), 0), 0);
-  const { data: made, error } = await admin.from("orders").insert({
-    customer_id: o.customer_id, nickname: o.nickname || "Job", groups, fees: o.fees, po_number: "",
+  // the customer's request it answers (a portal request picked on the Create order card or in the pop-up): filled in where
+  // it is, keeping its number, their words kept in the notes, so it doesn't stay in Incoming (Nov 19, #50149 / #50170)
+  const rq = await requestToFill(admin, (b as { into?: string }).into, o.customer_id as string);
+  if ((b as { into?: string }).into && !rq) return NextResponse.json({ error: "That request isn't waiting to be made any more." }, { status: 400 });
+  const lastNotes = !b.carry || b.carry.includes("customer") ? String(o.notes || "") : "";
+  const row = {
+    customer_id: o.customer_id, nickname: rq?.nickname?.trim() || o.nickname || "Job", groups, fees: o.fees, po_number: rq?.po_number || "",
     delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method, third_party: o.third_party || null, price_type: o.price_type,
-    discount_pct: o.discount_pct, discount_amt: o.discount_amt || 0, discount_type: o.discount_type || "pct", tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: false, notes: !b.carry || b.carry.includes("customer") ? o.notes : "", notes_on_invoice: (!b.carry || b.carry.includes("customer")) && !!o.notes_on_invoice, qty,
-  }).select("id, number").single();
+    discount_pct: o.discount_pct, discount_amt: o.discount_amt || 0, discount_type: o.discount_type || "pct", tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: false, notes: lastNotes, notes_on_invoice: (!b.carry || b.carry.includes("customer")) && !!o.notes_on_invoice, qty,
+  };
+  const about = String(rq?.simple_order?.about || "").trim();
+  if (rq && about) row.notes = [about, row.notes].filter(Boolean).join("\n");
+  const { data: made, error } = rq
+    ? await admin.from("orders").update({ ...row, status: "quote", type: "quote", draft: false }).eq("id", rq.id).eq("status", "request").select("id, number").single()
+    : await admin.from("orders").insert(row).select("id, number").single();
   if (error || !made) return NextResponse.json({ error: "Couldn't make the reorder: " + (error?.message || "unknown") }, { status: 500 });
   // its mockups (the latest of each group) and production files come with it, nothing made again
   const { data: olds } = await admin.from("mockups").select("customer_id, group_id, title, file_path, design_ids, snapshot, created_at").eq("order_id", o.id).is("archived_at", null).order("created_at", { ascending: false });
@@ -108,6 +119,7 @@ export async function PUT(req: Request) {
     const { data: inn } = await admin.from("order_internal").select("production_notes").eq("order_id", o.id).maybeSingle();
     if (inn?.production_notes) await admin.from("order_internal").upsert({ order_id: made.id, production_notes: inn.production_notes });
   }
+  if (rq) await admin.from("order_events").insert({ order_id: made.id, kind: "status", actor: v.email || "", detail: "quote" });
   await admin.from("order_events").insert({ order_id: made.id, kind: "reorder", detail: `Reorder of #${o.number}${b.mode === "file" ? " (new sizes from a file)" : b.mode === "clear" ? " (sizes to type)" : ""}, ${b.price === "last" ? "last time's prices" : "today's price list"}`, actor: v.email || "" });
   // a wholesale reorder still at new screens: the order page offers the reprint screen fee (?reprint=1), as Duplicate did
   const reprint = o.price_type === "wholesale" && groups.some((g) => g.imprints.some((im) => im.method === "screen" && !(im.remake ?? g.remake)));

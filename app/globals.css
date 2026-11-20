@@ -21013,6 +21013,11 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .rop-st-b{padding:0 12px 12px}
 .rop-st-b .rop-sec{border:0;padding:0;margin:10px 0 0}
 .rop-go{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+/* the customer's waiting request a reorder fills in (lib/openRequests.ts) */
+.rop-fill{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:center;margin-top:10px}
+.rop-fill-k{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.rop-fill select{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);padding:0 8px;min-width:0;width:100%}
+.rop-fill-n{grid-column:1/-1;font-size:12px}
 .rop-why{font-size:12.5px;color:var(--warn)}
 .rop-modes2{grid-template-columns:repeat(2,minmax(0,1fr))}
 
