@@ -592,3 +592,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 20 8:47am · 1.3.835 · Nick · SanMar ordering back on their test system: SanMar hasn't switched on live web orders for our account yet (Customer FTP/In folder does not exist)
 - Nov 20 8:59am · 1.3.836 · Nick · Promotional product orders get Add logo on each item: the same logo mockup tool as apparel, and its picture becomes the item's picture and proof
 - Nov 20 9:13am · 1.3.837 · Nick · Create order never opens the Mockup Creator on a group printed from the customer's own separations: their mockup is the mockup (Tiger Blue #50130 got a white box)
+- Nov 20 9:14am · 1.3.838 · Nick · Create order keeps the inks named on the customer's paperwork or mockup chips; the art's own colors only fill in when none were named

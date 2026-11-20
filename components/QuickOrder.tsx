@@ -914,7 +914,10 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         else { const rule = sizeRule(im.location, r); sp.size = rule.w; sp.sizeWhy = `${/best fit/i.test(im.notes || "") ? `"Best fit" on their paperwork: ` : ""}${rule.why}`; }
         if (im.inks && !/simulated/i.test(im.inks)) { sp.inks = im.inks; sp.inksWhy ||= "Named on their paperwork"; }
         if (ubOf.has(im.id)) { sp.ub = true; sp.ubWhy = ubOf.get(im.id); }
-        else { const a = artInks.get(im.id); if (a?.length) { sp.inks = a.map((k) => k.name).join(", "); sp.inksWhy = "Read off the art (the shirt's own color left out)"; } }
+        // the art's colors only when their paperwork named none: inks named on their order form or read off their mockup's
+        // chips win (Nick, Nov 20 2026, Tiger Blue #50130: "PMS 5665 C, PMS 5615 C, White" on their mockup came out "White",
+        // read off the .ai films' preview)
+        else if (!sp.inks) { const a = artInks.get(im.id); if (a?.length) { sp.inks = a.map((k) => k.name).join(", "); sp.inksWhy = "Read off the art (the shirt's own color left out)"; } }
         // the new art shaped differently from last time's (an extra circle on the right): a bigger size suggested
         if (sp.lastW && sp.lastH && r) {
           const was = sp.lastW / sp.lastH, now = 1 / r;
