@@ -675,7 +675,10 @@ export type PriceList = {
   contractNotes?: string;
 };
 /** non-standard flat garments (embroidery specialty items), from the garment's name */
-export const SPECIALTY_ITEM = /\b(hat|cap|snapback|trucker|beanie|knit|bag|backpack|tote|duffel|fleece|hood(ie|ed)?|sweatshirt|crewneck sweat|jacket|jkt|jckt|coat|parka|anorak|windbreaker|soft ?shell|vest|blanket|towel|apron)s?\b/i;
+// "knit" alone is no specialty item: it's the fabric of most polos and many shirts ("Jersey Knit Sport Shirt", "Flat Knit
+// Polo"; Nov 20 2026, #50171's Gildan 8800 polos got the $1 hat/bag add-on). A knit cap or beanie is caught by "cap",
+// "beanie", "toque" or its headwear brand.
+export const SPECIALTY_ITEM = /\b(hat|cap|snapback|trucker|beanie|toque|bag|backpack|tote|duffel|fleece|hood(ie|ed)?|sweatshirt|crewneck sweat|jacket|jkt|jckt|coat|parka|anorak|windbreaker|soft ?shell|vest|blanket|towel|apron)s?\b/i;
 /** the specialty words a garment name can be cut off in (the supplier's 30-odd character names: "Carhartt Thermal-Lined
  *  Duck Active Jac", Oct 31, #40311: the jacket wasn't charged as one) */
 const SPECIALTY_WORDS = ["backpack", "beanie", "blanket", "duffel", "fleece", "hoodie", "hooded", "jacket", "parka", "anorak", "windbreaker", "sweatshirt", "snapback", "trucker", "towel", "apron"];
