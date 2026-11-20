@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
 import { OldReorderForm } from "@/components/PortalOldReorder";
-import { bringOldJobFile, bringOrderArtwork, myOrderArtwork, searchMyOldJobs, type MyOldJob, type MyOrderArt, attachMockupToRequest, describeMyOrder, discardRequest, myReorderables, ownMockupUploadUrl, readMyPo, reorderInto, startOldReorder, type OldReorderStart, requestFileUrl, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type Reorderable, type RqFile } from "@/app/portal/request-actions";
+import { bringOldJobFile, bringOrderArtwork, myOrderArtwork, searchMyOldJobs, type MyOldJob, type MyOrderArt, attachMockupToRequest, describeMyOrder, discardRequest, myReorderables, ownMockupUploadUrl, readMyPo, reorderInto, startOldReorder, type OldReorderStart, requestFileUrl, keepRequestArt, myRequestArt, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type Reorderable, type RqFile } from "@/app/portal/request-actions";
 import { unzip } from "@/lib/unzip";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
@@ -153,6 +153,31 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
     } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); return null; }
   }
   /** A mockup the customer made in their own software (picture or PDF). */
+  // their art and sew files (DST, EMB, AI…), kept on the order's files as they're added (Nov 20 2026, #50171)
+  const [artFiles, setArtFiles] = useState<{ name: string; path: string }[]>([]);
+  useEffect(() => { if (!preview) void myRequestArt(o.id).then((r) => { if (r.ok && "files" in r) setArtFiles(r.files); }); }, [o.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** files picked beside the mockup: a picture or PDF is their mockup, anything else is an art or sew file for us */
+  async function uploadMockupOrArt(gi: number, fs: File[]) {
+    const pics = fs.filter((f) => /^image\/(png|jpe?g|webp)$/.test(f.type) || /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+    const rest = fs.filter((f) => !pics.includes(f));
+    for (const f of pics) await uploadOwnMockup(gi, f);
+    if (!rest.length || preview) return;
+    setErr(""); setUpBusy(o.groups[gi].id);
+    try {
+      const done: RqFile[] = [];
+      for (const f of rest) {
+        const t = await requestFileUrl(o.id, f.name);
+        if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Upload failed.");
+        const up = await createClient().storage.from("proofs").uploadToSignedUrl(t.path, t.token, f, { contentType: f.type || "application/octet-stream" });
+        if (up.error) throw new Error(up.error.message);
+        done.push({ path: t.path, name: f.name, type: f.type || "", size: f.size, kind: "art" });
+      }
+      const r = await keepRequestArt(o.id, done);
+      if (!r.ok) throw new Error(r.error);
+      if ("files" in r) setArtFiles(r.files);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); }
+    setUpBusy("");
+  }
   async function uploadOwnMockup(gi: number, f: File) {
     if (preview) return;
     setErr(""); setUpBusy(o.groups[gi].id);
@@ -205,10 +230,11 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
         {/* My files (Oct 24): their saved mockups and the mockups on their past orders, to bring onto this group */}
         {!g.fromMockup && <button type="button" className="btn sm" onClick={() => openMyFiles(g.id)}>My files</button>}
         {!g.fromMockup && (
-          <label className="btn sm" style={{ cursor: "pointer" }}>{upBusy === g.id ? "Uploading…" : "Upload your own mockup"}
-            <input type="file" hidden accept="image/png,image/jpeg,image/webp,application/pdf" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) uploadOwnMockup(gi, f); }} />
+          <label className="btn sm" style={{ cursor: "pointer" }} title="Your mockup (a picture or PDF), and any art or digitized files: DST, EMB, AI, EPS, SVG, zip">{upBusy === g.id ? "Uploading…" : "Upload your mockup or files"}
+            <input type="file" hidden multiple onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; if (l.length) void uploadMockupOrArt(gi, l); }} />
           </label>
         )}
+        {gi === 0 && artFiles.length > 0 && <span className="faint rq-artf" title="On your order for our art team">Files sent: {artFiles.map((f) => f.name).join(", ")}</span>}
         {own && !g.fromMockup && <button type="button" className="btn sm ghost" onClick={() => patch((d) => { d.groups[gi].customerMockups = []; })}>Remove mockup</button>}
       </div>
     );

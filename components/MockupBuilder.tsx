@@ -1780,10 +1780,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // the scale comes from the fronts and is used on the backs too, so a color's front and back show at the same size
     // (Oct 22, Nick: Heather Mustard's back came out lower and longer than its front; the reference shirt's back photo
     // is framed smaller than its front, so measuring each side against its own reference made them differ)
-    const readings = (pv: View) => sib.map((x) => fits[photo(x, pv)]).filter((p): p is Fit => !!p && !p.flat && !!p.body);
-    const rs = readings("front").length ? readings("front") : readings("back");
+    // Each reading is taken in the template color's photo first (Nov 20 2026, Peticolas PC90H: Jet Black's photo is from
+    // a 2018 shoot framed 16% bigger than Black Heather's 2023 one, so the middle reading of the two, used on both, drew
+    // Black Heather's prints 16% too big): a color laid over the template counts at the template's size, and its own
+    // scale comes back off the template the same way. A color that isn't laid over the template keeps its own reading.
+    const tpl = anchorOf(l) || l;
+    const regOf = (x: Line, pv: View) => { if (x.id === tpl.id) return 1; const r = regs[`${photo(tpl, pv)}>${photo(x, pv)}`]; return r && r.iou >= 0.82 && r.a > 0 ? r.a : 0; };
+    const readings = (pv: View) => sib.map((x) => ({ p: fits[photo(x, pv)], k: regOf(x, pv) })).filter((q): q is { p: Fit; k: number } => !!q.p && !q.p.flat && !!q.p.body && q.k > 0);
+    const pv0: View = readings("front").length ? "front" : "back", rs = readings(pv0), kl = regOf(l, pv0);
     const med = (a: number[]) => { const b2 = [...a].sort((x2, y2) => x2 - y2); return b2[b2.length >> 1]; };
-    const s0 = rs.length ? med(rs.map((p) => p.s)) : f.s, z0 = rs.length ? med(rs.map((p) => p.zs || p.s)) : f.zs || f.s;
+    const s0 = rs.length && kl ? med(rs.map((q) => q.p.s * q.k)) / kl : f.s, z0 = rs.length && kl ? med(rs.map((q) => (q.p.zs || q.p.s) * q.k)) / kl : f.zs || f.s;
     // a neckline set by hand stays (Oct 22, Nick: "the human eye sees it relative to the neck seam"); the automatic
     // readings were what moved shirts around
     const hand = v === "front" ? necks[neckKey(u)] : undefined;

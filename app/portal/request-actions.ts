@@ -608,6 +608,28 @@ async function keepFiles(admin: ReturnType<typeof createAdminClient>, orderId: s
   if (rows.length) await admin.from("art_files").insert(rows);
 }
 
+/**
+ * Their art and sew files on a group (Nov 20 2026, A Banner Co's Westwood, #50171: "the digitized (emb, pdf, dst) were
+ * attached in the quote"; the upload only took a picture or a PDF, so the DST and EMB were never sent and nobody knew). Any
+ * file they add beside their mockup (a DST, EMB, AI, EPS, SVG, zip…) goes on the order's files at once, "Uploaded by the
+ * customer in the portal". Returns what the order has from them so far, for the list under the buttons.
+ */
+export async function keepRequestArt(orderId: string, files: RqFile[]) {
+  try {
+    const { admin, cust } = await myDraft(orderId);
+    await keepFiles(admin, orderId, cleanFiles(files.map((f) => ({ ...f, kind: "art" as const })), cust.id, orderId));
+    return { ok: true as const, files: await requestArtList(admin, orderId) };
+  } catch (e) { return fail(e); }
+}
+/** the art files they've added to this order (for the list in the portal) */
+export async function myRequestArt(orderId: string) {
+  try { const { admin } = await myDraft(orderId); return { ok: true as const, files: await requestArtList(admin, orderId) }; } catch (e) { return fail(e); }
+}
+async function requestArtList(admin: ReturnType<typeof createAdminClient>, orderId: string) {
+  const { data } = await admin.from("art_files").select("name, file_path").eq("order_id", orderId).eq("category", "art").like("file_path", "requests/%");
+  return ((data || []) as { name: string; file_path: string }[]).map((x) => ({ name: x.name, path: x.file_path }));
+}
+
 export type PoRead = { groups: Group[]; nickname?: string; due_date?: string | null; po_number?: string; delivery?: string | null; ship_to?: string; questions: string[];
   /** what we read, for "Does this look right?" */ lines: { group: string; garment: string; color: string; qty: number; sizes: string }[]; pieces: number };
 
