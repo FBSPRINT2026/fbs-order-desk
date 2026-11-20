@@ -1145,9 +1145,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** Every color in the logo to the nearest of the customer's brand colors. */
   const matchBrand = (im: Imprint, key: string) => { const pt = paints[im.id]; const g = brand.groups.find((x) => x.key === key); if (!pt || !g?.colors.length) return; setInks(im.id, Object.fromEntries(pt.sources.map((x) => { const n = nearestBrand(x.hex, g); return [x.hex, n ? { name: n.c.ink, hex: n.c.hex } : null]; }))); };
   /** Oversized by size (Nov 9, Nick: "anytime you go over 13… oversized up to 15… just a little indicator"): a screen or
-   *  DTF print sized past the spot's normal max becomes oversized, up to OVERSIZE_IN; back under it, it isn't. */
+   *  DTF print sized past the spot's normal max becomes oversized, up to OVERSIZE_IN; back under it, it isn't. With its logo
+   *  on it or not yet (Amanda, Nov 18 2026, #50162: a full front waiting on its art couldn't be set past 13" for the bar). */
   const overFit = (im: Imprint, normal: number, want: number) => {
-    const can = !!designOf(im) && (im.method === "screen" || im.method === "dtf");
+    const can = im.method === "screen" || im.method === "dtf";
     const over = can && want > normal + 0.01;
     return { over, cap: over ? Math.max(normal, Math.min(OVERSIZE_IN, (normal * OVERSIZE_IN) / NORMAL_MAX_IN)) : normal };
   };
