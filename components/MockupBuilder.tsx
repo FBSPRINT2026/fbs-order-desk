@@ -1,7 +1,7 @@
 "use client";
 import InkNameList from "@/components/InkNameList";
 import { refreshUnseenProofs } from "@/app/shop/proof-actions";
-import { againAfter } from "@/lib/productionDetails";
+import { againAfter, needsDetails } from "@/lib/productionDetails";
 import { garmentFor as catalogGarment } from "@/lib/garmentMatch";
 import { sameColorAs } from "@/lib/colorMatch";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
@@ -2408,7 +2408,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   // clicking a close-up brings up its side: the photo (one-photo layouts) and the Imprints tab
                   <div key={im.id + size} className="mk-cu-wrap" onPointerDownCapture={() => { if (sideOf(im.location) !== curTab) setTab(sideOf(im.location)); }}>
                   <CloseUp key={im.id + size} size={size} title={im.location} hex={shirtHex(line)} onEyedrop={eye && !logoOnly && !!line && (!!garmentFor(line) || !!line.own) ? () => void pickShirtColor() : undefined} picked={!!line?.hex} onResetHex={resetShirtColor}
-                    onColor={eye && (logoOnly || !line || (!garmentFor(line) && !line.own)) ? setShirtHex : undefined} url={artUrl(im, line)} wIn={wIn} hIn={wIn * r} colors={inkList(im)}
+                    onColor={eye && (logoOnly || !line || (!garmentFor(line) && !line.own)) ? setShirtHex : undefined} url={artUrl(im, line)} wIn={wIn} hIn={wIn * r} colors={inkList(im)} noDims={portal && ((!!im.visualOnly && !im.confirmed) || needsDetails(im))}
                     onPick={(rx, ry, x, y) => pickColor(im.id, rx, ry, x, y)}
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} arm={sp.arm} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
@@ -2902,7 +2902,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       x.fillText(`max ${sp0.maxW}" × ${sp0.maxH}"`, x0 + 12, y0 + cell - 14);
       if (!bare) {
         x.fillStyle = "#141D2B"; x.font = "700 15px Helvetica, Arial, sans-serif";
-        x.fillText(`${wIn.toFixed(2)}" W × ${hIn.toFixed(2)}" H · ${im.drop ? `${im.drop}" drop` : "standard drop"}`, x0, y0 + cell + 24);
+        x.fillText(im.visualOnly && !im.confirmed ? "Printed to match your previous order" : `${wIn.toFixed(2)}" W × ${hIn.toFixed(2)}" H · ${im.drop ? `${im.drop}" drop` : "standard drop"}`, x0, y0 + cell + 24);
         x.font = "14px Helvetica, Arial, sans-serif"; x.fillStyle = "#4A566B";
         x.fillText(inkList(im).map((t) => t.name).join(", ").slice(0, 80), x0, y0 + cell + 46);
       }
@@ -5604,7 +5604,10 @@ const allInkNames = () => {
 };
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex, onColor, ctr, onCenter }: {
+function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex, onColor, ctr, onCenter, noDims }: {
+  /** the customer looking at a visual-only print (a reorder production sets on the run): no measurements (Nick, Nov 21
+   *  2026, #50174: Gateway's proof showed 11.12" × 9.98", the film's size, and they asked why it wasn't the sample's) */
+  noDims?: boolean;
   /** the part of the art it's centered on (shares of the art's width and height), when it isn't the whole art */ ctr?: { x: number; y: number } | null;
   /** center on a part of the art (Nov 1, Nick: "the TM is throwing off the center… highlight the whole area and say,
    *  this is my art to center on"): the middle of the box drawn over the art; null = the whole art */ onCenter?: (c: { x: number; y: number } | null) => void;
@@ -5738,7 +5741,7 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
           {sel && !box && <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />}
         </div>
       </div>
-      <div className="mk-cu-dim mkc-dim" style={{ width: W, alignSelf: "center", maxWidth: "100%" }}><span>{url ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : "No logo yet"}</span>
+      <div className="mk-cu-dim mkc-dim" style={{ width: W, alignSelf: "center", maxWidth: "100%" }}><span>{url ? (noDims ? "Printed to match your previous order" : <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</>) : "No logo yet"}</span>
         {url && onCenter && <button type="button" className={"mkc-btn" + (box || ctr ? " on" : "")} aria-pressed={!!box} title={ctr ? "Centered on part of the art: click to change" : "Center on part of the art (leave out a ™ or a tail)"} aria-label="Center on part of the art"
           onClick={() => setBox(box ? null : ctr ? { x0: Math.max(0, ctr.x - 0.25), y0: Math.max(0, ctr.y - 0.25), x1: Math.min(1, ctr.x + 0.25), y1: Math.min(1, ctr.y + 0.25) } : { x0: 0, y0: 0, x1: 1, y1: 1 })}>
           <svg viewBox="0 0 16 16" aria-hidden><line x1="8" y1="1" x2="8" y2="15" /><rect x="3" y="4.5" width="10" height="7" /></svg>

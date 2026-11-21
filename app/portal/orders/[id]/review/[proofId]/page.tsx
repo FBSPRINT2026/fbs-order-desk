@@ -1,3 +1,4 @@
+import { needsDetails } from "@/lib/productionDetails";
 import { proofViewed } from "@/lib/proofs";
 import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
@@ -96,7 +97,10 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
 
               {g.imprints.map((d, di) => {
                 const des = d.design_id ? designs[d.design_id] : null, pic = des ? dUrl[des.id] : "";
-                const sz = printSize(d, des), max = maxes[0]?.[di] || null, inks = d.visualOnly ? [] : inkNames(d.inks);
+                // a print production sets on the run (a visual-only reorder, or "production confirms the size"): no measured size shown
+                // to the customer, only the picture (Nick, Nov 21 2026, #50174)
+                const asBefore = !!d.visualOnly || needsDetails(d);
+                const sz = asBefore ? { w: 0, h: 0, label: "" } : printSize(d, des), max = maxes[0]?.[di] || null, inks = d.visualOnly ? [] : inkNames(d.inks);
                 // the art on the shirt color, with its measurements (px per inch fits the panel)
                 const s = sz.w && sz.h ? Math.min(380 / sz.w, 220 / sz.h) : sz.w ? 380 / sz.w : 0;
                 const aw = s ? sz.w * s : 300, ah = s && sz.h ? sz.h * s : 220, top = 36;
@@ -113,7 +117,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
                     <div className="ar-ps">
                       <div className="ar-loc">{d.location || "Print"}</div>
                       {/* a visual-only mockup (a reorder production confirms on the run): the picture, none of our guesses */}
-                      <div className="muted">{methodLabel(d)}{d.visualOnly ? " · printed to match your previous order" : ` · ${colors}`}</div>
+                      <div className="muted">{methodLabel(d)}{d.visualOnly ? " · printed to match your previous order" : ` · ${colors}`}{!d.visualOnly && asBefore ? " · exact size set on press" : ""}</div>
                       {!d.visualOnly && <dl>
                         {sz.label && <><dt>Size</dt><dd>{sz.w ? `${+sz.w.toFixed(2)}" wide` : ""}{sz.h ? ` × ${+sz.h.toFixed(2)}" tall` : ""}</dd></>}
                         <dt>Placement</dt><dd>{d.drop ? `${d.drop}" below the collar` : "Standard (about 3\" below the collar)"}</dd>

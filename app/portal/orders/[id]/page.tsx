@@ -282,7 +282,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                                 <td className="pod-nw"><b>{d.location || "Print"}</b></td>
                                 {/* never broken onto two lines (Nov 10, Nick: "Embroid / ery"): the full name, or EMB / SP / HP when the column is narrow */}
                                 <td className="pod-nw"><span className="pod-m-l">{methodLabel(d)}</span><abbr className="pod-m-s" title={methodLabel(d)}>{methodShort(d)}</abbr>{(d.method === "screen" || d.method === "embroidery") && d.colors ? <div className="sub">{d.method === "screen" && d.colors >= FULL_COLOR ? "Full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`}</div> : null}</td>
-                                <td className="pod-nw">{d.size || "—"}</td>
+                                <td className="pod-nw">{reorder ? "As before" : d.size || "—"}</td>
                                 <td>{reorder ? <span className="faint">Matches your previous order</span> : inks.length ? <span className="pod-inks">{inks.map((n) => { const hx = colorHex(n); return <span key={n} className="pod-ink"><i style={{ background: hx || "var(--surface-2)" }} aria-hidden />{n}</span>; })}</span> : "—"}</td>
                               </tr>
                             );
@@ -296,7 +296,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                         return (
                           <li key={d.id || k}>
                             <div className="pod-pl-a"><b>{d.location || "Print"}</b><span>{[methodLabel(d), cols].filter(Boolean).join(" · ")}</span></div>
-                            <div className="pod-pl-b">{d.size && <span className="pod-nw">{d.size}</span>}{needsDetails(d) ? <span className="faint">Matches your previous order</span> : inks.map((n) => { const hx = colorHex(n); return <span key={n} className="pod-ink"><i style={{ background: hx || "var(--surface-2)" }} aria-hidden />{n}</span>; })}</div>
+                            <div className="pod-pl-b">{d.size && !needsDetails(d) && <span className="pod-nw">{d.size}</span>}{needsDetails(d) ? <span className="faint">Matches your previous order</span> : inks.map((n) => { const hx = colorHex(n); return <span key={n} className="pod-ink"><i style={{ background: hx || "var(--surface-2)" }} aria-hidden />{n}</span>; })}</div>
                           </li>);
                       })}</ul>}
                       {(cg?.finishing.length || 0) > 0 && <div className="pod-fin"><span className="lbl">Finishing</span>{cg!.finishing.map((f) => f.name).join(", ")}</div>}
