@@ -769,9 +769,9 @@ export default function SeparationStudio({ id }: { id: string }) {
       r.plates.forEach((p) => { const k = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (k) p.hex = shown(k); });
       hiRef.current = null;
       // the print width is the ink's width (#50127: a background left to the shirt made 11.5" print 9"): how much wider
-      // the whole picture is than its ink, for every size worked out from the picture (pictures only: vector art is
-      // drawn from its own shapes)
-      const b = vart?.ok ? null : inkBox(r);
+      // the whole picture is than its ink, for every size worked out from the picture. Vector art too (#50128: its shapes
+      // measure the art, but a shape in the shirt's color, a navy panel behind the crest, prints nothing, so 10" came out 7")
+      const b = inkBox(r);
       const sp = b ? r.w / b.w : 1;
       if (Math.abs(sp - spanRef.current) > 0.002) { spanRef.current = sp; setSpan(sp); }
       setRes(r); setBusy("");
@@ -927,8 +927,9 @@ export default function SeparationStudio({ id }: { id: string }) {
     const px = pixelsOf(img, st.removeBg && !vart?.ok, !!vart, side);
     const { ks, so } = sepIn(px.w);
     const r0 = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
-    // the films are the ink, st.widthIn wide: a picture's empty or shirt-colored edges are cut off (#50127)
-    const r = vart?.ok ? r0 : cropToInk(r0);
+    // the films are the ink, st.widthIn wide: a picture's empty or shirt-colored edges are cut off (#50127), and vector
+    // art's shapes that print nothing (left to the shirt, #50128); every output is drawn from these plates
+    const r = cropToInk(r0);
     r.plates.forEach((p) => { const q = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (q) p.hex = shown(q); });
     // a picture under 400 ppi: the plates (not the art) are drawn again at 400 ppi, following the art's own soft
     // edges, so the Illustrator file doesn't step in the art's pixels
@@ -950,7 +951,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const title = `${order ? `#${order.number}` : `S-${row?.number ?? ""}`} ${row?.location || ""}`.trim();
   // the art's height over its width, for the Size row's height box
   // (the ink's own box: what the W and H sizes and the films are)
-  const inkB = useMemo(() => (res && !vart?.ok ? inkBox(res) : null), [res, vart]);
+  const inkB = useMemo(() => (res ? inkBox(res) : null), [res]);
   const artAsp = inkB ? inkB.h / inkB.w : res && res.w ? res.h / res.w : img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0;
   // sized by its height: the height stays when the art's proportions change (a crop, a new trace)
   useEffect(() => { if (st.sizeBy === "h" && st.heightIn && artAsp) { const w = st.heightIn / artAsp; if (Math.abs(w - st.widthIn) > 0.005) set({ widthIn: w }); } }, [artAsp]); // eslint-disable-line react-hooks/exhaustive-deps
