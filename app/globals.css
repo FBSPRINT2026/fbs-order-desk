@@ -24414,3 +24414,4 @@ button.sst-o{cursor:pointer}button.sst-o:hover{border-color:var(--accent);backgr
 .sst-ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:800 18px var(--display);flex:none}
 .sst-a{background:#e3f0fa;color:var(--fbs-blue,#0b72b5)}.sst-b{background:#efe6fa;color:#6b3fb0}.sst-c{background:#fdf1dc;color:#c27c0e}
 .sst-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.stn-big.stn-full{background:var(--surface);color:var(--accent);border:2px solid var(--accent)}

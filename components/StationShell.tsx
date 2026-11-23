@@ -18,8 +18,9 @@ import type { Station } from "@/lib/stations";
 export default function StationShell({ station, page }: { station: Station; page: ReactNode }) {
   const path = usePathname() || "";
   const router = useRouter();
-  const pages = [station.home, ...(station.pages || [])];
-  const ours = (p: string) => pages.some((h) => p === h || p.startsWith(h + "/"));
+  // a job's full page is open to every shop computer too (View full order in the job's details; Nick, Nov 23 2026)
+  const pages = [station.home, ...(station.pages || []), "/shop/orders/", "/shop/archive/"];
+  const ours = (p: string) => pages.some((h) => p === h || p.startsWith(h.endsWith("/") ? h : h + "/"));
 
   // a page that isn't the station's: back home at once
   useEffect(() => { if (path.startsWith("/shop") && !ours(path)) router.replace(station.home); }, [path]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -68,7 +69,7 @@ export default function StationShell({ station, page }: { station: Station; page
         <div className="stn-tr"><Translate /></div>
       </header>
       <main className="main stn-main">{page}</main>
-      {peek && <JobPeek ref0={peek} onClose={() => setPeek(null)} />}
+      {peek && <JobPeek ref0={peek} onClose={() => setPeek(null)} onFull={(href) => { setPeek(null); router.push(href); }} />}
     </div>
   );
 }
@@ -133,7 +134,7 @@ function StationSearch({ job, onPick, onClear }: { job: StationHit | null; onPic
 }
 
 /** a job, to look at: over the station's page, with its two print buttons; nothing to change */
-function JobPeek({ ref0, onClose }: { ref0: { kind: "o" | "a"; id: string }; onClose: () => void }) {
+function JobPeek({ ref0, onClose, onFull }: { ref0: { kind: "o" | "a"; id: string }; onClose: () => void; onFull: (href: string) => void }) {
   const [job, setJob] = useState<JobCard | null>(null), [err, setErr] = useState(""), [mocks, setMocks] = useState<StationMock[]>([]), [mi, setMi] = useState(0), [big, setBig] = useState(false);
   const load = useCallback(async () => { const r = await stationJob(ref0.kind, ref0.id); if (r.ok) { setJob(r.job); setMocks(r.mockups); } else setErr(r.error); }, [ref0.kind, ref0.id]);
   useEffect(() => { void load(); }, [load]);
@@ -191,6 +192,7 @@ function JobPeek({ ref0, onClose }: { ref0: { kind: "o" | "a"; id: string }; onC
           <div className="stn-peek-f">
             {ref0.kind === "o" && <button type="button" className="stn-big" onClick={() => printWo(ref0)}>Print work order</button>}
             <button type="button" className="stn-big" onClick={() => printLabel(ref0)}>Print box label</button>
+            <button type="button" className="stn-big stn-full" onClick={() => onFull(job.href || (ref0.kind === "o" ? `/shop/orders/${ref0.id}` : `/shop/archive/${ref0.id}`))}>View full order</button>
           </div>
         </>}
       </div>
