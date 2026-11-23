@@ -364,12 +364,21 @@ export default function SeparationStudio({ id }: { id: string }) {
   // vector art's background layer (stock art's cream / white page box): asked once, then kept in the settings
   const backdrop = useMemo(() => findBackdrop(vraw), [vraw]);
   // measured by the art's own shapes, not the page it sits on: the print width is the art's width
-  const vart = useMemo(() => { const v = vraw && backdrop && st.dropBackdrop ? withoutBackdrop(vraw, backdrop) : vraw; return v?.ok ? fitToShapes(v) : v; }, [vraw, backdrop, st.dropBackdrop]);
+  // and by what prints: a box or shapes left to the shirt (#50128's navy rectangle behind the back art, PMS 289 C on a Navy
+  // shirt) don't count, so W is the ink's width for vector art too (inkFrame: the printing part of the frame, found from
+  // the separation; Nick, Nov 23 2026: "you just fixed the one file… it did it again")
+  const [inkFrame, setInkFrame] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const vfit = useMemo(() => { const v = vraw && backdrop && st.dropBackdrop ? withoutBackdrop(vraw, backdrop) : vraw; return v?.ok ? fitToShapes(v) : v; }, [vraw, backdrop, st.dropBackdrop]);
+  useEffect(() => { setInkFrame(null); }, [vfit]);
+  const vart = useMemo(() => (vfit?.ok && inkFrame ? { ...vfit, ...inkFrame } : vfit), [vfit, inkFrame]);
   // after the background comes out (or goes back), the inks are found again once the new art is drawn
   const refind = useRef<HTMLImageElement | null | false>(false);
   // EPS / PDF art: the Studio's picture of it is drawn from its shapes
   const fromShapes = useRef(false);
   const [inks, setInks] = useState<SepInk[]>([]);
+  // which inks are left to the shirt decides what prints: when that changes, the vector frame is found again
+  const shirtKey = inks.map((k) => `${k.hex}${k.noPrint || k.shirt ? "s" : ""}`).join(",");
+  useEffect(() => { setInkFrame(null); }, [shirtKey, st.method]);
   const [res, setRes] = useState<SepResult | null>(null);
   const [orderKeys, setOrderKeys] = useState<string[]>([]);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -802,8 +811,16 @@ export default function SeparationStudio({ id }: { id: string }) {
       r.plates.forEach((p) => { const k = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (k) p.hex = shown(k); });
       hiRef.current = null;
       // the print width is the ink's width (#50127: a background left to the shirt made 11.5" print 9"): how much wider
-      // the whole picture is than its ink, for every size worked out from the picture (pictures only: vector art is
-      // drawn from its own shapes)
+      // the whole picture is than its ink, for every size worked out from the picture. Vector art is drawn again from its
+      // shapes in just the printing part of its frame (#50128: its 10" was a navy box, the ink 5.4"), so its films,
+      // Illustrator file and sizes are the ink; it settles in one step (the next separation fills the frame)
+      if (vart?.ok) {
+        const vb = inkBox(r);
+        if (vb) {
+          const f = { x: vart.x + (vb.x / r.w) * vart.w, y: vart.y + (vb.y / r.h) * vart.h, w: (vb.w / r.w) * vart.w, h: (vb.h / r.h) * vart.h };
+          setInkFrame(f); setBusy(""); return;
+        }
+      }
       const b = vart?.ok ? null : inkBox(r);
       const sp = b ? r.w / b.w : 1;
       if (Math.abs(sp - spanRef.current) > 0.002) { spanRef.current = sp; setSpan(sp); }
