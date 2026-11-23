@@ -608,3 +608,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 23 1:10pm · 1.3.851 · Nick · Purchase order form: the item rows sit on one line with the quantity box beside them
 - Nov 23 1:11pm · 1.3.852 · Nick · Purchase order: Ordered by fills in; no made-up 'Group 1' under items
 - Nov 23 1:15pm · 1.3.853 · Nick · Purchase order: the PO # is the job's number (a second PO on the job is -2), and it prints full size on 8.5 x 11 with half-inch margins
+- Nov 23 1:32pm · 1.3.854 · Nick · Separations: a zip works anywhere a separation file is picked. Learn from Separo opens Separo's zip and reads the inks off separation.eps (Base, 7457 C, 647 C); art uploads take the art out of a zip (original.png); a finished separation picked as art says where it goes instead of a vector error

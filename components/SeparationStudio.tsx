@@ -250,7 +250,7 @@ function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false, side
 }
 /** art uploaded straight to a separation (no order): kept in its folder, remembered in settings.art */
 export type SepArt = { path: string; name: string; type: string; preview?: string; /** the .ai / PDF this picture was drawn from */ original?: { path: string; name: string }; /** why it's separated as a picture */ note?: string };
-export const ART_ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,.eps,.ai,.pdf,image/png,image/jpeg,image/webp,image/svg+xml,application/postscript,application/pdf,application/illustrator";
+export const ART_ACCEPT = ".png,.jpg,.jpeg,.webp,.svg,.eps,.ai,.pdf,.zip,image/png,image/jpeg,image/webp,image/svg+xml,application/postscript,application/pdf,application/illustrator";
 export const ART_KINDS = "PNG, JPG, WebP, SVG, Illustrator (.ai), PDF or EPS";
 const isEps = (name: string, type = "") => /\.eps$/i.test(name) || (/postscript/i.test(type) && !/\.ai$/i.test(name));
 const isPdf = (name: string, type = "") => /\.(pdf|ai)$/i.test(name) || /pdf|illustrator/i.test(type);
@@ -262,6 +262,31 @@ export async function readVector(blob: Blob, name: string, type = ""): Promise<V
     catch (e) { return { ok: false, why: e instanceof Error ? e.message : "couldn't be read", x: 0, y: 0, w: 1, h: 1, shapes: [] }; }
   }
   return null;
+}
+/**
+ * A .zip opened into its files (Nick, Nov 23 2026: Separo's download, "Pasted art-1.zip", is separation.eps + original.png +
+ * readme.txt, and uploading it gave an error). Any zip of art or separations works the same: its files are used as if
+ * they'd been picked one by one; notes (.txt) and system files are left out.
+ */
+export async function openZips(fs: File[]): Promise<File[]> {
+  const out: File[] = [];
+  for (const f of fs) {
+    if (!(/\.zip$/i.test(f.name) || /zip/i.test(f.type))) { out.push(f); continue; }
+    const { unzip } = await import("@/lib/unzip");
+    const inner = await unzip(f).catch(() => [] as File[]);
+    out.push(...inner.filter((x) => !/\.(txt|md|rtf|url|html?)$/i.test(x.name)).map((x) => withType(x)));
+  }
+  return out;
+}
+const withType = (f: File) => f.type ? f : new File([f], f.name.replace(/^.*\//, ""), { type: /\.png$/i.test(f.name) ? "image/png" : /\.jpe?g$/i.test(f.name) ? "image/jpeg" : /\.eps$/i.test(f.name) ? "application/postscript" : /\.pdf$/i.test(f.name) ? "application/pdf" : /\.svg$/i.test(f.name) ? "image/svg+xml" : "" });
+/** a finished separation (Separo's or Photoshop's DCS EPS: one plate per ink), not art to separate */
+const isDoneSep = async (f: File) => isEps(f.name, f.type) && /%%PlateFile:/.test(await f.slice(0, 64 * 1024).text());
+/** the art in a zip, or a finished separation's original next to it: the original picture first, then any art file */
+async function artFromZip(f: File): Promise<File | null> {
+  const fs = await openZips([f]);
+  const ok = fs.filter((x) => artOk(x));
+  const plain: File[] = []; for (const x of ok) if (!(await isDoneSep(x))) plain.push(x);
+  return plain.find((x) => /^original\./i.test(x.name)) || plain.find((x) => /^image\//.test(x.type)) || plain[0] || null;
 }
 export const artOk = (f: File) => /^image\/(png|jpe?g|webp|svg\+xml)$/i.test(f.type) || /\.(png|jpe?g|webp|svg|eps|ai|pdf)$/i.test(f.name);
 /** null when the file can be separated, else why not (an EPS has to be flat filled shapes) */
@@ -278,8 +303,16 @@ export async function artProblem(f: File): Promise<string | null> {
  * and separated as a picture, with a note why; the original is kept with it. Only files that can't be opened at all
  * (an old PostScript-style .ai, or an EPS that isn't flat shapes) are refused.
  */
-export async function prepareSepArt(f: File): Promise<{ file: File; original?: File; note: string } | { error: string }> {
+export async function prepareSepArt(f0: File): Promise<{ file: File; original?: File; note: string } | { error: string }> {
+  let f = f0;
+  if (/\.zip$/i.test(f.name) || /zip/i.test(f.type)) {
+    const inner = await artFromZip(f);
+    if (!inner) return { error: `That zip has no art in it. Use a ${ART_KINDS}.` };
+    f = inner;
+  }
   if (!artOk(f)) return { error: `Use a ${ART_KINDS}.` };
+  // a finished separation as the art: it's already separated (its plates are pictures); say where it goes
+  if (await isDoneSep(f)) return { error: "That's a finished separation (one plate per ink, like Separo's separation.eps), not art to separate. Upload it under Learn from Separo, or upload the original art (Separo's zip has it as original.png)." };
   const v = await readVector(f, f.name, f.type);
   if (!v || v.ok) return { file: f, note: "" };
   const kind = isEps(f.name, f.type) ? "EPS" : /\.ai$/i.test(f.name) ? "Illustrator file" : "PDF";
@@ -1675,8 +1708,11 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
   const [readInks, setReadInks] = useState(0);
   /** choosing Separo's files is the whole step: they're saved and learned from right away (Nicholas, Oct 7 2026).
    *  Only when no ink names can be read from them does it wait for the inks to be typed. */
-  async function pickFiles(fs: File[]) {
-    if (!fs.length) return;
+  async function pickFiles(fs0: File[]) {
+    if (!fs0.length) return;
+    // Separo's download is a zip (separation.eps, original.png, readme.txt): opened here, the EPS read for its inks
+    const fs = await openZips(fs0);
+    if (!fs.length) { setErr("That zip had nothing in it to use."); return; }
     setFiles(fs);
     const names = await inkNamesFromFiles(fs);
     if (names.length) { setInkText(names.join("\n")); setReadInks(names.length); await save(fs, names); }
@@ -1689,7 +1725,7 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
       const imgs: { label: string; data: string }[] = [];
       const art = artImage(); if (art) imgs.push({ label: "The original art:", data: art });
       // a look at what came back: a PNG / JPG as is, else the PDF / .ai / EPS drawn (its first page)
-      const comp = fs.find((f) => /^image\/(png|jpe?g)$/i.test(f.type) && f.size < 15e6);
+      const comp = fs.find((f) => /^image\/(png|jpe?g)$/i.test(f.type) && f.size < 15e6 && !/^original\./i.test(f.name));
       if (comp) { const d = await jpegOf(comp); if (d) imgs.push({ label: `What came back from ${src} (${comp.name}):`, data: d }); }
       else {
         const doc = fs.find((f) => /\.(pdf|ai|eps)$/i.test(f.name) && f.size < 60e6);
