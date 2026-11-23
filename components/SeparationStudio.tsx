@@ -1723,6 +1723,7 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
   const [why, setWhy] = useState("");
   const [learned, setLearned] = useState<{ summary: string; lessons: { id: string; lesson: string }[] } | null>(null), [learning, setLearning] = useState(false);
   const [readInks, setReadInks] = useState(0);
+  const [dropOver, setDropOver] = useState(false);
   /** choosing Separo's files is the whole step: they're saved and learned from right away (Nicholas, Oct 7 2026).
    *  Only when no ink names can be read from them does it wait for the inks to be typed. */
   async function pickFiles(fs0: File[]) {
@@ -1793,7 +1794,8 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
       </section>
       <section className="sep-card">
         <h3>2. Upload what came back</h3>
-        <label className="tmx-drop"><input type="file" multiple accept=".eps,.pdf,.ai,.psd,.tif,.tiff,.png,.jpg,.zip" onChange={(e) => pickFiles([...(e.target.files || [])])} /><b>{busy ? "Uploading…" : learning ? "Learning from it…" : files.length ? files.map((f) => f.name).join(", ") : "Choose Separo's files (EPS, PDF, AI, PSD, TIFF, PNG, ZIP): it learns from them right away"}</b></label>
+        {/* drop files on it too (Nick, Nov 23 2026: "drag and drop isn't working here") */}
+        <label className={"tmx-drop" + (dropOver ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setDropOver(true); }} onDragLeave={() => setDropOver(false)} onDrop={(e) => { e.preventDefault(); setDropOver(false); void pickFiles([...(e.dataTransfer.files || [])]); }}><input type="file" multiple accept=".eps,.pdf,.ai,.psd,.tif,.tiff,.png,.jpg,.zip" onChange={(e) => { void pickFiles([...(e.target.files || [])]); e.target.value = ""; }} /><b>{busy ? "Uploading…" : learning ? "Learning from it…" : files.length ? files.map((f) => f.name).join(", ") : "Choose Separo's files (EPS, PDF, AI, PSD, TIFF, PNG, ZIP): it learns from them right away"}</b></label>
         {readInks > 0 && <div className="sep-ok">Read {readInks} ink{readInks === 1 ? "" : "s"} from the file: saved and sent for review.</div>}
         {/* only when the inks couldn't be read from the files: type them, then save */}
         {files.length > 0 && !readInks && !busy && !learning && <>
