@@ -74,3 +74,31 @@ export async function markPickedUp(orderIds: string[]): Promise<{ ok: true; done
     return { ok: true, done: done.length };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/**
+ * A job typed or scanned on Outbound: which list it's in, so the page goes straight there (Nick, Nov 23 2026: "I do
+ * 40462 for filter, I click go, it should just take you to wherever that is in the process"; "if you go 40462… it should
+ * show it automatically as shipped"). Read off the order's status, its delivery and its shipments.
+ */
+export type OutboundSpot = { tab: "ship" | "pickup" | "deliver"; sub: "ready" | "shipped" | "shelf" | "packing" | "done" | "todo"; number: string; say: string };
+export async function outboundWhere(code: string): Promise<{ ok: true; spot: OutboundSpot | null } | { ok: false; error: string }> {
+  try {
+    const { admin } = await staff();
+    const num = String(code || "").replace(/^#/, "").match(/\d{3,7}/)?.[0];
+    if (!num) return { ok: true, spot: null };
+    const { data: o } = await admin.from("orders").select("id, number, status, delivery_method, nickname").eq("number", +num).is("discarded_at", null).maybeSingle();
+    const { data: a } = o ? { data: null } : await admin.from("archived_orders").select("id, visual_id, status_name, data").eq("visual_id", num).is("removed_at", null).maybeSingle();
+    if (!o && !a) return { ok: true, spot: null };
+    const { data: sh } = await admin.from("shipments").select("status, carrier, service, shipped_at").eq(o ? "order_id" : "archived_order_id", (o || a)!.id).eq("status", "shipped").order("shipped_at", { ascending: false }).limit(1);
+    const went = (sh || [])[0] as { carrier: string; service: string; shipped_at: string | null } | undefined;
+    const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "");
+    if (went) return { ok: true, spot: { tab: "ship", sub: "shipped", number: num, say: `#${num} shipped ${day(went.shipped_at)} · ${[went.carrier, went.service].filter(Boolean).join(" ")}. To fix it, Void its labels below and ship it again.` } };
+    const status = o ? String(o.status) : /complete|picked|deliver|ship/i.test(String(a!.status_name || "")) ? "completed" : "ready";
+    const how = String((o ? o.delivery_method : (a!.data as { deliveryMethod?: string } | null)?.deliveryMethod) || "");
+    const kind = /ship/i.test(how) ? "ship" : /deliver/i.test(how) ? "deliver" : "pickup";
+    const printing = status === "production" || status === "approved";
+    if (kind === "ship") return { ok: true, spot: { tab: "ship", sub: "ready", number: num, say: status === "completed" ? `#${num} is Completed with no label made here.` : printing ? `#${num} is still printing.` : `#${num} is ready to ship.` } };
+    if (kind === "deliver") return { ok: true, spot: { tab: "deliver", sub: status === "completed" ? "done" : "todo", number: num, say: status === "completed" ? `#${num} was delivered.` : printing ? `#${num} is still printing.` : `#${num} is ready to deliver.` } };
+    return { ok: true, spot: { tab: "pickup", sub: status === "completed" ? "done" : status === "fulfillment" ? "packing" : "shelf", number: num, say: status === "completed" ? `#${num} was picked up.` : status === "fulfillment" ? `#${num} is being packed.` : printing ? `#${num} is still printing.` : `#${num} is on the pickup shelf.` } };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}

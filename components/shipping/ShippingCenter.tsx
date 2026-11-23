@@ -50,11 +50,13 @@ const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLoc
  * Shipping center: every order that's ready to ship (new orders marked Ready with delivery "Ship", and Printavo
  * orders in "Shipping - Ready to Ship"), a scan box for box labels, and the ship window.
  */
-export default function ShippingCenter({ embedded = false, shipReq = null, filter = "", settingsAt = 0 }: { embedded?: boolean; shipReq?: { n: string; at: number } | null; /** Outbound's Search / filter */ filter?: string;
+export default function ShippingCenter({ embedded = false, shipReq = null, filter = "", settingsAt = 0, showTab = null }: { embedded?: boolean; shipReq?: { n: string; at: number } | null; /** Outbound's Search / filter */ filter?: string;
+  /** Outbound found a job: open the list it's in (Ready to ship or Shipped) */ showTab?: { tab: "ready" | "shipped"; at: number } | null;
   /** Outbound's gear in its header (Nick, Nov 19 2026): each press opens or closes the shipping settings */ settingsAt?: number } = {}) {
   const sb = createClient();
   const [items, setItems] = useState<Item[] | null>(null);
   const [shipped, setShipped] = useState<(Shipment & { label: string; customer: string })[]>([]);
+  const wantRef = useRef("");
   // Void labels (Nick, Nov 23 2026: "if we make a mistake on a label… void the labels so we don't get charged")
   const [voidAsk, setVoidAsk] = useState(""), [voidWhy, setVoidWhy] = useState(""), [voidBusy, setVoidBusy] = useState(""), [voidMsg, setVoidMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
   async function voidLabels(id: string) {
@@ -128,7 +130,15 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
     }).filter(Boolean) as { item: Item; parts: MixPart[]; went: Shipment | null }[]);
 
     const { data: done } = await sb.from("shipments").select("*").eq("status", "shipped").order("shipped_at", { ascending: false }).limit(50);
-    const d = (done || []) as Shipment[];
+    // a job looked up on Outbound that shipped longer ago than the last 50: its shipments too, so it can be fixed
+    const want = (wantRef.current || "").match(/^\d{3,7}$/)?.[0];
+    let extra: Shipment[] = [];
+    if (want) {
+      const [{ data: wo }, { data: wa }] = await Promise.all([sb.from("orders").select("id").eq("number", +want), sb.from("archived_orders").select("id").eq("visual_id", want)]);
+      const ids = [...((wo || []) as { id: string }[]).map((x) => `order_id.eq.${x.id}`), ...((wa || []) as { id: string }[]).map((x) => `archived_order_id.eq.${x.id}`)];
+      if (ids.length) extra = ((await sb.from("shipments").select("*").eq("status", "shipped").or(ids.join(","))).data || []) as Shipment[];
+    }
+    const d = [...((done || []) as Shipment[]), ...extra.filter((x) => !(done || []).some((y: { id: string }) => y.id === x.id))];
     const oIds = d.map((x) => x.order_id).filter(Boolean) as string[], aIds = d.map((x) => x.archived_order_id).filter(Boolean) as string[];
     const [{ data: on }, { data: an }, { data: dc }] = await Promise.all([
       oIds.length ? sb.from("orders").select("id, number").in("id", oIds) : Promise.resolve({ data: [] }),
@@ -142,6 +152,9 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
   useEffect(() => { load(); }, [load]);
   // Outbound's Start shipping hands a job # here once the list is in (Nov 13, Nick)
   useEffect(() => { if (shipReq && items) onScan(shipReq.n); }, [shipReq?.at, !!items]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (showTab) setTab(showTab.tab); }, [showTab?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a job # typed on Outbound: make sure its shipments are in Shipped, however long ago it went
+  useEffect(() => { const n = filter.trim().replace(/^#/, ""); if (embedded && /^\d{3,7}$/.test(n) && n !== wantRef.current) { wantRef.current = n; void load(); } }, [filter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** A scanned box label: "34317-2" (order and box) or just the order number. */
   function onScan(v: string) {
@@ -150,6 +163,8 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
     setScan("");
     if (!m) return setNote(`“${v}” isn't an order number.`);
     const it = (items || []).find((x) => x.number === m[1]);
+    // already shipped: straight to it in Shipped, where its labels can be voided and it shipped again (Nick, Nov 23 2026)
+    if (!it && shipped.some((x) => x.label === m[1] || x.label === `#${m[1]}`)) { setTab("shipped"); return setNote(`#${m[1]} already shipped: it's below. To fix it, Void its labels, then ship it again.`); }
     if (!it) return setNote(`#${m[1]} isn't in Ready to ship. Check its status (it has to be ready, with delivery by shipping).`);
     setNote(""); setOpen({ item: it, box: m[2] ? +m[2] : null });
   }
@@ -242,7 +257,7 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
           <table className="aa-tbl">
             <thead><tr><th>#</th><th>Customer</th><th>Shipped</th><th>Service</th><th className="r">Boxes</th><th>Paid by</th><th>Tracking</th><th /></tr></thead>
             <tbody>
-              {shipped.map((s) => (
+              {shipped.filter((x) => !words.length || words.every((w) => [x.label, x.customer, x.carrier, x.service, x.ship_to?.company, x.ship_to?.name, x.ship_to?.city, ...x.boxes.map((b) => b.tracking)].some((v) => String(v || "").toLowerCase().replace(/^#/, "").includes(w)))).map((s) => (
                 <tr key={s.id} style={{ cursor: "default" }}>
                   <td className="num">{s.label}</td>
                   <td>{s.customer}<div className="aa-s">{oneLine(s.ship_to)}</div></td>

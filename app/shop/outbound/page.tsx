@@ -12,7 +12,7 @@ import { mergeSettings } from "@/lib/pricing";
 import { estimateBoxes } from "@/lib/shipping";
 import ShipCheck from "@/components/ShipCheck";
 import ShippingCenter from "@/components/shipping/ShippingCenter";
-import { markPickedUp, outboundLookup, type LookupJob, type Where } from "./actions";
+import { markPickedUp, outboundLookup, outboundWhere, type LookupJob, type Where } from "./actions";
 
 /**
  * Outbound (Nov 11 2026, Nick): everything done printing that has to leave the shop, by how it leaves: shipped (the
@@ -55,7 +55,6 @@ export default function Outbound() {
   // again after, with it on the list
   const [checkN, setCheckN] = useState(""), [shipKey, setShipKey] = useState(0);
   const [labelFor, setLabelFor] = useState<{ n: string; at: number } | null>(null);
-  const [scanned, setScanned] = useState<string>("");
   const [busy, setBusy] = useState("");
   const qRef = useRef<HTMLInputElement>(null);
 
@@ -107,9 +106,28 @@ export default function Outbound() {
   // another page comes here as ?scan=<number>
   useEffect(() => {
     const n = new URLSearchParams(window.location.search).get("scan");
-    if (n && jobCode(n)) { setScanned(jobCode(n)); window.history.replaceState(null, "", window.location.pathname); }
-    return onScan(({ n }) => { setScanned(n); return true; });
-  }, []);
+    if (n && jobCode(n)) { void goTo(jobCode(n)); window.history.replaceState(null, "", window.location.pathname); }
+    return onScan(({ n }) => { void goTo(n); return true; });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // a job typed in Search / filter (Enter) or scanned: straight to the list it's in, filtered to it, with a line saying
+  // where it is; no "label or ship?" question, the top bar prints labels (Nick, Nov 23 2026: "it should just take you
+  // to wherever that is in the process… if you go 40462… it should show it automatically as shipped")
+  const [showTab, setShowTab] = useState<{ tab: "ready" | "shipped"; at: number } | null>(null);
+  async function goTo(code: string) {
+    const num = String(code).replace(/^#/, "").match(/\d{3,7}/)?.[0];
+    if (!num) return;
+    setQ(num);
+    const r = await outboundWhere(num);
+    if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+    if (!r.spot) { setMsg({ ok: false, text: `#${num} isn't a job here. Check the number.` }); return; }
+    const sp = r.spot;
+    setTab(sp.tab);
+    if (sp.tab === "ship") setShowTab({ tab: sp.sub === "shipped" ? "shipped" : "ready", at: Date.now() });
+    if (sp.tab === "pickup") setPickSub(sp.sub === "done" ? "done" : sp.sub === "packing" ? "packing" : "shelf");
+    if (sp.tab === "deliver") setDelSub(sp.sub === "done" ? "done" : "todo");
+    setMsg({ ok: true, text: sp.say });
+  }
 
   const of = (h: Row["how"]) => (rows || []).filter((r) => r.how === h);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
@@ -196,7 +214,7 @@ export default function Outbound() {
         {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
 
         {/* the Shipping Center stays mounted so its ship window can open from a scan on any tab */}
-        <div hidden={tab !== "ship"}><ShippingCenter key={shipKey} embedded shipReq={shipReq} filter={q} settingsAt={setAt} /></div>
+        <div hidden={tab !== "ship"}><ShippingCenter key={shipKey} embedded shipReq={shipReq} filter={q} settingsAt={setAt} showTab={showTab} /></div>
         {checkN && <ShipCheck number={checkN} onClose={() => setCheckN("")} onReady={() => { const n = checkN; setCheckN(""); void load(); setShipKey((k) => k + 1); setMsg(null); setTab("ship"); setShipReq({ n, at: Date.now() }); }} />}
 
         {tab === "pickup" && <>
@@ -257,14 +275,13 @@ export default function Outbound() {
           <span>Search / filter</span>
           <span className="obx-fi">
             <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
-            <input ref={qRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { const n = jobCode(q); if (n && (/\//.test(q) || !(rows || []).some(hit))) { e.preventDefault(); setScanned(n); setQ(""); } } if (e.key === "Escape") setQ(""); }} placeholder="Customer, job #, PO or scan" aria-label="Search and filter Outbound" />
+            <input ref={qRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { const n = jobCode(q); if (n) { e.preventDefault(); void goTo(n); } } if (e.key === "Escape") { setQ(""); setMsg(null); } }} placeholder="Customer, job #, PO or scan" aria-label="Search and filter Outbound" />
             {q && <button type="button" className="linkbtn" onClick={() => { setQ(""); qRef.current?.focus(); }}>Clear</button>}
           </span>
         </label>
         {(!stn || labelFor) && <LabelPanel pick={labelFor} perBox={perBox} />}
       </aside>
 
-      {scanned && <ScanChoice n={scanned} onClose={() => setScanned("")} onLabel={() => { label(scanned); setScanned(""); }} onShip={() => { const why = startShipping(scanned); if (!why) setScanned(""); return why; }} />}
     </div>
   );
 }
