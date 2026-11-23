@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function PoPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ po?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
-  const v = await getViewer();
+  const v = await getViewer(", name");
   if (!v.user) redirect(`/login?next=/print/${id}/po`);
   if (!v.isStaff) notFound();
   const admin = createAdminClient();
@@ -38,7 +38,7 @@ export default async function PoPage({ params, searchParams }: { params: Promise
   // each line: its own picture (a promo item's), else its group's mockup
   const groups = orderGroups(o);
   const raw = groups.flatMap((g, gi) => {
-    const gp = groupPictures(g)[0] || "";
+    const gp = groupPictures(g)[0] || ""; void gi;
     return g.lines.filter((l) => l.spec?.kind === "promo").map((l) => {
       const sizes = Object.entries(l.sizes || {}).filter(([, n]) => (n || 0) > 0) as [string, number][];
       const qty = sizes.reduce((a, [, n]) => a + n, 0);
@@ -50,7 +50,7 @@ export default async function PoPage({ params, searchParams }: { params: Promise
       ].filter(Boolean);
       const approved = sp0?.proof?.status === "approved" && sp0.proof.at ? `Art approved ${new Date(sp0.proof.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "";
       return {
-        id: l.id, group: groups.length > 1 ? (g.name?.trim() || `Group ${gi + 1}`) : "",
+        id: l.id, group: groups.length > 1 ? (g.name?.trim() || "") : "",
         item: sp0?.itemNo || l.style || "", kind: sp0?.imprintType ? "" : (sp0 ? "" : l.brand || ""),
         desc, approved, qty, sizes: sizes.length > 1 || (sizes[0] && sizes[0][0] !== "OS") ? sizes : [],
         supplier: sp0?.supplier || "",
