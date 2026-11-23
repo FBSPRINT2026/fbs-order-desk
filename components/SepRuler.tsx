@@ -41,7 +41,7 @@ export default function SepRuler({ canvas, printW, resW, resH, box, w, h }: {
       {ticksX.map((t, i) => <g key={"x" + i}><line x1={t.x} x2={t.x} y1={0} y2={t.big ? 10 : 5} className="srl-t" />{t.n != null && t.n > 0 && <text x={t.x + 2} y={14} className="srl-n">{t.n}</text>}</g>)}
       {ticksY.map((t, i) => <g key={"y" + i}><line y1={t.y} y2={t.y} x1={0} x2={t.big ? 10 : 5} className="srl-t" />{t.n != null && t.n > 0 && <text y={t.y - 2} x={1} className="srl-n">{t.n}</text>}</g>)}
       <rect x={bx.x + 0.5} y={bx.y + 0.5} width={Math.max(0, bx.w - 1)} height={Math.max(0, bx.h - 1)} className="srl-box" />
-      <text x={bx.x + bx.w / 2} y={Math.max(30, bx.y - 6)} className="srl-wh" textAnchor="middle">{fmt(w)}&quot; × {fmt(h)}&quot;</text>
+      <text x={bx.x + bx.w / 2} y={bx.y > 34 ? bx.y - 6 : bx.y + 34} className="srl-wh" textAnchor="middle">{fmt(w)}&quot; × {fmt(h)}&quot;</text>
     </svg>
   );
 }
