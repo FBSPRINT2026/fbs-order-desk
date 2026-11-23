@@ -80,7 +80,7 @@ export async function illustratorPdf(plates0: Plate[], w: number, h: number, o0:
   const st = o0.starter;
   // the starter: color plates only, as shapes, nothing halftoned (he makes those himself)
   const plates = st ? plates0.filter((p) => p.kind !== "underbase") : plates0;
-  const o: IllustratorOpts = st ? { ...o0, tonal: false, solid: "vector", vector: undefined, marks: { crop: false, targets: o0.marks?.targets !== false } } : o0;
+  const o: IllustratorOpts = st ? { ...o0, tonal: false, solid: "vector", vector: undefined, marks: { crop: true, targets: o0.marks?.targets !== false } } : o0;
   const W = o.widthIn * 72, H = W * (h / w), s = W / w, N = plates.length;
   const parts: Uint8Array[] = []; const offsets: number[] = []; let pos = 0;
   const push = (x: Uint8Array | string) => { const b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); pos += b.length; };
@@ -151,11 +151,18 @@ export async function illustratorPdf(plates0: Plate[], w: number, h: number, o0:
     + (o.marks?.crop === false ? "" : crop(MG, MG, -1, -1) + crop(MG + W, MG, 1, -1) + crop(MG, MG + H, -1, 1) + crop(MG + W, MG + H, 1, 1)) + "Q\n";
   const esc = (t: string) => t.replace(/[\\()]/g, (c) => "\\" + c).replace(/[^\x20-\x7e]/g, "?");
   // the starter: the job's lines by the top target (on every film), like the shop's own films
-  if (st) st.lines.filter(Boolean).slice(0, 4).forEach((t, li) => {
-    const size = 9, tw = t.length * size * 0.55;
+  // (Nick, Nov 23 2026: "the crop marks be the registration color so it prints on every film, and the description in the
+  // color that's the color… layered over each other"): the job's lines and the marks in registration (every film), then
+  // each ink's own name and number in that ink's spot color, all at the same spot, so every film carries its own
+  if (st) {
+    const lines = st.lines.filter(Boolean).slice(0, 4), size = 9;
+    const all = [...lines, ...plates.map((p, i) => `${p.name}  (${i + 1}/${N})`)];
+    const tw = Math.max(...all.map((t) => t.length)) * size * 0.55;
     let x = tx + 20; if (x + tw > PW - 6) x = Math.max(6, tx - 20 - tw);
-    marks += `q /CSA cs 1 scn BT /FL ${size} Tf ${x.toFixed(2)} ${(ty + 6 - li * 11).toFixed(2)} Td (${esc(t)}) Tj ET Q\n`;
-  });
+    lines.forEach((t, li) => { marks += `q /CSA cs 1 scn BT /FL ${size} Tf ${x.toFixed(2)} ${(ty + 6 - li * 11).toFixed(2)} Td (${esc(t)}) Tj ET Q\n`; });
+    const iy = ty + 6 - lines.length * 11;
+    plates.forEach((p, i) => { marks += `q /CS${i} cs 1 scn BT /FL ${size} Tf ${x.toFixed(2)} ${iy.toFixed(2)} Td (${esc(`${p.name}  (${i + 1}/${N})`)}) Tj ET Q\n`; });
+  }
   if (!st) plates.forEach((p, i) => {
     const text = `${p.name}  (${i + 1}/${N})`, size = 11, tw = text.length * size * 0.6;
     // right of the top target; to its left when the art is too narrow for the name to fit on the page
