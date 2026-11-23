@@ -24,7 +24,7 @@ import { confirmTitle, isNewOrderConfirm } from "@/components/OrderTypeRow";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import ColorChange, { versionOfColor, versionsOf as versionsOfAll } from "@/components/ColorChange";
-import { baseColor, inkKeyOf, inksOnColor, liveInkBy, livePrint } from "@/lib/inkBy";
+import { baseColor, inkKeyOf, inksFor, inksOnColor, liveInkBy, livePrint } from "@/lib/inkBy";
 import LocationChange from "@/components/LocationChange";
 import { hasSpotChange, spotKey, spotLines, spotOf, spotsOf, needsSettle, settleSpots } from "@/lib/spotChange";
 import { colorChanges } from "@/lib/pricing";
@@ -394,7 +394,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
       const cw = cwOn(x, key), own = cw && hasColorwayArt(designUrls, des.id, { colorway: cw.name }) ? printArtUrl(designUrls, des.id, { colorway: cw.name }) : "";
       return { d: x, url: own || url, own: !!own, swap: null, where: x.location, inks: cw ? [{ name: cw.name, changed: versionOfColor(x, key) > 0 }] : [{ name: x.colorway || "As printed", changed: false }] };
     }
-    const m = Object.entries(x.inkBy || {}).find(([c]) => c.trim().toLowerCase() === key.trim().toLowerCase())?.[1] || {};
+    const m = inksFor(x.inkBy, key) || {};
     const swap = Object.fromEntries(Object.entries(m).filter(([a, b]) => b && a.trim().toLowerCase() !== b.trim().toLowerCase()).map(([a, b]) => [a.trim().toLowerCase(), b.trim()]));
     return { d: x, url, own: false, swap: Object.keys(swap).length ? swap : null, where: x.location, inks: inksOnColor(x, key) };
   };
@@ -431,7 +431,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
       // a colorway change: that colorway's own picture, as it is (its inks painted on the logo when it has none)
       const des = designOf(d), cw = des ? colorwaysOf(des).find((c) => c.name === v.to) : undefined;
       const own = des && hasColorwayArt(designUrls, des.id, { colorway: v.to }) ? printArtUrl(designUrls, des.id, { colorway: v.to }) : "";
-      const swap = Object.fromEntries(Object.entries((l && Object.entries(d.inkBy || {}).find(([c]) => c.trim().toLowerCase() === inkKeyOf(l).trim().toLowerCase())?.[1]) || {}).filter(([a, b]) => b && a.trim().toLowerCase() !== b.trim().toLowerCase()).map(([a, b]) => [a.trim().toLowerCase(), b.trim()]));
+      const swap = Object.fromEntries(Object.entries((l && inksFor(d.inkBy, inkKeyOf(l))) || {}).filter(([a, b]) => b && a.trim().toLowerCase() !== b.trim().toLowerCase()).map(([a, b]) => [a.trim().toLowerCase(), b.trim()]));
       const L = des && cw ? cwLetter(des, cw) : "";
       if (L) color = `Group ${L}`;
       return { color, hex, swap, bg, caption: `Colorway ${L ? `${L} · ` : ""}${v.to}`, ...(own && cw ? { url: own, to: cw.inks.join(", ") } : {}) };

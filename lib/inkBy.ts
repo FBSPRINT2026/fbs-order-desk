@@ -5,7 +5,22 @@
  */
 import type { Imprint } from "@/lib/pricing";
 
-const ck = (c: string) => (c || "").trim().toLowerCase();
+/** The one way a color-change key (a garment color, "mauve ~c" for a colorway's line) or an ink name is compared: case,
+ *  spaces and punctuation don't count (Nov 23, Amanda, #50195: the Mockup Creator saved "graphiteheather", the order page
+ *  looked for "graphite heather" and showed the print in White while the mockup showed Black). Every place that looks a
+ *  color up in Imprint.inkBy / colorwayBy goes through inkKey or inksFor. */
+export const inkKey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9~]/g, "");
+const ck = inkKey;
+/** a garment color's (or a line's ink key's) swaps in a print's inkBy, however the key was written */
+export const inksFor = (inkBy: Record<string, Record<string, string>> | null | undefined, color: string): Record<string, string> | undefined =>
+  Object.entries(inkBy || {}).find(([k]) => inkKey(k) === inkKey(color))?.[1];
+/** inkBy with one color's swaps set (or removed), every other spelling of that color's key dropped; saved under the
+ *  color as written, lower case */
+export function setInksFor(inkBy: Record<string, Record<string, string>> | null | undefined, color: string, next: Record<string, string> | null) {
+  const out = Object.fromEntries(Object.entries(inkBy || {}).filter(([k]) => inkKey(k) !== inkKey(color)));
+  if (next) out[(color || "").trim().toLowerCase()] = next;
+  return out;
+}
 /** A colorway of a group (Nov 9, Nick: "the same garment color can be in two colorways… Mauve in B and C"): a line with
  *  `cw` keeps its own inks under "mauve ~c" in Imprint.inkBy, so two lines of one garment color can print different
  *  inks in one group (one set of screens). Every place that looks up a line's inks goes through inkKeyOf(line). */

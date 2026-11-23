@@ -1,5 +1,5 @@
 import "server-only";
-import { inkKeyOf } from "@/lib/inkBy";
+import { inkKeyOf, inksFor } from "@/lib/inkBy";
 import { garmentFor } from "@/lib/garmentMatch";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { orderGroups, printedLines, type Imprint, type Order } from "@/lib/pricing";
@@ -164,7 +164,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
         for (const l of g.lines || []) {
           // a line in its own colorway is its own key (lib/inkBy.ts inkKeyOf); the screen shows it by its garment color
           const c = (l.color || "").trim() ? inkKeyOf(l).trim() : ""; if (!c) continue;
-          const m = Object.entries(im.inkBy || {}).find(([k]) => ck(k) === ck(c))?.[1] || {};
+          const m = inksFor(im.inkBy, c) || {};
           const e = Object.entries(m).find(([a, b]) => b && ck(a) !== ck(b));
           const key = e ? `${ck(e[0])}>${ck(e[1])}` : "";
           const v = by.get(key) || { from: e ? e[0] : "", to: e ? e[1] : "", shirts: [] };

@@ -5,7 +5,7 @@ import { guessHex, lineColor } from "@/lib/mockup";
 import { threadByName } from "@/lib/embroidery";
 import { colorHex } from "@/lib/inkColors";
 import { InkSelect, ThreadSelect } from "@/components/InkSelect";
-import { inkKeyOf } from "@/lib/inkBy";
+import { inkKey, inkKeyOf, inksFor } from "@/lib/inkBy";
 
 /**
  * Color change on a print (Oct 27, Nick on #40192's ShipStation polos: "you click a color change button and you go, okay,
@@ -49,10 +49,10 @@ export function versionsOf(im: Imprint): Ver[] {
 /** which version (0 = as printed, 1… = a change) a garment color gets on this print */
 export function versionOfColor(im: Imprint, color: string, vers = versionsOf(im)): number {
   if (vers.some((v) => v.cw)) {
-    const name = Object.entries(im.colorwayBy || {}).find(([k]) => ck(k) === ck(color))?.[1];
+    const name = Object.entries(im.colorwayBy || {}).find(([k]) => inkKey(k) === inkKey(color))?.[1];
     return name ? vers.findIndex((v) => ck(v.to) === ck(name)) + 1 : 0;
   }
-  const m =Object.entries(im.inkBy || {}).find(([k]) => ck(k) === ck(color))?.[1];
+  const m = inksFor(im.inkBy, color);
   if (!m) return 0;
   const c = changeOn(im, m);
   if (!c) return 0;
@@ -63,8 +63,8 @@ export function versionOfColor(im: Imprint, color: string, vers = versionsOf(im)
 export default function ColorChange({ im, lines, onSave, onClose }: { im: Imprint; lines: GLine[]; onSave: (inkBy: Imprint["inkBy"]) => void; onClose: () => void }) {
   const inks = (im.inks || "").split(/\s*,\s*/).filter(Boolean);
   // one row per ink key: a garment color, or its own colorway's lines of it (GLine.cw, lib/inkBy.ts inkKeyOf)
-  const ik = (l: GLine) => ck(inkKeyOf(l));
-  const colors = [...new Map(lines.filter((l) => (l.color || "").trim()).map((l) => [ik(l), l])).values()];
+  const ik = (l: GLine) => ck(inkKeyOf(l)), same = (a: string, b: string) => inkKey(a) === inkKey(b);
+  const colors = [...new Map(lines.filter((l) => (l.color || "").trim()).map((l) => [inkKey(inkKeyOf(l)), l])).values()];
   const [vers, setVers] = useState<Ver[]>(() => { const v = versionsOf(im); return v.length ? v : [{ from: inks[0] || "", to: "" }]; });
   const [pick, setPick] = useState<Record<string, number>>(() => Object.fromEntries(colors.map((l) => [ik(l), versionOfColor(im, inkKeyOf(l))])));
   const thread = im.method === "embroidery";
@@ -106,7 +106,7 @@ export default function ColorChange({ im, lines, onSave, onClose }: { im: Imprin
         {/* garments against the versions: one tick per garment color */}
         <div className="tbl-wrap"><table className="tbl cc-tbl">
           <thead><tr><th>Garment</th><th>A · as printed</th>{vers.map((v, i) => <th key={i}>{String.fromCharCode(66 + i)} · {v.to || "…"}</th>)}</tr></thead>
-          <tbody>{colors.map((l) => { const k = ik(l), on = pick[k] || 0; const n = lines.filter((x) => ik(x) === k).length; return (
+          <tbody>{colors.map((l) => { const k = ik(l), on = pick[k] || 0; const n = lines.filter((x) => same(ik(x), k)).length; return (
             <tr key={k}>
               <td><span className="cc-g"><i style={{ background: guessHex(lineColor(l)) }} /><b>{l.color}</b>{l.cw && <span className="faint">its own colorway</span>}{n > 1 ? <span className="faint">{n} styles</span> : <span className="faint">{l.style}</span>}</span></td>
               {[0, ...vers.map((_, i) => i + 1)].map((vi) => (

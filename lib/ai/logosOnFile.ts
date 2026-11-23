@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyColorwayChange, brandDark, colorwayFor, colorwaysOf, goodsColorway, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand } from "@/lib/brands";
 import type { Design, GLine, Group, Imprint } from "@/lib/pricing";
+import { inksFor } from "@/lib/inkBy";
 
 /**
  * The customer's logos on file and their brand standards, for the order reader (Oct 27, Nick on Cedar Promos' ShipStation
@@ -196,7 +197,7 @@ export function mergeLogoGroups(groups: Group[], brands: Brand[] = []): { groups
         const xi = x.imprints.find((y) => keyOf(y) === k);
         if (!xi) continue;
         for (const l of x.lines) {
-          const own = Object.entries(xi.inkBy || {}).find(([c]) => ck2(c) === ck2(l.color))?.[1];
+          const own = inksFor(xi.inkBy, l.color);
           const first = (xi.inks || "").split(/\s*,\s*/)[0] || "";
           const inks = own && first && own[first] ? (xi.inks || "").replace(first, own[first]) : xi.inks || "";
           per.push({ color: l.color, inks, n: 1 });

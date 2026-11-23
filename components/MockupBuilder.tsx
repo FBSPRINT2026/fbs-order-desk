@@ -12,7 +12,7 @@ import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
-import { changeVersions, inkChanges, inkKeyOf, inksOnColor } from "@/lib/inkBy";
+import { changeVersions, inkChanges, inkKeyOf, inksFor, inksOnColor, setInksFor } from "@/lib/inkBy";
 import { locationsFor, headwearOf, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2, OVERSIZE_IN, NORMAL_MAX_IN, printSizeKey, inkSwaps } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -5066,12 +5066,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         const first = lines.find((l) => (l.color || "").trim()) || lines[0];
                         if (!first || colorKey(inkKeyOf(first)) === colorKey(inkKeyOf(line)) || !(line.color || "").trim()) return null;
                         // a line in its own colorway keeps its inks under its own key (lib/inkBy.ts inkKeyOf)
-                        const ck = line.cw ? inkKeyOf(line).trim().toLowerCase() : colorKey(line.color), cur = im.inkBy?.[ck];
+                        const ck = inkKeyOf(line), cur = inksFor(im.inkBy, ck);
                         const names = [...new Set([...Object.values(paints[im.id]?.map || {}).map((v) => v.name).filter((n) => n && n !== "none"), ...(im.inks || "").split(",").map((x) => x.trim()).filter(Boolean)])].slice(0, 8);
                         const put = (next: Record<string, string> | null) => setImprints((xs) => xs.map((x) => {
                           if (x.id !== im.id) return x;
-                          const inkBy = { ...(x.inkBy || {}) };
-                          if (next) inkBy[ck] = next; else delete inkBy[ck];
+                          const inkBy = setInksFor(x.inkBy, ck, next);
                           const y = { ...x, inkBy: Object.keys(inkBy).length ? inkBy : undefined };
                           return { ...y, inkChanges: colorChanges(y) };
                         }));

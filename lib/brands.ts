@@ -2,6 +2,7 @@ import type { DigitizedSet } from "@/lib/digitizedFiles";
 import { garmentHex, guessHex, mainLine } from "@/lib/mockup";
 import { needleThreads, sheetThread } from "@/lib/needleThreads";
 import { colorHex } from "@/lib/inkColors";
+import { inkKey } from "@/lib/inkBy";
 import { threadByName } from "@/lib/embroidery";
 import { newImprint, type Design, type GLine, type Imprint, type Method } from "@/lib/pricing";
 
@@ -255,8 +256,8 @@ export function applyColorwayChange(im: Imprint, d: Pick<Design, "specs">, byCol
   const base = printColorway(im, d);
   const cws = colorwaysOf(d);
   const ck = (c: string) => c.trim().toLowerCase();
-  const was = Object.keys(im.colorwayBy || {}).map(ck);
-  const inkBy: Record<string, Record<string, string>> = Object.fromEntries(Object.entries(im.inkBy || {}).filter(([c]) => !was.includes(ck(c))));
+  const was = Object.keys(im.colorwayBy || {}).map(inkKey);
+  const inkBy: Record<string, Record<string, string>> = Object.fromEntries(Object.entries(im.inkBy || {}).filter(([c]) => !was.includes(inkKey(c))));
   const by: Record<string, string> = {};
   for (const [c, name] of Object.entries(byColor)) {
     const cw = cws.find((y) => cwKey(y.name) === cwKey(name));
@@ -271,7 +272,7 @@ export function applyColorwayChange(im: Imprint, d: Pick<Design, "specs">, byCol
 /** the colorway a garment color gets on a print: its colorway change, else the print's own */
 export function colorwayOnColor(im: Pick<Imprint, "colorway" | "colorwayBy" | "inks" | "emb">, d: Pick<Design, "specs"> | null | undefined, color: string): Colorway | null {
   if (!d) return null;
-  const name = Object.entries(im.colorwayBy || {}).find(([c]) => c.trim().toLowerCase() === (color || "").trim().toLowerCase())?.[1];
+  const name = Object.entries(im.colorwayBy || {}).find(([c]) => inkKey(c) === inkKey(color))?.[1];
   if (name) { const cw = colorwaysOf(d).find((y) => cwKey(y.name) === cwKey(name)); if (cw) return cw; }
   return printColorway(im, d);
 }
