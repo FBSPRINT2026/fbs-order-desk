@@ -596,3 +596,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 21 6:24am · 1.3.839 · Nick · A customer never sees a measured size on a print production sets on press (visual mockup / production confirms): the proof, its close-ups, the logo sheet and their order page show the picture and 'printed to match' instead
 - Nov 23 9:45am · 1.3.840 · Nick · Outbound's Print button opens the computer's print window with every box label already in it (count asked once; Copies stays 1); straight-to-Zebra is the link under it; printable labels page takes a known box count
 - Nov 23 9:52am · 1.3.841 · Nick · Printable box labels page: opens the print window straight away with one label; how many is the print window's Copies (no second count); the Zebra keeps its own count beside Send to Zebra
+- Nov 23 9:56am · 1.3.842 · Nick · Box labels printed through the print window come out pure black and white: no dotted gray wash on a thermal Zebra

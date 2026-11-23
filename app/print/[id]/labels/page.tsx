@@ -38,7 +38,9 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .labels-page { background: #e9edf2; min-height: 100%; padding: 16px 16px 40px; }
         .lbl { width: 4in; height: 6in; margin: 0 auto 16px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
         .lbl svg { width: 100%; height: 100%; display: block; }
-        @media print { .labels-page { background: #fff; padding: 0; } .no-print { display: none !important; } .lbl { box-shadow: none; margin: 0; page-break-after: always; break-after: page; } }
+        /* a thermal printer has no gray: anything near white printed as a dotted gray wash over the label (Nick, Nov 23 2026).
+           Every page color goes white and the label is pushed to pure black and white, so only the lines and text print. */
+        @media print { html, body { background: #fff !important; } .lbl, .lbl svg { background: #fff !important; } .lbl svg { filter: grayscale(1) contrast(20); } .labels-page { background: #fff; padding: 0; } .no-print { display: none !important; } .lbl { box-shadow: none; margin: 0; page-break-after: always; break-after: page; } }
       `}</style>
       {/* ?go=1: opened from Outbound's Print button just to print (a hidden frame): no controls (Nick, Nov 23 2026) */}
       {sp.go !== "1" && <LabelControls boxes={boxes} size={size} job={{ kind, id }} />}
