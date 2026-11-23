@@ -388,6 +388,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const rtab = rtab0 === "films" ? "screens" : rtab0 === "coach" ? "press" : rtab0;
   // ?films=separo|illustrator (the corner card's "Something's wrong"): the films record opens on that way
   const [filmsPick, setFilmsPick] = useState<MadeBy | null>(null);
+  const rulerHost = useRef<HTMLDivElement | null>(null);
   useEffect(() => { const f = new URLSearchParams(window.location.search).get("films"); if (f === "separo" || f === "illustrator" || f === "studio" || f === "customer") { setFilmsPick(f); setTab("studio"); setRtab("screens"); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [pick, setPick] = useState(false);
   const [cancelAsk, setCancelAsk] = useState(false), [restartAsk, setRestartAsk] = useState(false);
@@ -1557,16 +1558,18 @@ export default function SeparationStudio({ id }: { id: string }) {
             <div className="rv-seg">{([["proof", "Proof"], ["compare", "Compare"], ["original", "Original"], ["films", "Films"]] as const).map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => { setView(k); setSolo(null); }}>{l}</button>)}</div>
             <div className="rv-seg">{([["shirt", "On the shirt"], ["checker", "Transparent"]] as const).map(([k, l]) => <button key={k} type="button" className={bg === k ? "on" : ""} onClick={() => setBg(k)}>{l}</button>)}</div>
           </div>
+          <div className={"srl-host" + (res && !solo && !films ? " on" : "")} ref={rulerHost}>
           <div className={"sep-stage" + (bg === "checker" && !solo && !films ? " checker" : "")} style={{ background: solo || films ? "#fff" : bg === "shirt" && !noShirt ? st.garment : bg === "checker" ? undefined : "#fff" }}>
             {films && res && <FilmsView plates={plates} w={res.w} h={res.h} onOpen={(k) => { setSolo(k); setLoupe(null); }} />}
             <div className={"sep-canvases" + (films ? " gone" : "")}>
               <canvas ref={cv} className={(pick ? "pick " : solo ? "zoom " : "") + (view === "original" && !solo ? "gone" : "")} onClick={onPick} />
               <canvas ref={cvOrig} className={"sep-orig" + (view === "proof" || view === "films" || solo ? " gone" : "")} style={view === "compare" && !solo ? { clipPath: `inset(0 ${100 - split}% 0 0)` } : undefined} onClick={onPick} />
-              {res && !solo && !films && <SepRuler canvas={cv} printW={printW} resW={res.w} resH={res.h} box={inkB} w={st.widthIn} h={st.widthIn * (artAsp || 0)} />}
               {view === "compare" && !solo && <input className="sep-split" type="range" min={0} max={100} value={split} onChange={(e) => setSplit(+e.target.value)} aria-label="Original | proof" style={artBox ? { left: artBox.l, width: artBox.w, right: "auto" } : undefined} />}
             </div>
             {/* working: a spinner over the picture so it's clear it's thinking (Nov 11, Nick) */}
             {(busy || (!img && !err)) && <div className="sep-think" role="status" aria-live="polite"><span className="sep-spin" aria-hidden /><b>{busy || "Loading the art…"}</b></div>}
+          </div>
+          {res && !solo && !films && <SepRuler canvas={cv} host={rulerHost} printW={printW} resW={res.w} box={inkB} w={st.widthIn} h={st.widthIn * (artAsp || 0)} />}
           </div>
           {sizeWarn && !solo && <div className="sep-sizewarn">⚠ {sizeWarn}</div>}
           {solo && (

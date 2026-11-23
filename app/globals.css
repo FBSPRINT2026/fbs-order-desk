@@ -24345,14 +24345,18 @@ main.main .rvg-sub{margin-bottom:10px}
 .obt-tile.obt-ship .obt-cnt{color:var(--fbs-blue,#0b72b5)}.obt-tile.obt-pickup .obt-cnt{color:#c27c0e}.obt-tile.obt-deliver .obt-cnt{color:var(--ok)}
 .obt-tile.obt-ship.on{border-color:var(--fbs-blue,#0b72b5);background:#eef6fc}.obt-tile.obt-pickup.on{border-color:#c27c0e;background:#fffaf0}.obt-tile.obt-deliver.on{border-color:var(--ok);background:#f0faf4}
 .obt-mode .obt-mt small,.obt-mode .obt-mn small{color:#fff;opacity:.92;display:block}
-/* the proof's ruler (components/SepRuler.tsx; Nick, Nov 23 2026) */
-.srl{position:absolute;pointer-events:none;overflow:visible;z-index:2}
-.sep-main .sep-canvases .srl{transform:none}
-.srl-band{fill:rgba(255,255,255,.82)}
+/* the proof's ruler, outside the proof box (components/SepRuler.tsx; Nick, Nov 23 2026) */
+.srl-host{position:relative;display:flex;flex-direction:column;min-height:0}
+.sep-main .srl-host{flex:1}
+.srl-host>.sep-stage{flex:1}
+.srl-host.on{padding:22px 0 0 26px}
+.srl{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;z-index:3}
+.srl-band{fill:var(--surface-2,#f1f4f7)}
+.srl-ink{fill:#fff3c4}
 .srl-t{stroke:#3c4654;stroke-width:1}
 .srl-n{font:700 10px var(--body);fill:#1c2430}
-.srl-box{fill:none;stroke:#ffd34d;stroke-width:1.5;stroke-dasharray:6 4}
-.srl-wh{font:800 13px var(--body);fill:#ffd34d;paint-order:stroke;stroke:rgba(0,0,0,.55);stroke-width:3px}
+.srl-box{fill:none;stroke:#ffd34d;stroke-width:1.2;stroke-dasharray:6 4;opacity:.9}
+.srl-wh{font:800 11px var(--body);fill:#8a5a00}
 .sep-sizewarn{margin-top:8px;background:#fff6e5;border:1px solid #f0c36d;border-radius:var(--r);padding:8px 12px;font-size:13px;color:var(--ink)}
 /* the films check in the corner (components/FilmCheck.tsx) */
 .fck-tray{position:fixed;right:16px;bottom:16px;z-index:90;display:flex;flex-direction:column;gap:8px;width:min(340px,calc(100vw - 32px))}
