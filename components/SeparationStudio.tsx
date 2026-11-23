@@ -53,6 +53,7 @@ export { ARCHIVE_DAYS, SEP_STATUS, sepStage, type SepStage } from "@/lib/sepStat
 import { ARCHIVE_DAYS, SEP_STATUS } from "@/lib/sepStatus";
 import { openZips } from "@/lib/sepZip";
 import SepRuler from "@/components/SepRuler";
+import SepStart, { type SepPath } from "@/components/SepStart";
 import FilmsRecord from "@/components/FilmsRecord";
 import { FILMS_SENT } from "@/components/FilmCheck";
 import { logStudioFilms, type MadeBy } from "@/app/shop/sep-film-actions";
@@ -389,6 +390,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   // ?films=separo|illustrator (the corner card's "Something's wrong"): the films record opens on that way
   const [filmsPick, setFilmsPick] = useState<MadeBy | null>(null);
   const rulerHost = useRef<HTMLDivElement | null>(null);
+  // "What would you like to do?" (components/SepStart.tsx): asked when a separation still to be made is opened and
+  // nobody has picked a way yet; ?films= (from the corner card) already says which
+  const [startOpen, setStartOpen] = useState<boolean | null>(null);
   useEffect(() => { const f = new URLSearchParams(window.location.search).get("films"); if (f === "separo" || f === "illustrator" || f === "studio" || f === "customer") { setFilmsPick(f); setTab("studio"); setRtab("screens"); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [pick, setPick] = useState(false);
   const [cancelAsk, setCancelAsk] = useState(false), [restartAsk, setRestartAsk] = useState(false);
@@ -1266,6 +1270,26 @@ export default function SeparationStudio({ id }: { id: string }) {
   }, [plates]); // eslint-disable-line react-hooks/exhaustive-deps
   if (err && !row) return <div className="empty">{err}</div>;
   if (!row) return <div className="empty">Loading…</div>;
+  const path0 = (row.settings as { path?: SepPath }).path;
+  const showStart = startOpen ?? (!path0 && !filmsPick && (row.status === "requested" || row.status === "in_progress"));
+  const pickPath = async (p: SepPath) => {
+    setStartOpen(false);
+    const r = await sb.from("separations").update({ settings: { ...row.settings, path: p, pathAt: new Date().toISOString() }, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
+    if (!r.error) setRow(r.data as SepRow);
+    if (p !== "studio") { setTab("studio"); setRtab("screens"); setFilmsPick(p === "own" ? "illustrator" : "separo"); setTimeout(() => document.querySelector(".frc")?.scrollIntoView({ behavior: "smooth", block: "center" }), 300); }
+  };
+  const starter = async () => {
+    try {
+      setErr("");
+      const hr = await fullSep();
+      setBusy("Making the starter file…"); await new Promise((r) => setTimeout(r, 30));
+      const cust = order ? (await sb.from("customers").select("company, name").eq("id", order.customer_id).maybeSingle()).data : null;
+      const lines = [String(cust?.company || cust?.name || ""), `${order ? `#${order.number} ` : `S-${row.number} `}${row.location || ""}`.trim(), `${st.widthIn.toFixed(2).replace(/\.?0+$/, "")}" wide`];
+      const bytes = await illustratorPdf(hr.plates, hr.w, hr.h, { widthIn: st.widthIn, tonal: false, title, starter: { lines } }, deflate);
+      download(bytes, `${slug(title)}-starter.pdf`);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(""); }
+  };
   const s0 = SEP_STATUS[row.status];
   const dark = baseShirt(shirtOf(st)), noShirt = !st.garment;
   const garments = [...new Set(order ? orderGroups(order).find((g) => g.id === row.group_id)?.lines.map((l) => l.color).filter(Boolean) || [] : [])];
@@ -1274,6 +1298,8 @@ export default function SeparationStudio({ id }: { id: string }) {
 
   return (
     <div className="sep">
+      {showStart && <SepStart title={title} colors={plates.filter((p) => p.kind !== "underbase").length} ready={!!res} busy={busy && busy !== "Separating…" ? busy : ""} artUrl={origUrl}
+        onPick={(p) => void pickPath(p)} onStarter={() => void starter()} onClose={() => setStartOpen(false)} />}
       <div className="page-head">
         <div>
           <div className="eyebrow sep-eyebrow"><Link href="/shop/separations">Separations</Link> · S-{row.number}

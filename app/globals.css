@@ -24401,3 +24401,16 @@ main.main .rvg-sub{margin-bottom:10px}
 .frc-act{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
 .frc-err{color:var(--danger);font-size:13px;margin-right:auto}
 .frc-ok{color:var(--ok);font-weight:700;white-space:nowrap}.frc-bad{color:var(--danger);font-weight:700}
+/* "What would you like to do?" on opening a separation (components/SepStart.tsx; Nick, Nov 23 2026) */
+.sst-bg{position:fixed;inset:0;z-index:80;background:rgba(15,22,35,.45);display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px;overflow:auto}
+.sst{background:var(--surface);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:min(620px,100%);padding:18px 20px}
+.sst-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}
+.sst-h h2{margin:0;font:800 22px var(--display)}.sst-h p{margin:2px 0 0;color:var(--ink-3);font-size:13px}
+.sst-opts{display:flex;flex-direction:column;gap:10px}
+.sst-o{display:flex;gap:14px;align-items:flex-start;text-align:left;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface);color:var(--ink);font:inherit}
+button.sst-o{cursor:pointer}button.sst-o:hover{border-color:var(--accent);background:#f5faff}
+.sst-o>span:last-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.sst-o b{font-size:16px}.sst-o small{color:var(--ink-3);font-size:13px;line-height:1.4}
+.sst-ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:800 18px var(--display);flex:none}
+.sst-a{background:#e3f0fa;color:var(--fbs-blue,#0b72b5)}.sst-b{background:#efe6fa;color:#6b3fb0}.sst-c{background:#fdf1dc;color:#c27c0e}
+.sst-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}

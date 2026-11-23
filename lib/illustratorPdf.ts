@@ -40,6 +40,12 @@ export type IllustratorOpts = {
   /** halftone plates are left as gray for the RIP to make the dots (like Separo's files). Per plate, the smallest dot
    *  its mesh holds (0–1): lighter grays are dropped or raised to it, so the RIP never makes specks that wash out */
   minDot?: number[];
+  /** the starter file for separations made by hand (Nick, Nov 23 2026: "a color separated version of the art with
+   *  separations already indicated… he could just download from that", like Jose's DFD Left Chest film): the color
+   *  plates only (no underbase: he builds that himself), each a shape in its own named spot swatch that knocks out the
+   *  others (the art as it looks, not stacked plates), a white ink shown magenta so it can be seen (how Jose marks white), targets top and
+   *  bottom, and the job's lines (customer, print, size) by the top target */
+  starter?: { lines: string[] };
 };
 /** a gray (0–1) the RIP can print as dots that hold: under half the smallest dot → none, under it → the smallest; the
  *  same at the dark end (holes) */
@@ -70,7 +76,11 @@ export function ripPlate(a: Uint8Array, w: number, h: number, solid: boolean, md
 /** the plate names as they appear in Illustrator: "1 - Underbase White" … (print order) */
 export const plateLabel = (p: Plate, i: number) => `${i + 1} - ${p.name}`;
 
-export async function illustratorPdf(plates: Plate[], w: number, h: number, o: IllustratorOpts, z: (u8: Uint8Array) => Promise<Uint8Array>): Promise<Uint8Array> {
+export async function illustratorPdf(plates0: Plate[], w: number, h: number, o0: IllustratorOpts, z: (u8: Uint8Array) => Promise<Uint8Array>): Promise<Uint8Array> {
+  const st = o0.starter;
+  // the starter: color plates only, as shapes, nothing halftoned (he makes those himself)
+  const plates = st ? plates0.filter((p) => p.kind !== "underbase") : plates0;
+  const o: IllustratorOpts = st ? { ...o0, tonal: false, solid: "vector", vector: undefined, marks: { crop: false, targets: o0.marks?.targets !== false } } : o0;
   const W = o.widthIn * 72, H = W * (h / w), s = W / w, N = plates.length;
   const parts: Uint8Array[] = []; const offsets: number[] = []; let pos = 0;
   const push = (x: Uint8Array | string) => { const b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); pos += b.length; };
@@ -80,7 +90,8 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
   // then (if any plate is a picture) 6+N the DeviceN color space, 7+N its tint function, 8+N the image
   const CS_DN = 6 + N, FN_DN = 7 + N, IM_DN = 8 + N;
   const cs: string[] = [];
-  const looks = plates.map((p) => cmyk(p.hex, p.kind));
+  const isWhite = (p: Plate) => { const n = parseInt(p.hex.slice(1), 16); return ((n >> 16) & 255) > 235 && ((n >> 8) & 255) > 235 && (n & 255) > 235; };
+  const looks = plates.map((p) => (st ? (isWhite(p) || p.kind === "highlight" ? [0, 1, 0, 0] as [number, number, number, number] : cmyk(p.hex, "color")) : cmyk(p.hex, p.kind)));
   plates.forEach((p, i) => {
     const [c, m, y, k] = looks[i];
     cs.push(`/CS${i} ${6 + i} 0 R`);
@@ -90,7 +101,7 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
   // which plates are pictures (in the multi-ink image) and which are shapes: solid plates of vector art (and solid
   // plates traced on request) are smooth curves traced from the plate, which is exact for vector art (drawn from its
   // shapes, with knockouts, trap and base already worked out); halftone plates stay pictures for the RIP to screen
-  const raster = plates.map((p) => o.tonal || !!p.tonal || (o.solid !== "vector" && !o.vector));
+  const raster = plates.map((p) => (st ? false : o.tonal || !!p.tonal || (o.solid !== "vector" && !o.vector)));
   const ri = plates.map((_, i) => i).filter((i) => raster[i]);
 
   let content = "";
@@ -98,7 +109,8 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
   plates.forEach((p, i) => {
     if (raster[i]) return;
     const path = traceCurves(p.alpha, w, h, s, H);
-    if (path) content += `q /GS0 gs /CS${i} cs 1 scn\n${path}f*\nQ\n`;
+    // the starter knocks out (the art as it looks, each color its own shape); films overprint
+    if (path) content += `q ${st ? "" : "/GS0 gs "}/CS${i} cs 1 scn\n${path}f*\nQ\n`;
   });
 
   if (ri.length) {
@@ -135,10 +147,16 @@ export async function illustratorPdf(plates: Plate[], w: number, h: number, o: I
   const target = (x: number, y: number) => { const r = 7, k = r * 0.5523; return `${x - 14} ${y} m ${x + 14} ${y} l S ${x} ${y - 14} m ${x} ${y + 14} l S ${x + r} ${y} m ${x + r} ${y + k} ${x + k} ${y + r} ${x} ${y + r} c ${x - k} ${y + r} ${x - r} ${y + k} ${x - r} ${y} c ${x - r} ${y - k} ${x - k} ${y - r} ${x} ${y - r} c ${x + k} ${y - r} ${x + r} ${y - k} ${x + r} ${y} c S\n`; };
   const crop = (x: number, y: number, dx: number, dy: number) => `${x + dx * 6} ${y} m ${x + dx * 30} ${y} l S ${x} ${y + dy * 6} m ${x} ${y + dy * 30} l S\n`;
   const tx = MG + W / 2, ty = MG + H + MG / 2;
-  let marks = `q /GS0 gs /CSA CS 1 SCN 0.5 w\n` + (o.marks?.targets === false ? "" : target(tx, ty) + target(tx, MG / 2) + target(MG / 2, MG + H / 2) + target(MG + W + MG / 2, MG + H / 2))
+  let marks = `q /GS0 gs /CSA CS 1 SCN 0.5 w\n` + (o.marks?.targets === false ? "" : target(tx, ty) + target(tx, MG / 2) + (st ? "" : target(MG / 2, MG + H / 2) + target(MG + W + MG / 2, MG + H / 2)))
     + (o.marks?.crop === false ? "" : crop(MG, MG, -1, -1) + crop(MG + W, MG, 1, -1) + crop(MG, MG + H, -1, 1) + crop(MG + W, MG + H, 1, 1)) + "Q\n";
   const esc = (t: string) => t.replace(/[\\()]/g, (c) => "\\" + c).replace(/[^\x20-\x7e]/g, "?");
-  plates.forEach((p, i) => {
+  // the starter: the job's lines by the top target (on every film), like the shop's own films
+  if (st) st.lines.filter(Boolean).slice(0, 4).forEach((t, li) => {
+    const size = 9, tw = t.length * size * 0.55;
+    let x = tx + 20; if (x + tw > PW - 6) x = Math.max(6, tx - 20 - tw);
+    marks += `q /CSA cs 1 scn BT /FL ${size} Tf ${x.toFixed(2)} ${(ty + 6 - li * 11).toFixed(2)} Td (${esc(t)}) Tj ET Q\n`;
+  });
+  if (!st) plates.forEach((p, i) => {
     const text = `${p.name}  (${i + 1}/${N})`, size = 11, tw = text.length * size * 0.6;
     // right of the top target; to its left when the art is too narrow for the name to fit on the page
     let x = tx + 20; if (x + tw > PW - 6) x = Math.max(6, tx - 20 - tw);
