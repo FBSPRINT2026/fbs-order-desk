@@ -19,7 +19,7 @@ export default function LabelControls({ boxes, size, tight, job }: { boxes: numb
   return (
     <div className="no-print" style={{ maxWidth: 820, margin: "0 auto 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
       <label style={{ display: "flex", gap: 6, alignItems: "center" }}>Number of labels
-        <input type="number" min={1} max={50} value={n} onChange={(e) => setN(e.target.value)} onBlur={() => go(n, size)} onKeyDown={(e) => e.key === "Enter" && go(n, size)} style={{ width: 64, padding: "5px 7px" }} />
+        <input type="number" min={1} max={99} value={n} onChange={(e) => setN(e.target.value)} onBlur={() => go(n, size)} onKeyDown={(e) => e.key === "Enter" && go(n, size)} style={{ width: 64, padding: "5px 7px" }} />
       </label>
       <label style={{ display: "flex", gap: 6, alignItems: "center" }}>Label size
         <select value={size} onChange={(e) => go(n, e.target.value)} style={{ padding: "5px 7px" }}>
@@ -31,7 +31,7 @@ export default function LabelControls({ boxes, size, tight, job }: { boxes: numb
       <button type="button" onClick={() => window.print()} style={{ padding: "7px 14px", fontWeight: 600, background: "#0A7BA6", color: "#fff", border: 0, borderRadius: 6, cursor: "pointer" }}>Print labels</button>
       {zmsg && <span style={{ fontWeight: 600 }}>{zmsg}</span>}
       {tight && <span style={{ color: "#B8392A", fontWeight: 600 }}>This order has a lot of garments for a 4×6 label. Switch to half sheet if rows get cut off.</span>}
-      <span style={{ color: "#555" }}>Zebra tip: in the print window choose your Zebra printer, paper size 4×6, margins None, and scale 100% (Actual size).</span>
+      <span style={{ color: "#555" }}>Zebra tip: in the print window choose your Zebra printer, paper size 4×6, margins None, and scale 100% (Actual size). <b>Leave Copies at 1</b>: every label is already in the print.</span>
     </div>
   );
 }

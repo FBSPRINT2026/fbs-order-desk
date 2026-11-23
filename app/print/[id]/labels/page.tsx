@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * the one layout (`drawBoxLabel` in lib/zpl.ts; Nick, Nov 16 2026: the scanners read the QR, so no barcode). One per
  * box, BOX ___ OF ___ to write in.
  */
-export default async function LabelsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ boxes?: string; size?: string; a?: string }> }) {
+export default async function LabelsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ boxes?: string; size?: string; a?: string; known?: string; only?: string; go?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const { user, isStaff } = await getViewer();
@@ -22,8 +22,11 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const kind: "o" | "a" = sp.a ? "a" : "o";
   const card = await loadJobCard(createAdminClient(), { kind, id });
   if (!card) return notFound();
-  const svg = boxLabelSvg(card, 0, 0);
-  const boxes = Math.min(50, Math.max(1, parseInt(sp.boxes || "1", 10) || 1));
+  const boxes = Math.min(99, Math.max(1, parseInt(sp.boxes || "1", 10) || 1));
+  // "I know my box count": each label says its own box ("BOX 3 OF 40"), or only the one box being reprinted
+  const known = sp.known === "1", only = known ? Math.min(boxes, Math.max(0, parseInt(sp.only || "0", 10) || 0)) : 0;
+  const nums = known ? (only ? [only] : Array.from({ length: boxes }, (_, i) => i + 1)) : Array.from({ length: boxes }, () => 0);
+  const blank = boxLabelSvg(card, 0, 0);
   const size = sp.size === "letter" ? "letter" : "4x6";
   return (
     <div className="labels-page">
@@ -34,8 +37,9 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lbl svg { width: 100%; height: 100%; display: block; }
         @media print { .labels-page { background: #fff; padding: 0; } .no-print { display: none !important; } .lbl { box-shadow: none; margin: 0; page-break-after: always; break-after: page; } }
       `}</style>
-      <LabelControls boxes={boxes} size={size} job={{ kind, id }} />
-      {Array.from({ length: boxes }, (_, i) => <div key={i} className="lbl" dangerouslySetInnerHTML={{ __html: svg }} />)}
+      {/* ?go=1: opened from Outbound's Print button just to print (a hidden frame): no controls (Nick, Nov 23 2026) */}
+      {sp.go !== "1" && <LabelControls boxes={boxes} size={size} job={{ kind, id }} />}
+      {nums.map((b, i) => <div key={i} className="lbl" dangerouslySetInnerHTML={{ __html: b ? boxLabelSvg(card, b, boxes) : blank }} />)}
     </div>
   );
 }

@@ -341,7 +341,23 @@ function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; 
     const h = setTimeout(async () => { const r = await post({ action: "preview", job: { kind: card.kind, id: card.id }, boxes, known, box: Math.min(show, boxes) }); if (r.ok && r.j.svg) setSvg(r.j.svg); }, 200);
     return () => clearTimeout(h);
   }, [card, boxes, show, known]); // eslint-disable-line react-hooks/exhaustive-deps
-  async function print() {
+  // Print opens the computer's own print window with every label already in it (Nick, Nov 23 2026: "when you just click
+  // the print button, it should open up the native windows print dialogue"; asked for 40, then 40 copies in the print
+  // window, made 1,600). The count is asked once, here: Copies in the print window stays 1.
+  function print() {
+    if (!card || busy) return;
+    setMsg(null);
+    const q = new URLSearchParams({ boxes: String(boxes), go: "1", ...(card.kind === "a" ? { a: "1" } : {}), ...(known ? { known: "1", ...(+only ? { only: String(+only) } : {}) } : {}) });
+    document.getElementById("obl-print-frame")?.remove();
+    const fr = document.createElement("iframe");
+    fr.id = "obl-print-frame"; fr.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+    fr.src = `/print/${card.id}/labels?${q}`;
+    setBusy(true);
+    fr.onload = () => { setBusy(false); setTimeout(() => { try { fr.contentWindow?.focus(); fr.contentWindow?.print(); } catch { window.open(fr.src, "_blank"); } }, 300); };
+    document.body.appendChild(fr);
+    setMsg({ ok: true, text: `${+only && known ? "1 label" : `${boxes} label${boxes === 1 ? "" : "s"}`} in the print window: leave Copies at 1.` });
+  }
+  async function sendZebra() {
     if (!card || busy) return;
     setBusy(true); setMsg(null);
     const r = await post({ action: "box", job: { kind: card.kind, id: card.id }, boxes, known, only: known ? +only || undefined : undefined });
@@ -375,7 +391,7 @@ function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; 
         <div className="obl-k">How many labels?</div>
         <div className="obl-n">
           <button type="button" className="ob-step" aria-label="One fewer label" disabled={!card} onClick={() => setBoxes(Math.max(1, boxes - 1))}>−</button>
-          <input ref={boxRef} type="number" min={1} max={99} value={boxes} disabled={!card} onChange={(e) => setBoxes(Math.max(1, Math.min(99, Math.round(+e.target.value) || 1)))} onKeyDown={(e) => { if (e.key === "Enter") void print(); }} aria-label="Labels" />
+          <input ref={boxRef} type="number" min={1} max={99} value={boxes} disabled={!card} onChange={(e) => setBoxes(Math.max(1, Math.min(99, Math.round(+e.target.value) || 1)))} onKeyDown={(e) => { if (e.key === "Enter") print(); }} aria-label="Labels" />
           <button type="button" className="ob-step" aria-label="One more label" disabled={!card} onClick={() => setBoxes(Math.min(99, boxes + 1))}>+</button>
         </div>
         <label className="obl-kb"><input type="checkbox" checked={known} onChange={(e) => setKnown(e.target.checked)} /> I know my box count</label>
@@ -385,9 +401,9 @@ function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; 
           {boxes > 10 && <span className="obl-more">+{boxes - 10}</span>}
         </div>
         {known && <label className="ob-f"><span>Only one box (reprint)</span><input type="number" min={1} max={99} value={only} disabled={!card} onChange={(e) => setOnly(e.target.value)} placeholder="All" /></label>}
-        <button type="button" className="btn primary obl-go" disabled={!card || busy} onClick={() => void print()}>{busy ? "Sending…" : label}</button>
+        <button type="button" className="btn primary obl-go" disabled={!card || busy} onClick={print}>{busy ? "Opening…" : label}</button>
         {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
-        {card?.kind === "o" && <a className="linkbtn obl-sheet" href={`/print/${card.id}/labels?boxes=${boxes}`} target="_blank" rel="noreferrer">Print on paper instead</a>}
+        <button type="button" className="linkbtn obl-sheet" disabled={!card || busy} onClick={() => void sendZebra()} title="Straight to the Zebra through this computer's print relay, no print window">Send straight to the Zebra instead</button>
         </>}
       </div>
     </section>

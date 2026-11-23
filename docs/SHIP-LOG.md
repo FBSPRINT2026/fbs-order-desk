@@ -594,3 +594,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 20 9:13am · 1.3.837 · Nick · Create order never opens the Mockup Creator on a group printed from the customer's own separations: their mockup is the mockup (Tiger Blue #50130 got a white box)
 - Nov 20 9:14am · 1.3.838 · Nick · Create order keeps the inks named on the customer's paperwork or mockup chips; the art's own colors only fill in when none were named
 - Nov 21 6:24am · 1.3.839 · Nick · A customer never sees a measured size on a print production sets on press (visual mockup / production confirms): the proof, its close-ups, the logo sheet and their order page show the picture and 'printed to match' instead
+- Nov 23 9:45am · 1.3.840 · Nick · Outbound's Print button opens the computer's print window with every box label already in it (count asked once; Copies stays 1); straight-to-Zebra is the link under it; printable labels page takes a known box count
