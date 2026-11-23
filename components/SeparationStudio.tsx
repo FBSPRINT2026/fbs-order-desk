@@ -1764,6 +1764,20 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
   const [learned, setLearned] = useState<{ summary: string; lessons: { id: string; lesson: string }[] } | null>(null), [learning, setLearning] = useState(false);
   const [readInks, setReadInks] = useState(0);
   const [dropOver, setDropOver] = useState(false);
+  /** Separo's download link pasted instead of the file (Nick, Nov 23 2026): our server fetches it (api/separo/file) */
+  const [link, setLink] = useState(""), [getting, setGetting] = useState(false);
+  async function fromLink() {
+    setGetting(true); setErr("");
+    try {
+      const r = await fetch("/api/separo/file", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url: link }) });
+      const j = (await r.json().catch(() => ({}))) as { url?: string; name?: string; error?: string };
+      if (!j.url) throw new Error(j.error || "Couldn't get that file.");
+      const blob = await (await fetch(j.url)).blob();
+      setLink("");
+      await pickFiles([new File([blob], j.name || "separation.zip", { type: "application/zip" })]);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    setGetting(false);
+  }
   /** choosing Separo's files is the whole step: they're saved and learned from right away (Nicholas, Oct 7 2026).
    *  Only when no ink names can be read from them does it wait for the inks to be typed. */
   async function pickFiles(fs0: File[]) {
@@ -1836,6 +1850,7 @@ function Outside({ row, origUrl, onSaved, openFile, ours, artImage }: { row: Sep
         <h3>2. Upload what came back</h3>
         {/* drop files on it too (Nick, Nov 23 2026: "drag and drop isn't working here") */}
         <label className={"tmx-drop" + (dropOver ? " over" : "")} onDragOver={(e) => { e.preventDefault(); setDropOver(true); }} onDragLeave={() => setDropOver(false)} onDrop={(e) => { e.preventDefault(); setDropOver(false); void pickFiles([...(e.dataTransfer.files || [])]); }}><input type="file" multiple accept=".eps,.pdf,.ai,.psd,.tif,.tiff,.png,.jpg,.zip" onChange={(e) => { void pickFiles([...(e.target.files || [])]); e.target.value = ""; }} /><b>{busy ? "Uploading…" : learning ? "Learning from it…" : files.length ? files.map((f) => f.name).join(", ") : "Choose Separo's files (EPS, PDF, AI, PSD, TIFF, PNG, ZIP): it learns from them right away"}</b></label>
+        <div className="sep-link"><input value={link} onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && link.trim()) void fromLink(); }} placeholder="Or paste Separo's download link (…cloudfront.net/separations/…zip)" /><button type="button" className="btn" disabled={!link.trim() || getting || busy} onClick={() => void fromLink()}>{getting ? "Getting it…" : "Get it"}</button></div>
         {readInks > 0 && <div className="sep-ok">Read {readInks} ink{readInks === 1 ? "" : "s"} from the file: saved and sent for review.</div>}
         {/* only when the inks couldn't be read from the files: type them, then save */}
         {files.length > 0 && !readInks && !busy && !learning && <>
