@@ -603,3 +603,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 23 12:29pm · 1.3.846 · Nick · Shop computers: the top bar's search list opens over the page, not cut off under the bar
 - Nov 23 12:39pm · 1.3.847 · Nick · Shop computers: type a job and press Enter, the bar confirms it (#, customer, job) and View details / Print work order / Print box label work on it. Ship window: address and who pays fold to one line, Create labels always on screen
 - Nov 23 12:42pm · 1.3.848 · Nick · Outbound: Shipping / Pickup shelf / Delivery as big picture buttons on the right with a colored banner on top; box label panel off on shop computers (top bar has it). Job peek shows its mockup and where it ships. FBS-PRESS's crew menu and job menus get the shop computers' top bar
+- Nov 23 12:45pm · 1.3.849 · Nick · Outbound banner: the line under SHIPPING / PICKUP SHELF / DELIVERY reads white

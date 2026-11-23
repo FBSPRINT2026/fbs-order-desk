@@ -24344,3 +24344,4 @@ main.main .rvg-sub{margin-bottom:10px}
 .obt-cnt{font:800 28px/1 var(--display);white-space:nowrap}
 .obt-tile.obt-ship .obt-cnt{color:var(--fbs-blue,#0b72b5)}.obt-tile.obt-pickup .obt-cnt{color:#c27c0e}.obt-tile.obt-deliver .obt-cnt{color:var(--ok)}
 .obt-tile.obt-ship.on{border-color:var(--fbs-blue,#0b72b5);background:#eef6fc}.obt-tile.obt-pickup.on{border-color:#c27c0e;background:#fffaf0}.obt-tile.obt-deliver.on{border-color:var(--ok);background:#f0faf4}
+.obt-mode .obt-mt small,.obt-mode .obt-mn small{color:#fff;opacity:.92;display:block}
