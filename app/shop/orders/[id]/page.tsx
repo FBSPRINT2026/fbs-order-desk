@@ -1732,6 +1732,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}`} target="_blank" rel="noreferrer"><MenuItem icon="invoice" tone="blue" title={o.type === "quote" ? "Quote PDF" : "Invoice PDF"} sub="Prices, totals and balance" /></a>
               <a href={`/print/${o.id}?proof=1`} target="_blank" rel="noreferrer" title="The art proof for the customer to approve: every mockup big, each print up close with its size and inks"><MenuItem icon="proof" tone="salmon" title="Proof PDF" sub="Mockups for the customer to approve" /></a>
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer"><MenuItem icon="clipboard" tone="orange" title="Work order" sub="What the press crew runs from" /></a>
+              {/* promotional products are bought from a vendor: a PO with pictures and quantities, no prices (Nick, Nov 23 2026) */}
+              {o.product_kind === "promo" && <a href={`/print/${o.id}/po`} target="_blank" rel="noreferrer"><MenuItem icon="invoice" tone="green" title="Purchase order" sub="To the vendor: items, pictures, ship to us" /></a>}
             </div>
           </details>
           {shipAsk && <ShipCheck number={String(o.number)} onClose={() => setShipAsk(false)} onReady={() => { setShipAsk(false); window.location.href = `/shop/outbound?scan=${o.number}`; }} />}
