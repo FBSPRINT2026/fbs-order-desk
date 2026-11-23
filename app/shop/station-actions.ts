@@ -3,6 +3,8 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadJobCard, type JobCard } from "@/lib/jobCard";
 import { statusText } from "@/lib/pricing";
+import { groupPictures } from "@/lib/mockupFresh";
+import type { Group } from "@/lib/types";
 
 /**
  * The shop computers' one search (components/StationShell.tsx; Nick, Nov 23 2026: "all the employees need to be able to
@@ -46,12 +48,29 @@ export async function stationFind(q: string): Promise<{ ok: true; hits: StationH
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
-/** one job to look at (garments, sizes, prints): the same card the box label and the crew's phones use */
-export async function stationJob(kind: "o" | "a", id: string): Promise<{ ok: true; job: JobCard } | { ok: false; error: string }> {
+/** one job to look at (garments, sizes, prints, where it goes): the same card the box label and the crew's phones use,
+ *  with each group's mockup picture (groupPictures: ours, a placement picture, theirs, else the logo) */
+export type StationMock = { name: string; thumb: string; full: string };
+export async function stationJob(kind: "o" | "a", id: string): Promise<{ ok: true; job: JobCard; mockups: StationMock[] } | { ok: false; error: string }> {
   try {
     const v = await getViewer();
     if (!v.user || !v.isStaff) return { ok: false, error: "Staff only." };
-    const job = await loadJobCard(createAdminClient(), { kind, id });
-    return job ? { ok: true, job } : { ok: false, error: "That job isn't here." };
+    const admin = createAdminClient();
+    const job = await loadJobCard(admin, { kind, id });
+    if (!job) return { ok: false, error: "That job isn't here." };
+    let mockups: StationMock[] = [];
+    if (kind === "o") {
+      const { data: og } = await admin.from("orders").select("groups").eq("id", id).maybeSingle();
+      const groups = (og?.groups || []) as Group[];
+      const dIds = [...new Set(groups.flatMap((g) => (g.imprints || []).map((d) => d.design_id).filter(Boolean)))] as string[];
+      const { data: ds } = dIds.length ? await admin.from("designs").select("id, preview_path").in("id", dIds) : { data: [] };
+      const logos = Object.fromEntries(((ds || []) as { id: string; preview_path: string }[]).map((d) => [d.id, d.preview_path]));
+      const gs = groups.map((g, i) => ({ name: g.name?.trim() || `Group ${i + 1}`, paths: groupPictures(g, false, logos) }));
+      const all = [...new Set(gs.flatMap((g) => g.paths.flatMap((x) => [x, x.replace(/-thumb\.png$/, ".png")])))];
+      const signed = all.length ? (await admin.storage.from("proofs").createSignedUrls(all, 3600)).data || [] : [];
+      const url = new Map<string, string>(signed.filter((x) => x.signedUrl && !x.error).map((x) => [String(x.path), String(x.signedUrl)]));
+      mockups = gs.flatMap((g) => g.paths.map((x) => ({ name: g.name, thumb: url.get(x) || "", full: url.get(x.replace(/-thumb\.png$/, ".png")) || url.get(x) || "" }))).filter((m) => m.thumb || m.full);
+    }
+    return { ok: true, job, mockups };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

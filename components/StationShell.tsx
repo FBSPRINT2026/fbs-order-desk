@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Translate from "@/components/Translate";
-import { stationFind, stationJob, type StationHit } from "@/app/shop/station-actions";
+import { stationFind, stationJob, type StationHit, type StationMock } from "@/app/shop/station-actions";
 import type { JobCard } from "@/lib/jobCard";
 import type { Station } from "@/lib/stations";
 
@@ -134,8 +134,8 @@ function StationSearch({ job, onPick, onClear }: { job: StationHit | null; onPic
 
 /** a job, to look at: over the station's page, with its two print buttons; nothing to change */
 function JobPeek({ ref0, onClose }: { ref0: { kind: "o" | "a"; id: string }; onClose: () => void }) {
-  const [job, setJob] = useState<JobCard | null>(null), [err, setErr] = useState("");
-  const load = useCallback(async () => { const r = await stationJob(ref0.kind, ref0.id); if (r.ok) setJob(r.job); else setErr(r.error); }, [ref0.kind, ref0.id]);
+  const [job, setJob] = useState<JobCard | null>(null), [err, setErr] = useState(""), [mocks, setMocks] = useState<StationMock[]>([]), [mi, setMi] = useState(0), [big, setBig] = useState(false);
+  const load = useCallback(async () => { const r = await stationJob(ref0.kind, ref0.id); if (r.ok) { setJob(r.job); setMocks(r.mockups); } else setErr(r.error); }, [ref0.kind, ref0.id]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
   return (
@@ -155,6 +155,20 @@ function JobPeek({ ref0, onClose }: { ref0: { kind: "o" | "a"; id: string }; onC
             {job.priority && <span className="pri"><b>Priority</b></span>}
           </div>
           <div className="stn-peek-b">
+            <div className="stn-peek-top">
+              <div className="stn-mock">
+                {mocks.length ? <>
+                  <button type="button" className="stn-mock-img" onClick={() => setBig(true)} title="See it big"><img src={mocks[mi]?.thumb || mocks[mi]?.full} alt="Mockup" /></button>
+                  {mocks.length > 1 && <div className="stn-mock-n">{mocks.map((m, i) => <button key={i} type="button" className={i === mi ? "on" : ""} onClick={() => setMi(i)} aria-label={`Picture ${i + 1}`} />)}</div>}
+                  <small>Tap to see it big{mocks.length > 1 ? ` · ${mi + 1} of ${mocks.length}` : ""}</small>
+                </> : <div className="stn-mock-none">No mockup</div>}
+              </div>
+              <div className="stn-shipto">
+                <div className="stn-shipto-k">{job.delivery === "pickup" ? "Pickup" : job.delivery === "deliver" ? "We deliver to" : "Ships to"}</div>
+                {job.delivery === "pickup" ? <p>The customer picks it up here.</p> : job.shipTo.length ? <p data-notranslate>{job.shipTo.map((l, i) => <span key={i} className={i === 0 ? "b" : ""}>{l}</span>)}</p> : <p className="faint">No address on the job</p>}
+                {job.delivery !== "pickup" && <small>{[job.shipMethod, job.tracking ? `Tracking ${job.tracking}` : "Not shipped yet"].filter(Boolean).join(" · ")}</small>}
+              </div>
+            </div>
             {job.groups.map((g, gi) => (
               <section key={gi}>
                 {job.groups.length > 1 && <h3 data-notranslate>{g.name}</h3>}
@@ -180,6 +194,7 @@ function JobPeek({ ref0, onClose }: { ref0: { kind: "o" | "a"; id: string }; onC
           </div>
         </>}
       </div>
+      {big && mocks[mi] && <div className="stn-big-pic" onClick={(e) => { e.stopPropagation(); setBig(false); }}><img src={mocks[mi].full || mocks[mi].thumb} alt="Mockup" /><span>Tap to close</span></div>}
     </div>
   );
 }

@@ -30,9 +30,15 @@ const WHERE: Record<Where, [string, string]> = {
   packing: ["Being packed", "ob-w-pack"], printing: ["Still printing", "ob-w-print"], waiting: ["Not started", "ob-w-print"],
 };
 const ORDER: Where[] = ["shelf", "ship", "deliver", "packing", "printing", "waiting"];
+const MODES_ = () => ({
+  ship: { title: "SHIPPING", tile: "Shipping", sub: "Boxes going out by UPS, FedEx or USPS", hint: "UPS · FedEx · USPS", unit: "to ship", ic: Ico.truck },
+  pickup: { title: "PICKUP SHELF", tile: "Pickup shelf", sub: "Jobs waiting for the customer to pick up", hint: "Customers picking up", unit: "on the shelf", ic: Ico.shelf },
+  deliver: { title: "DELIVERY", tile: "Delivery", sub: "Jobs we drive to the customer", hint: "We drive it there", unit: "to deliver", ic: Ico.pin },
+});
 const Ico = { shelf: <svg viewBox="0 0 24 24"><path d="M3 4v16M21 4v16M3 10h18M3 17h18" /><path d="M7 10V7h4v3M13 17v-4h4v4" /></svg>, pin: <svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>, box: <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z" /><path d="M3 7l9 4 9-4M12 11v10" /></svg>, truck: <svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7" /><circle cx="7" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></svg> };
 
 export default function Outbound() {
+  const MODES = MODES_();
   const [tab, setTab] = useSticky<"ship" | "pickup" | "deliver">("outbound.tab3", "ship");
   // each section's own tabs (Nick, Nov 19 2026): Pickup shelf = On the shelf / Being packed / Picked up; Delivery = To
   // deliver / Route / Delivered (Ship's are the Shipping Center's: Ready to ship / Shipped / Transit map)
@@ -127,6 +133,9 @@ export default function Outbound() {
   }
   const shipOrSay = (n: string) => { const why = startShipping(n); if (why) setMsg({ ok: false, text: why }); };
   const label = (n: string) => setLabelFor({ n, at: Date.now() });
+  // a shop computer has Print box label in its top bar: the box label panel only opens here when a row's Label is pressed
+  const [stn, setStn] = useState(false);
+  useEffect(() => { setStn(!!document.querySelector(".app-stn")); }, []);
 
   const list = (rs: Row[], kind: "deliver" | "pickup", sub = "") => (
     <div className="tbl-wrap ob-tblw"><table className="tbl">
@@ -174,13 +183,16 @@ export default function Outbound() {
         <button type="button" className="obx-gear" onClick={() => { setTab("ship"); setSetAt(Date.now()); }} aria-label="Shipping settings" title="Shipping settings">
           <svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
         </button>
-        <div className="obx-seg" role="tablist" aria-label="Outbound">
-          {([["ship", "Ship", counts.ship, Ico.truck], ["pickup", "Pickup shelf", counts.pickup, Ico.shelf], ["deliver", "Delivery", counts.deliver, Ico.pin]] as const).map(([k, l, n, ic]) =>
-            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span>{rows && <span className="aa-n">{n}</span>}</button>)}
-        </div>
         </span>
       </div>
       <div className="ob-left">
+        {/* which list this is, in its color, so nobody wonders (Nick, Nov 23 2026: "something on the top that indicates
+            you're viewing shipping, pickup or delivery") */}
+        <div className={"obt-mode obt-" + tab}>
+          <span className="obt-ic">{MODES[tab].ic}</span>
+          <span className="obt-mt"><b>{MODES[tab].title}</b><small>{MODES[tab].sub}</small></span>
+          {rows && <span className="obt-mn"><b>{counts[tab]}</b><small>{MODES[tab].unit}</small></span>}
+        </div>
         {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
 
         {/* the Shipping Center stays mounted so its ship window can open from a scan on any tab */}
@@ -229,6 +241,16 @@ export default function Outbound() {
       </div>
 
       <aside className="ob-right">
+        {/* Shipping | Pickup shelf | Delivery as big picture buttons with their counts (Nick, Nov 23 2026) */}
+        <div className="obt-tiles" role="tablist" aria-label="Outbound">
+          {(["ship", "pickup", "deliver"] as const).map((k) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={"obt-tile obt-" + k + (tab === k ? " on" : "")} onClick={() => setTab(k)}>
+              <span className="obt-ic">{MODES[k].ic}</span>
+              <span className="obt-tt"><b>{MODES[k].tile}</b><small>{MODES[k].hint}</small></span>
+              {rows && <span className="obt-cnt">{counts[k]}</span>}
+            </button>
+          ))}
+        </div>
         {/* Search / filter, over Box label (Nick, Nov 19 2026): narrows everything on the page; a scanned label or a job
             link pops up what to do with it */}
         <label className="obx-f">
@@ -239,7 +261,7 @@ export default function Outbound() {
             {q && <button type="button" className="linkbtn" onClick={() => { setQ(""); qRef.current?.focus(); }}>Clear</button>}
           </span>
         </label>
-        <LabelPanel pick={labelFor} perBox={perBox} />
+        {(!stn || labelFor) && <LabelPanel pick={labelFor} perBox={perBox} />}
       </aside>
 
       {scanned && <ScanChoice n={scanned} onClose={() => setScanned("")} onLabel={() => { label(scanned); setScanned(""); }} onShip={() => { const why = startShipping(scanned); if (!why) setScanned(""); return why; }} />}
