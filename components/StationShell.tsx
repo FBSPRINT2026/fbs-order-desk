@@ -35,7 +35,8 @@ export default function StationShell({ station, page }: { station: Station; page
       if (u.origin !== location.origin || !u.pathname.startsWith("/shop")) return;
       const m = u.pathname.match(/^\/shop\/(orders|archive)\/([0-9a-f-]{36})/);
       if (m) { e.preventDefault(); e.stopPropagation(); setPeek({ kind: m[1] === "orders" ? "o" : "a", id: m[2] }); return; }
-      if (!ours(u.pathname)) { e.preventDefault(); e.stopPropagation(); }
+      // a page that isn't the station's (an order's "← Orders", a customer): back to the station's own page, never stuck
+      if (!ours(u.pathname)) { e.preventDefault(); e.stopPropagation(); window.location.assign(station.home); }
     };
     document.addEventListener("click", on, true);
     return () => document.removeEventListener("click", on, true);
@@ -49,7 +50,7 @@ export default function StationShell({ station, page }: { station: Station; page
   return (
     <div className="stn">
       <header className="stn-bar">
-        <button type="button" className="stn-home" onClick={() => { setPeek(null); router.push(station.home); }} title="Back to the start">
+        <button type="button" className="stn-home" onClick={() => { setPeek(null); window.location.assign(station.home); }} title="Back to the start">
           <svg viewBox="0 0 24 24" aria-hidden><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
           <span><b data-notranslate>{station.name}</b><small>{station.label}</small></span>
         </button>

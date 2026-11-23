@@ -149,3 +149,11 @@ export async function labelPng(epShipmentId: string): Promise<ArrayBuffer | null
   const r = await fetch(u, { cache: "no-store" }).catch(() => null);
   return r && r.ok ? await r.arrayBuffer() : null;
 }
+
+/** Void a bought label (EasyPost refund; Nick, Nov 23 2026: "if we make a mistake on a label… void the labels so that
+ *  we don't get charged"). UPS and FedEx void right away; USPS refunds take the post office a couple of weeks. A label
+ *  that's already been scanned by the carrier can't be voided (EasyPost says so). */
+export async function voidLabel(shipmentId: string): Promise<{ status: string }> {
+  const r = await ep<{ refund_status?: string }>(`/shipments/${shipmentId}/refund`, {});
+  return { status: String(r.refund_status || "submitted") };
+}

@@ -24421,3 +24421,8 @@ button.sst-o{cursor:pointer}button.sst-o:hover{border-color:var(--accent);backgr
 .sw-fromname{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
 .sw-fromname>span{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)}
 .sw-fromname input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body)}
+/* Void labels in Shipped (components/shipping/ShippingCenter.tsx; Nick, Nov 23 2026) */
+.shv-ask{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}
+.shv-ask input{height:30px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:13px var(--body);width:150px}
+.shv-yes{background:var(--danger)!important;color:#fff!important;border-color:var(--danger)!important}
+.shv-ok{color:var(--ok);font-size:12px;margin-top:4px}.shv-err{color:var(--danger);font-size:12px;margin-top:4px}

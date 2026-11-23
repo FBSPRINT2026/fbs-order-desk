@@ -55,6 +55,17 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
   const sb = createClient();
   const [items, setItems] = useState<Item[] | null>(null);
   const [shipped, setShipped] = useState<(Shipment & { label: string; customer: string })[]>([]);
+  // Void labels (Nick, Nov 23 2026: "if we make a mistake on a label… void the labels so we don't get charged")
+  const [voidAsk, setVoidAsk] = useState(""), [voidWhy, setVoidWhy] = useState(""), [voidBusy, setVoidBusy] = useState(""), [voidMsg, setVoidMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+  async function voidLabels(id: string) {
+    setVoidBusy(id); setVoidMsg(null);
+    const r = await fetch("/api/shipping/void", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shipmentId: id, why: voidWhy }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." }));
+    setVoidBusy(""); setVoidAsk(""); setVoidWhy("");
+    if (r.error) { setVoidMsg({ id, text: r.error, ok: false }); return; }
+    const res = (r.results || []) as { box: number; ok: boolean; status: string }[];
+    setVoidMsg({ id, ok: !!r.all, text: r.all ? `Voided ${res.length} label${res.length === 1 ? "" : "s"}. UPS and FedEx aren't charged; a USPS refund takes the post office up to a couple of weeks.` : `Voided ${res.filter((x) => x.ok).length} of ${res.length}. Not voided: ${res.filter((x) => !x.ok).map((x) => `box ${x.box} (${x.status})`).join("; ")}` });
+    void load();
+  }
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
   // Ready to ship / Shipped / Transit map; no Overview (Nick, Nov 19 2026)
   const [tab, setTab] = useSticky<"ready" | "shipped" | "transit">("shipping.tab2", "ready");
@@ -229,7 +240,7 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
       ) : (
         <div className="aa-card aa-tblcard">
           <table className="aa-tbl">
-            <thead><tr><th>#</th><th>Customer</th><th>Shipped</th><th>Service</th><th className="r">Boxes</th><th>Paid by</th><th>Tracking</th></tr></thead>
+            <thead><tr><th>#</th><th>Customer</th><th>Shipped</th><th>Service</th><th className="r">Boxes</th><th>Paid by</th><th>Tracking</th><th /></tr></thead>
             <tbody>
               {shipped.map((s) => (
                 <tr key={s.id} style={{ cursor: "default" }}>
@@ -239,10 +250,18 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
                   <td>{[s.carrier, s.service].filter(Boolean).join(" ") || "—"}</td>
                   <td className="r num">{s.boxes.length}</td>
                   <td className="aa-s">{BILL_LABEL[s.bill_to]}</td>
-                  <td className="aa-s">{s.boxes.filter((b) => b.tracking).map((b) => <div key={b.n}><a href={trackingLink(b.tracking!)} target="_blank" rel="noreferrer">{b.tracking}</a></div>)}</td>
+                  <td className="aa-s">{s.boxes.filter((b) => b.tracking).map((b) => <div key={b.n}><a href={trackingLink(b.tracking!)} target="_blank" rel="noreferrer">{b.tracking}</a></div>)}
+                    {voidMsg?.id === s.id && <div className={voidMsg.ok ? "shv-ok" : "shv-err"}>{voidMsg.text}</div>}</td>
+                  <td className="r">{s.boxes.some((b) => b.ep_id && b.tracking) && (voidAsk === s.id ? (
+                    <span className="shv-ask">
+                      <input value={voidWhy} onChange={(e) => setVoidWhy(e.target.value)} placeholder="Why? (optional)" aria-label="Why void" />
+                      <button type="button" className="btn sm shv-yes" disabled={voidBusy === s.id} onClick={() => void voidLabels(s.id)}>{voidBusy === s.id ? "Voiding…" : `Void ${s.boxes.filter((b) => b.ep_id && b.tracking).length} label${s.boxes.filter((b) => b.ep_id && b.tracking).length === 1 ? "" : "s"}`}</button>
+                      <button type="button" className="linkbtn" onClick={() => { setVoidAsk(""); setVoidWhy(""); }}>Cancel</button>
+                    </span>
+                  ) : <button type="button" className="btn sm" onClick={() => { setVoidAsk(s.id); setVoidMsg(null); }} title="A wrong label: void it so EasyPost doesn't charge for it">Void</button>)}</td>
                 </tr>
               ))}
-              {!shipped.length && <tr><td colSpan={7}><div className="aa-empty">Nothing shipped from here yet.</div></td></tr>}
+              {!shipped.length && <tr><td colSpan={8}><div className="aa-empty">Nothing shipped from here yet.</div></td></tr>}
             </tbody>
           </table>
         </div>
