@@ -10,6 +10,7 @@ export type Shipment = {
   status: "draft" | "labeled" | "shipped" | "void";
   ship_to: ShipAddress; bill_to: BillTo; bill_account: string; bill_zip: string; /** the customer's own carrier account it shipped on (EasyPost id); empty = FBS's */ ship_on?: string; carrier: string; service: string;
   boxes: Box[]; rates: Rate[] | null; cost: number | null; price: number | null; note: string;
+  /** blind ship: the name the label ships from (our address, the customer's name); empty = ours */ from_name?: string;
   created_by: string; created_at: string; updated_at: string; shipped_at: string | null;
 };
 

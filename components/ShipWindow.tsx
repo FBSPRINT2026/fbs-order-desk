@@ -78,6 +78,20 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const asked = (t.service || "").split(ON_ACCOUNT)[0].trim();
   const [service, setService] = useState(existing?.service || matchShipMethod(asked) || asked);
   const [note, setNote] = useState(existing?.note || "");
+  // blind shipping (Nick, Nov 23 2026: "it says from FBS Print 811 Alpha Dr, but it needs to say from Cedar Promos 811
+  // Alpha Dr"): the label's from name is the customer's, our address. Each customer's choice is kept
+  // (customers.ship_blind; never set = wholesale customers ship blind)
+  const exFrom = existing?.from_name || "";
+  const [blind, setBlind] = useState(!!exFrom), [fromName, setFromName] = useState(exFrom || t.customer || "");
+  useEffect(() => {
+    if (exFrom || !t.customerId) return;
+    void sb.from("customers").select("company, name, ship_blind, price_type").eq("id", t.customerId).maybeSingle().then(({ data }) => {
+      if (!data) return;
+      setFromName(String(data.company || data.name || t.customer || ""));
+      setBlind(data.ship_blind ?? data.price_type === "wholesale");
+    });
+  }, [t.customerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickBlind = (on: boolean) => { setBlind(on); if (t.customerId) void sb.from("customers").update({ ship_blind: on }).eq("id", t.customerId); };
   const [rates, setRates] = useState<Rate[] | null>(existing?.rates || null);
   const [pick, setPick] = useState<string>(existing?.service ? `${existing.carrier}|${existing.service}` : "");
   // why it isn't going Ground (Nick, Nov 19 2026: "you should have to override it to go out of ground")
@@ -195,6 +209,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     ship_to: to, bill_to: shipOn ? "fbs" : bill, bill_account: bill === "fbs" || shipOn ? "" : account.trim(), bill_zip: bill === "fbs" || shipOn ? "" : zip.trim(), ship_on: shipOn,
     carrier: chosen?.carrier || existing?.carrier || (service.split(" ")[0] || ""), service: chosen?.service || service,
     boxes, rates, cost: chosen && bill === "fbs" ? chosen.cost : existing?.cost ?? null, price: chosen ? chosen.price : existing?.price ?? null, note,
+    from_name: blind ? fromName.trim() : "",
     updated_at: new Date().toISOString(),
   });
 
@@ -477,6 +492,13 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
 
           {/* where and who pays */}
           <aside className="sw-side">
+            <div className="sw-h">Ship from</div>
+            <div className="sw-sum sw-from">
+              <span><b data-notranslate>{blind ? fromName || t.customer : settings.from.company || settings.from.name || "FBS Print"}</b>
+                <small data-notranslate>{[settings.from.street1, settings.from.city, settings.from.state].filter(Boolean).join(", ")}</small></span>
+              <label className="check sw-blind"><input type="checkbox" checked={blind} onChange={(e) => pickBlind(e.target.checked)} /> Blind ship</label>
+            </div>
+            {blind && <label className="sw-fromname"><span>From name on the label</span><input value={fromName} onChange={(e) => setFromName(e.target.value)} placeholder={t.customer} /></label>}
             <div className="sw-h">Ship to</div>
             {!toOpen ? (
               <div className="sw-sum">

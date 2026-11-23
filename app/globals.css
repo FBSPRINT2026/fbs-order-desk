@@ -24415,3 +24415,9 @@ button.sst-o{cursor:pointer}button.sst-o:hover{border-color:var(--accent);backgr
 .sst-a{background:#e3f0fa;color:var(--fbs-blue,#0b72b5)}.sst-b{background:#efe6fa;color:#6b3fb0}.sst-c{background:#fdf1dc;color:#c27c0e}
 .sst-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .stn-big.stn-full{background:var(--surface);color:var(--accent);border:2px solid var(--accent)}
+/* blind ship (components/ShipWindow.tsx; Nick, Nov 23 2026) */
+.sw-from{align-items:center}
+.sw-blind{white-space:nowrap;font-size:13px;font-weight:700}
+.sw-fromname{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.sw-fromname>span{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)}
+.sw-fromname input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body)}

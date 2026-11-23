@@ -54,7 +54,10 @@ export async function POST(req: Request) {
     // "PHONENUMBER.EMPTY"), so a blank one goes to FedEx as our shop's number, only on the label, saved nowhere
     const phone = String(sh.ship_to?.phone || s.from.phone || "").trim();
     const to = { ...sh.ship_to, phone };
-    const q = await rateShipment({ labelFormat: "ZPL", from: s.from, to, boxes, bill: shipOn ? "fbs" : bill, account: sh.bill_account || "", zip: sh.bill_zip || "", reference: ref, carrierAccounts });
+    // blind ship: our address under the customer's name (shipments.from_name; Nick, Nov 23 2026)
+    const fromName = String(sh.from_name || "").trim();
+    const from = fromName ? { ...s.from, company: fromName.slice(0, 60) } : s.from;
+    const q = await rateShipment({ labelFormat: "ZPL", from, to, boxes, bill: shipOn ? "fbs" : bill, account: sh.bill_account || "", zip: sh.bill_zip || "", reference: ref, carrierAccounts });
     const rate = q.rates.find((r) => r.carrier === carrier && r.service === service);
     if (!rate) { await undo(); return NextResponse.json({ error: `${carrier} ${service} isn't offered for this shipment any more. Check rates again.` }, { status: 409 });
     }
