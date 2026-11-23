@@ -25,7 +25,10 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   const boxes = Math.min(99, Math.max(1, parseInt(sp.boxes || "1", 10) || 1));
   // "I know my box count": each label says its own box ("BOX 3 OF 40"), or only the one box being reprinted
   const known = sp.known === "1", only = known ? Math.min(boxes, Math.max(0, parseInt(sp.only || "0", 10) || 0)) : 0;
-  const nums = known ? (only ? [only] : Array.from({ length: boxes }, (_, i) => i + 1)) : Array.from({ length: boxes }, () => 0);
+  // the labels are all alike (BOX ___ OF ___), so a page opened to print by hand shows one, and how many is the print
+  // window's own Copies: one count, asked once (Nick, Nov 23 2026: 40 here, then 40 copies there, made 1,600). Outbound's
+  // Print button (?go=1) still sends all of them, counted on its own screen, with Copies left at 1.
+  const nums = known ? (only ? [only] : Array.from({ length: boxes }, (_, i) => i + 1)) : Array.from({ length: sp.go === "1" ? boxes : 1 }, () => 0);
   const blank = boxLabelSvg(card, 0, 0);
   const size = sp.size === "letter" ? "letter" : "4x6";
   return (
