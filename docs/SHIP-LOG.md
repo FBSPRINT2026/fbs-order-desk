@@ -612,3 +612,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 23 1:36pm · 1.3.855 · Nick · Separations: vector art (.ai, EPS, PDF) is sized by what prints too. A box or shapes left to the shirt behind the art (#50128's navy rectangle) no longer count toward W, so the films, Illustrator file and H are the ink at the size set; found again when an ink is switched to or from the shirt
 - Nov 23 1:41pm · 1.3.856 · Nick · Learn from Separo: files (or Separo's zip) can be dropped on the upload box
 - Nov 23 1:43pm · 1.3.857 · Nick · Separations: vector art's proof always shows while its frame is fitted to the ink (#50033's proof stayed blank)
+- Nov 23 1:48pm · 1.3.858 · Nick · Separations: a separation opened on Coach & Learning shows its proof and original when you switch back to Separations (they stayed black)

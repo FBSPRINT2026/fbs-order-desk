@@ -874,7 +874,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       imgData.data.set(composite({ plates, w: res.w, h: res.h }, shirtOf(st), new Set(plates.filter((p) => !hidden.has(p.key)).map((p) => p.key)), st.pressGain ?? PRESS_GAIN, bg === "checker" || !st.garment));
     }
     x.putImageData(imgData, 0, 0);
-  }, [res, plates, hidden, solo, st.garment, bg]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [res, plates, hidden, solo, st.garment, bg, tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // film close-up: about 0.6" of the real film around the clicked spot, at the film settings (dots, dpi, mesh)
   const LOUPE_IN = 0.6;
@@ -926,7 +926,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       }
     }
     c.getContext("2d")!.putImageData(new ImageData(data, px.w, px.h), 0, 0);
-  }, [pxTick, view, mockMap]);
+  }, [pxTick, view, mockMap, tab]);
 
   // eyedropper: click the preview to add that color from the art as an ink
   const onPick = (e: MouseEvent<HTMLCanvasElement>) => {
