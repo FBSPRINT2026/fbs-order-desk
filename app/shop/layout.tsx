@@ -25,6 +25,7 @@ import ChatPing from "@/components/ChatPing";
 import ScreenPin from "@/components/ScreenPin";
 import MockupFreshener from "@/components/MockupFreshener";
 import DockSizer from "@/components/DockSizer";
+import FilmCheck from "@/components/FilmCheck";
 
 export const dynamic = "force-dynamic";
 // the shop's server actions (the AI order helper reading a big PDF and making many edits) get up to 5 minutes
@@ -93,6 +94,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         <ArtboardPrompt />
         <MockupFreshener />
         <ScanWatch />
+        <FilmCheck />
       </div>
     </RoleProvider>
   );

@@ -51,6 +51,11 @@ export type Channel = { key: string; name: string; hex: string; kind: Plate["kin
 export type SepFile = { path: string; name: string; kind: "plate" | "preview" | "illustrator" | "films" | "upload"; size?: number };
 export { ARCHIVE_DAYS, SEP_STATUS, sepStage, type SepStage } from "@/lib/sepStatus";
 import { ARCHIVE_DAYS, SEP_STATUS } from "@/lib/sepStatus";
+import { openZips } from "@/lib/sepZip";
+import SepRuler from "@/components/SepRuler";
+import FilmsRecord from "@/components/FilmsRecord";
+import { FILMS_SENT } from "@/components/FilmCheck";
+import { logStudioFilms, type MadeBy } from "@/app/shop/sep-film-actions";
 
 /** where every separation starts (Restart Separation goes back here) */
 const START = { ...DEFAULT_SEP, widthIn: 11, lpi: 55, angle: 22.5, dpi: 720, removeBg: true, lib: "auto" as const };
@@ -263,22 +268,6 @@ export async function readVector(blob: Blob, name: string, type = ""): Promise<V
   }
   return null;
 }
-/**
- * A .zip opened into its files (Nick, Nov 23 2026: Separo's download, "Pasted art-1.zip", is separation.eps + original.png +
- * readme.txt, and uploading it gave an error). Any zip of art or separations works the same: its files are used as if
- * they'd been picked one by one; notes (.txt) and system files are left out.
- */
-export async function openZips(fs: File[]): Promise<File[]> {
-  const out: File[] = [];
-  for (const f of fs) {
-    if (!(/\.zip$/i.test(f.name) || /zip/i.test(f.type))) { out.push(f); continue; }
-    const { unzip } = await import("@/lib/unzip");
-    const inner = await unzip(f).catch(() => [] as File[]);
-    out.push(...inner.filter((x) => !/\.(txt|md|rtf|url|html?)$/i.test(x.name)).map((x) => withType(x)));
-  }
-  return out;
-}
-const withType = (f: File) => f.type ? f : new File([f], f.name.replace(/^.*\//, ""), { type: /\.png$/i.test(f.name) ? "image/png" : /\.jpe?g$/i.test(f.name) ? "image/jpeg" : /\.eps$/i.test(f.name) ? "application/postscript" : /\.pdf$/i.test(f.name) ? "application/pdf" : /\.svg$/i.test(f.name) ? "image/svg+xml" : "" });
 /** a finished separation (Separo's or Photoshop's DCS EPS: one plate per ink), not art to separate */
 const isDoneSep = async (f: File) => isEps(f.name, f.type) && /%%PlateFile:/.test(await f.slice(0, 64 * 1024).text());
 /** the art in a zip, or a finished separation's original next to it: the original picture first, then any art file */
@@ -397,6 +386,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   const [rtab0, setRtab] = useSticky<"screens" | "press" | "films" | "coach">("sep.rtab", "screens");
   // two tabs: screens with their films, the press with the coach
   const rtab = rtab0 === "films" ? "screens" : rtab0 === "coach" ? "press" : rtab0;
+  // ?films=separo|illustrator (the corner card's "Something's wrong"): the films record opens on that way
+  const [filmsPick, setFilmsPick] = useState<MadeBy | null>(null);
+  useEffect(() => { const f = new URLSearchParams(window.location.search).get("films"); if (f === "separo" || f === "illustrator" || f === "studio" || f === "customer") { setFilmsPick(f); setTab("studio"); setRtab("screens"); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [pick, setPick] = useState(false);
   const [cancelAsk, setCancelAsk] = useState(false), [restartAsk, setRestartAsk] = useState(false);
   // the name (click it to rename); null = not editing
@@ -507,7 +499,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const widthIn = saved.widthIn || parseFloat(String(im?.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || 11;
     // the inks the order names for this print (the mockup's, snapped to the customer's brand colors): a found ink close
     // to one of them takes its name (Oct 16, Nick: #40070 found PMS 179 C / Cool Gray 4 C for their PMS 199 C / Cool Gray 5 C)
-    im0.current = im ? { colors: im.colors } : null;
+    im0.current = im ? { colors: im.colors, size: im.size || "" } : null;
     orderInks.current = String(im?.inks || "").split(",").map((n) => n.trim()).filter(Boolean).map((name) => ({ name, hex: colorHex(name) || "" })).filter((k) => k.hex);
     // the customer's brand colors only when the order names no inks for this print (several sets can't be guessed between)
     if (row0.customer_id && !orderInks.current.length) {
@@ -954,7 +946,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const toggleMore = (k: string) => setMore(more.includes(k) ? more.filter((x) => x !== k) : [...more, k]);
   const designRef = useRef<(Design & { print_plan?: PrintPlan | null }) | null>(null);
   const orderInks = useRef<{ name: string; hex: string }[]>([]);
-  const im0 = useRef<{ colors?: number | string } | null>(null);
+  const im0 = useRef<{ colors?: number | string; size?: string } | null>(null);
   /** the order's own ink name for a found color, when one is close (ΔE under 20) */
   const orderName = (hex: string) => { let best = "", bd = 20; for (const k of orderInks.current) { const d = deltaE(hex, k.hex); if (d < bd) { bd = d; best = k.name; } } return best; };
   const hiRef = useRef<{ key: string; plates: Plate[]; w: number; h: number; ppi: number } | null>(null);
@@ -1000,6 +992,17 @@ export default function SeparationStudio({ id }: { id: string }) {
   // (the ink's own box: what the W and H sizes and the films are)
   const inkB = useMemo(() => (res && !vart?.ok ? inkBox(res) : null), [res, vart]);
   const artAsp = inkB ? inkB.h / inkB.w : res && res.w ? res.h / res.w : img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0;
+  // a size that's likely wrong, said before any film is made (Nick, Nov 23 2026: #50127 / #50128 printed the wrong size):
+  // bigger than a screen prints, or not the size the order asks for
+  const sizeWarn = useMemo(() => {
+    if (!res || !artAsp) return "";
+    const W = st.widthIn, H = st.widthIn * artAsp, f = (v: number) => v.toFixed(2).replace(/\.?0+$/, "");
+    const want = String(im0.current?.size || ""), n = parseFloat(want.replace(/[^\d.]/g, " ").trim().split(/\s+/)[0] || "");
+    const tall = /tall|high/i.test(want);
+    if (n > 0 && Math.abs((tall ? H : W) - n) / n > 0.08) return `The order says ${want}; these films print ${f(W)}" × ${f(H)}". Check the size before printing films.`;
+    if (H > 15 || W > 15) return `${f(W)}" × ${f(H)}" is past the 15" most screens print. Check the size before printing films.`;
+    return "";
+  }, [res, artAsp, st.widthIn]);
   // sized by its height: the height stays when the art's proportions change (a crop, a new trace)
   useEffect(() => { if (st.sizeBy === "h" && st.heightIn && artAsp) { const w = st.heightIn / artAsp; if (Math.abs(w - st.widthIn) > 0.005) set({ widthIn: w }); } }, [artAsp]); // eslint-disable-line react-hooks/exhaustive-deps
   // where the art sits on the film: a left chest 4" right of the screen's center as you look at the film (the wearer's
@@ -1559,11 +1562,13 @@ export default function SeparationStudio({ id }: { id: string }) {
             <div className={"sep-canvases" + (films ? " gone" : "")}>
               <canvas ref={cv} className={(pick ? "pick " : solo ? "zoom " : "") + (view === "original" && !solo ? "gone" : "")} onClick={onPick} />
               <canvas ref={cvOrig} className={"sep-orig" + (view === "proof" || view === "films" || solo ? " gone" : "")} style={view === "compare" && !solo ? { clipPath: `inset(0 ${100 - split}% 0 0)` } : undefined} onClick={onPick} />
+              {res && !solo && !films && <SepRuler canvas={cv} printW={printW} resW={res.w} resH={res.h} box={inkB} w={st.widthIn} h={st.widthIn * (artAsp || 0)} />}
               {view === "compare" && !solo && <input className="sep-split" type="range" min={0} max={100} value={split} onChange={(e) => setSplit(+e.target.value)} aria-label="Original | proof" style={artBox ? { left: artBox.l, width: artBox.w, right: "auto" } : undefined} />}
             </div>
             {/* working: a spinner over the picture so it's clear it's thinking (Nov 11, Nick) */}
             {(busy || (!img && !err)) && <div className="sep-think" role="status" aria-live="polite"><span className="sep-spin" aria-hidden /><b>{busy || "Loading the art…"}</b></div>}
           </div>
+          {sizeWarn && !solo && <div className="sep-sizewarn">⚠ {sizeWarn}</div>}
           {solo && (
             <div className="sep-loupe">
               {loupe ? <canvas ref={loupeCv} aria-label="Film close-up" /> : <div className="sep-loupe-hint">Click the film to see the real dots up close</div>}
@@ -1606,9 +1611,15 @@ export default function SeparationStudio({ id }: { id: string }) {
             <PressSetupCard compact presses={presses} setPresses={setPresses} press={press} onPickPress={(id) => { setPressId(id); setSetup(null); }} onPress={onPress} setup={setup} commit={commitSetup} clearSetup={() => setSetup(null)}
               sheet={{ title: `Press setup S-${row.number}`, heading: `Press setup · ${row.location || ""}${order ? ` · #${order.number} ${order.nickname || ""}` : ""}`, sub: `S-${row.number} · ${plates.length} screens · shirt ${row.garment_color || st.garment || "not picked"}` }} />
           )}
-          {rtab === "screens" && res && <PrintFilms n={plates.length} inks={plates.map((p) => p.name)} aspect={artAsp} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy} offsetPt={filmOffsetPt} where={filmWhere}
+          {rtab === "screens" && <FilmsRecord sepId={row.id} origUrl={origUrl} pick={filmsPick} size={{ w: st.widthIn, h: st.widthIn * (artAsp || 0), colors: plates.length }}
+            illustrator={async () => { download(await aiFile(), `${slug(title)}-seps.pdf`); }} />}
+          {rtab === "screens" && res && <PrintFilms warn={sizeWarn} n={plates.length} inks={plates.map((p) => p.name)} aspect={artAsp} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy} offsetPt={filmOffsetPt} where={filmWhere}
             make={async (rollIn, only, nest) => { try { return await filmsEach(rollIn, only, nest); } finally { setBusy(""); } }}
-            onSent={() => { if (row.status !== "cancelled") markPrinted(); }} />}
+            onSent={() => {
+              if (row.status !== "cancelled") markPrinted();
+              // every Print Films waits for "Printed right / Something's wrong" in the corner (components/FilmCheck.tsx)
+              void logStudioFilms(row.id, { width: st.widthIn, height: st.widthIn * (artAsp || 0), colors: plates.length, method: st.method }).then(() => window.dispatchEvent(new Event(FILMS_SENT)));
+            }} />}
           {rtab === "screens" && <section className="sep-card">
             <h3>Files</h3>
             <div className="sep-dl">
@@ -1830,7 +1841,8 @@ const SHOP_MESH = [80, 110, 156, 195, 230, 305];
 const LPIS = [35, 40, 45, 50, 55, 60, 65, 75, 85];
 /** the film printer's roll (Epson, 17"): every film goes on it */
 const ROLL_IN = 17;
-function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent, offsetPt = 0, where = "" }: {
+function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent, offsetPt = 0, where = "", warn = "" }: {
+  /** a size that's likely wrong: asked once before the films are made */ warn?: string;
   n: number; inks: string[]; aspect: number; widthIn: number; dpi: number; title: string; busy: boolean; offsetPt?: number; where?: string;
   /** `only`: one film (0-based, print order) */
   make: (rollIn: number, only?: number, nest?: boolean) => Promise<{ name: string; bytes: Uint8Array }[]>; onSent: () => void;
@@ -1857,6 +1869,7 @@ function PrintFilms({ n, inks, aspect, widthIn, dpi, title, busy, make, onSent, 
   /** print every film, or `only` one again (a reprint: ran out of film, a bad film): a reprint doesn't move the
    *  separation along again */
   async function print(only?: number) {
+    if (warn && only == null && !window.confirm(`${warn}\n\nPrint the films anyway?`)) return;
     setErr(""); setMsg(""); setWorking(true); setAgain(only ?? null);
     try {
       // through Dropbox first (Oct 29): the portal saves each film into Dropbox's FILM DIRECT TO PRINT, which syncs to
