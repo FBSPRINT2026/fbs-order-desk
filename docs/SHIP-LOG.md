@@ -624,3 +624,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 23 3:15pm · 1.3.867 · Nick · Separations: 'What would you like to do?' comes up on every separation nobody has picked a way for yet, printed ones included (#50135 didn't ask)
 - Nov 23 3:26pm · 1.3.868 · Nick · After an update goes live, the next link clicked on any shop page loads fresh, so a page left open across an update can't hang on the spinner (Jose opening jobs from the schedule)
 - Nov 23 3:27pm · 1.3.869 · Nick · Separation starter file prints right on every film: crop marks and targets in registration (all films), the customer / job / size in registration, and each ink's name and number in that ink's own spot color, layered in one spot so each film carries its own
+- Nov 23 3:31pm · 1.3.870 · Nick · Separation starter file: only the center targets top and bottom, no corner crop marks

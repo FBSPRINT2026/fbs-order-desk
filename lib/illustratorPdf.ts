@@ -80,7 +80,7 @@ export async function illustratorPdf(plates0: Plate[], w: number, h: number, o0:
   const st = o0.starter;
   // the starter: color plates only, as shapes, nothing halftoned (he makes those himself)
   const plates = st ? plates0.filter((p) => p.kind !== "underbase") : plates0;
-  const o: IllustratorOpts = st ? { ...o0, tonal: false, solid: "vector", vector: undefined, marks: { crop: true, targets: o0.marks?.targets !== false } } : o0;
+  const o: IllustratorOpts = st ? { ...o0, tonal: false, solid: "vector", vector: undefined, marks: { crop: false, targets: o0.marks?.targets !== false } } : o0;
   const W = o.widthIn * 72, H = W * (h / w), s = W / w, N = plates.length;
   const parts: Uint8Array[] = []; const offsets: number[] = []; let pos = 0;
   const push = (x: Uint8Array | string) => { const b = typeof x === "string" ? enc.encode(x) : x; parts.push(b); pos += b.length; };
