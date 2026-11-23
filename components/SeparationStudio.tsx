@@ -1271,7 +1271,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   if (err && !row) return <div className="empty">{err}</div>;
   if (!row) return <div className="empty">Loading…</div>;
   const path0 = (row.settings as { path?: SepPath }).path;
-  const showStart = startOpen ?? (!path0 && !filmsPick && (row.status === "requested" || row.status === "in_progress"));
+  // asked on every separation nobody has picked a way for yet, printed ones too (Nick, Nov 23 2026: #50135, printed
+  // Nov 19, didn't ask); never on a cancelled one
+  const showStart = startOpen ?? (!path0 && !filmsPick && row.status !== "cancelled");
   const pickPath = async (p: SepPath) => {
     setStartOpen(false);
     const r = await sb.from("separations").update({ settings: { ...row.settings, path: p, pathAt: new Date().toISOString() }, updated_at: new Date().toISOString() }).eq("id", row.id).select("*").single();
