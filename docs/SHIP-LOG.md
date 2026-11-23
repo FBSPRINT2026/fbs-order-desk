@@ -627,3 +627,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 23 3:31pm · 1.3.870 · Nick · Separation starter file: only the center targets top and bottom, no corner crop marks
 - Nov 23 3:51pm · 1.3.871 · Nick · Learn from Separo: paste Separo's download link instead of downloading and uploading the zip; our server fetches it from Separo's file server only and learns from it the same way
 - Nov 23 3:58pm · 1.3.872 · Nick · Separo learning: every Separo job's ladder of ink choices (1 to 9 colors) and the count it picks by default, saved for learning how Separo limits colors (separo_jobs, migration 336)
+- Nov 23 4:01pm · 1.3.873 · Nick · Separo learning: the art Separo worked from (each job's picture) can be read for measuring how it picks its color count

@@ -18,8 +18,17 @@ export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) as { url?: string };
   let u: URL;
   try { u = new URL(String(b.url || "").trim()); } catch { return NextResponse.json({ error: "That isn't a link." }, { status: 400 }); }
-  if (u.protocol !== "https:" || !/\.cloudfront\.net$/i.test(u.hostname) || !/^\/separations\/[\w-]+\/[^/]+\.zip$/i.test(u.pathname))
+  const art = /^\/(normalized_artworks|artwork_thumbnails)\/[\w-]+\.png$/i.test(u.pathname);
+  if (u.protocol !== "https:" || !/\.cloudfront\.net$/i.test(u.hostname) || !(art || /^\/separations\/[\w-]+\/[^/]+\.zip$/i.test(u.pathname)))
     return NextResponse.json({ error: "That isn't Separo's download link (it ends in .zip, from Download separation)." }, { status: 400 });
+  // the art Separo worked from (a job's picture): small, handed straight back for learning how it limits colors
+  if (art) {
+    const r = await fetch(u.toString(), { redirect: "error" }).catch(() => null);
+    if (!r || !r.ok) return NextResponse.json({ error: `Separo's file server didn't send it (${r?.status || "no answer"}).` }, { status: 502 });
+    const bytes = await r.arrayBuffer();
+    if (bytes.byteLength > 4e6) return NextResponse.json({ error: "Too big." }, { status: 413 });
+    return new NextResponse(bytes, { headers: { "content-type": "image/png", "cache-control": "private, max-age=3600" } });
+  }
   const r = await fetch(u.toString(), { redirect: "error" }).catch(() => null);
   if (!r || !r.ok) return NextResponse.json({ error: `Separo's file server didn't send it (${r?.status || "no answer"}).` }, { status: 502 });
   const bytes = new Uint8Array(await r.arrayBuffer());
