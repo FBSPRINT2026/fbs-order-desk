@@ -40,13 +40,10 @@ export default function StationShell({ station, page }: { station: Station; page
     return () => document.removeEventListener("click", on, true);
   }, [station.home]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // the print buttons in the bar ask for the job first: "wo" or "label"
-  const [want, setWant] = useState<"" | "wo" | "label">("");
-  const pick = (h: { kind: "o" | "a"; id: string }) => {
-    // an old Printavo job has no work order of ours: it opens to look at instead
-    if (want === "wo" && h.kind === "o") printWo(h); else if (want === "label") printLabel(h); else setPeek(h);
-    setWant("");
-  };
+  // type a job, press Enter: the bar shows which job it found (#, customer, job name) and the three buttons beside it work
+  // on that job (Nick, Nov 23 2026: "when you hit enter it should just confirm the job name and customer and then to the
+  // right there should be three buttons… view details, print work order and print box label")
+  const [job, setJob] = useState<StationHit | null>(null);
 
   return (
     <div className="stn">
@@ -55,12 +52,16 @@ export default function StationShell({ station, page }: { station: Station; page
           <svg viewBox="0 0 24 24" aria-hidden><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
           <span><b data-notranslate>{station.name}</b><small>{station.label}</small></span>
         </button>
-        <StationSearch want={want} onPick={pick} onCancel={() => setWant("")} />
-        <button type="button" className={"stn-act" + (want === "wo" ? " on" : "")} onClick={() => setWant(want === "wo" ? "" : "wo")}>
+        <StationSearch job={job} onPick={setJob} onClear={() => setJob(null)} />
+        <button type="button" className="stn-act" disabled={!job} onClick={() => job && setPeek(job)}>
+          <svg viewBox="0 0 24 24" aria-hidden><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+          <span>View details</span>
+        </button>
+        <button type="button" className="stn-act" disabled={!job || job.kind !== "o"} title={job?.kind === "a" ? "An old Printavo job has no work order here" : undefined} onClick={() => job && printWo(job)}>
           <svg viewBox="0 0 24 24" aria-hidden><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6z" /></svg>
           <span>Print work order</span>
         </button>
-        <button type="button" className={"stn-act" + (want === "label" ? " on" : "")} onClick={() => setWant(want === "label" ? "" : "label")}>
+        <button type="button" className="stn-act" disabled={!job} onClick={() => job && printLabel(job)}>
           <svg viewBox="0 0 24 24" aria-hidden><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01" /></svg>
           <span>Print box label</span>
         </button>
@@ -79,27 +80,45 @@ function printLabel(h: { kind: "o" | "a"; id: string }) {
   window.open(`/print/${h.id}/labels${h.kind === "a" ? "?a=1" : ""}`, "_blank");
 }
 
-/** the one search: type, pick a job (or press Enter for the first) */
-function StationSearch({ want, onPick, onCancel }: { want: "" | "wo" | "label"; onPick: (h: StationHit) => void; onCancel: () => void }) {
+/** the one search: type a #, a customer, a PO or a name and press Enter (or tap a job in the list); the job it found stays
+ * in the bar, confirmed, until it's cleared or another is looked up */
+function StationSearch({ job, onPick, onClear }: { job: StationHit | null; onPick: (h: StationHit) => void; onClear: () => void }) {
   const [q, setQ] = useState(""), [hits, setHits] = useState<StationHit[]>([]), [busy, setBusy] = useState(false), [open, setOpen] = useState(false);
-  const box = useRef<HTMLInputElement>(null), seq = useRef(0);
-  useEffect(() => { if (want) { box.current?.focus(); setOpen(true); } }, [want]);
+  const box = useRef<HTMLInputElement>(null), seq = useRef(0), enterNext = useRef(false);
   useEffect(() => {
     const t = q.trim();
     if (t.length < 2) { setHits([]); return; }
     const my = ++seq.current;
-    const h = setTimeout(async () => { setBusy(true); const r = await stationFind(t); if (my === seq.current) { setBusy(false); setHits(r.ok ? r.hits : []); } }, 250);
+    const h = setTimeout(async () => {
+      setBusy(true); const r = await stationFind(t);
+      if (my !== seq.current) return;
+      setBusy(false); const hs = r.ok ? r.hits : []; setHits(hs);
+      // Enter pressed before the answer came back: take the best match once it's here
+      if (enterNext.current) { enterNext.current = false; const best = exact(t, hs); if (best) choose(best); }
+    }, 200);
     return () => clearTimeout(h);
-  }, [q]);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a typed job # wins over everything else; otherwise the first job found
+  const exact = (t: string, hs: StationHit[]) => hs.find((h) => h.number === t.replace(/^#/, "").trim()) || hs[0] || null;
   const choose = (h: StationHit) => { onPick(h); setQ(""); setHits([]); setOpen(false); box.current?.blur(); };
-  const ask = want === "wo" ? "Which job? Type its # or name to print its work order" : want === "label" ? "Which job? Type its # or name to print its box label" : "Find a job: # , customer, PO or name";
+  if (job && !q) return (
+    <div className="stn-find stn-got" onClick={() => { onClear(); setTimeout(() => box.current?.focus(), 0); }} title="Look up another job">
+      <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12l5 5L20 7" /></svg>
+      <span className="stn-got-t"><b data-notranslate>#{job.number}</b><span data-notranslate>{job.customer}</span>{job.job && <small data-notranslate>{job.job}</small>}</span>
+      <em>{job.status}</em>
+      <button type="button" className="stn-x" onClick={(e) => { e.stopPropagation(); onClear(); }} aria-label="Clear">✕</button>
+    </div>
+  );
+  const ask = "Find a job: # , customer, PO or name, then Enter";
   return (
-    <div className={"stn-find" + (want ? " asking" : "")}>
+    <div className="stn-find">
       <svg viewBox="0 0 24 24" aria-hidden><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
       <input ref={box} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 200)}
-        onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) choose(hits[0]); if (e.key === "Escape") { setQ(""); onCancel(); box.current?.blur(); } }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { const best = exact(q, hits); if (best && !busy) choose(best); else if (q.trim().length >= 2) enterNext.current = true; }
+          if (e.key === "Escape") { setQ(""); box.current?.blur(); }
+        }}
         placeholder={ask} aria-label={ask} />
-      {want && <button type="button" className="stn-x" onClick={onCancel} aria-label="Cancel">✕</button>}
       {open && q.trim().length >= 2 && (
         <ul className="stn-hits">
           {busy && !hits.length ? <li className="faint">Looking…</li> : !hits.length ? <li className="faint">No job found</li> : hits.map((h) => (

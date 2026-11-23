@@ -24296,3 +24296,20 @@ main.main .rvg-sub{margin-bottom:10px}
 .stn-note{background:#fff8e6;border-radius:var(--r);padding:10px 14px;margin:12px 0 0;font-size:14px}
 .stn-peek-f{display:flex;flex-wrap:wrap;gap:12px;padding:16px 24px;border-top:1px solid var(--line)}
 .stn-big{flex:1 1 220px;height:56px;border-radius:var(--r);border:0;background:var(--accent);color:#fff;font-weight:800;font-size:17px;cursor:pointer}
+
+/* Ship window: Create labels never scrolls away (Nick, Nov 23 2026): the sheet fits the screen, its middle scrolls, the
+   bottom bar stays; the address and who pays fold to one line each (.sw-sum) */
+.pp-modal>.pp-sheet.sw{display:flex;flex-direction:column;max-height:calc(100vh - 32px);margin-block:16px}
+.pp-sheet.sw>.sw-cols{flex:1 1 auto;min-height:0;overflow:auto}
+.pp-sheet.sw>.sw-bar{flex:none;background:var(--surface);position:sticky;bottom:0;z-index:2}
+.sw-sum{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;font-size:14px;margin-bottom:8px}
+.sw-sum>span{min-width:0}
+.sw-sum small{display:block;color:var(--ink-3);font-size:12.5px;margin-top:2px}
+/* the found job, confirmed in the bar (Nick, Nov 23 2026) */
+.stn-act:disabled{opacity:.35;cursor:default}
+.stn-find.stn-got{cursor:pointer;box-shadow:0 0 0 3px var(--ok)}
+.stn-got>svg{color:var(--ok);stroke:currentColor;fill:none;stroke-width:3;width:22px;height:22px;flex:none}
+.stn-got-t{flex:1;min-width:0;display:flex;align-items:baseline;gap:10px;overflow:hidden;white-space:nowrap}
+.stn-got-t b{font-size:18px}.stn-got-t span{font-size:17px;font-weight:700}
+.stn-got-t small{font-size:14px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis}
+.stn-got em{font-style:normal;font-size:13px;color:var(--ink-3);white-space:nowrap}

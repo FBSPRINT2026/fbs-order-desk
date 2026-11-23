@@ -287,6 +287,11 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     setBusy("");
   }
 
+  // the address and who pays fold to one line each when they're filled in (they're almost always right), so boxes, rates
+  // and Create labels fit on one screen; Edit / Change opens the fields (Nick, Nov 23 2026: "you have to scroll down to
+  // hit ship")
+  const [editTo, setEditTo] = useState(false), [editPay, setEditPay] = useState(false);
+  const toOpen = editTo || !addressReady(to);
   const addrField = (k: keyof ShipAddress, label: string, cls = "") => (
     <label className={cls}>{label}<input type="text" value={to[k]} onChange={(e) => { setTo({ ...to, [k]: e.target.value }); setRates(null); }} /></label>
   );
@@ -473,6 +478,13 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
           {/* where and who pays */}
           <aside className="sw-side">
             <div className="sw-h">Ship to</div>
+            {!toOpen ? (
+              <div className="sw-sum">
+                <span><b data-notranslate>{to.company || to.name}</b>{to.company && to.name ? <> · Attn <span data-notranslate>{to.name}</span></> : null}
+                  <small data-notranslate>{[to.street1, to.street2].filter(Boolean).join(", ")}<br />{to.city}, {to.state} {to.zip}</small></span>
+                <button type="button" className="linkbtn" onClick={() => setEditTo(true)}>Edit</button>
+              </div>
+            ) : <>
             <div className="sw-addr">
               {addrField("company", "Company", "wide")}
               {addrField("name", "Attention", "wide")}
@@ -484,6 +496,14 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
               {addrField("email", "Email")}
             </div>
             {!addressReady(to) && <div className="sw-warn">The address needs a street, city, state and ZIP.</div>}
+            {editTo && addressReady(to) && <button type="button" className="linkbtn" onClick={() => setEditTo(false)}>Done</button>}
+            </>}
+            {!editPay ? (
+              <div className="sw-sum">
+                <span><b>Paid by</b> {shipOn && onAcct ? acctName(onAcct) : BILL_LABEL[bill as BillTo]}{service ? <> · {service}</> : null}{note ? <small>{note}</small> : null}</span>
+                <button type="button" className="linkbtn" onClick={() => setEditPay(true)}>Change</button>
+              </div>
+            ) : <>
 
             {accts.length > 0 && (shipOn || accts.some((a) => a.id !== shipOn && /fedex|ups/i.test(a.readable))) && (
               <>
@@ -513,6 +533,8 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
             <div className="sw-h">Service</div>
             <select value={service} onChange={(e) => setService(e.target.value)}><option value="">Choose…</option>{SHIP_METHODS.map((m) => <option key={m}>{m}</option>)}</select>
             <label className="sw-note">Note<textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything for the shipper" /></label>
+            <button type="button" className="linkbtn" onClick={() => setEditPay(false)}>Done</button>
+            </>}
             {t.due && <div className="faint" style={{ fontSize: 12.5 }}>In-hands date: <b>{new Date(t.due + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}</b></div>}
           </aside>
         </div>
