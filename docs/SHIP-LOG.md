@@ -605,3 +605,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 23 12:42pm · 1.3.848 · Nick · Outbound: Shipping / Pickup shelf / Delivery as big picture buttons on the right with a colored banner on top; box label panel off on shop computers (top bar has it). Job peek shows its mockup and where it ships. FBS-PRESS's crew menu and job menus get the shop computers' top bar
 - Nov 23 12:45pm · 1.3.849 · Nick · Outbound banner: the line under SHIPPING / PICKUP SHELF / DELIVERY reads white
 - Nov 23 1:08pm · 1.3.850 · Nick · Promotional products: Documents ▾ → Purchase order. A PO to the vendor with each item's picture, item #, description and quantity (no prices), ship to us by default (or the customer, or another address); saved as PO <order #>-<n>, vendors remembered
+- Nov 23 1:10pm · 1.3.851 · Nick · Purchase order form: the item rows sit on one line with the quantity box beside them

@@ -59,7 +59,7 @@ export default function PoDoc({ orderId, number, job, customer, shop, customerSh
           </label>
           <label className="po-f"><span>Needed by</span><input type="date" value={po.needed_by || ""} onChange={(e) => set({ needed_by: e.target.value || null })} /></label>
           <div className="po-f"><span>Ship to</span>
-            <div className="po-seg">{([["us", "Us"], ["customer", "The customer"], ["other", "Other"]] as const).map(([k, l]) => (
+            <div className="po-seg">{([["us", "Us"], ["customer", "Customer"], ["other", "Other"]] as const).map(([k, l]) => (
               <button key={k} type="button" className={po.ship_to_kind === k ? "on" : ""} disabled={k === "customer" && !customerShip} onClick={() => set({ ship_to_kind: k, ...(k === "other" && !po.ship_to ? { ship_to: "" } : {}) })}>{l}</button>
             ))}</div>
           </div>
@@ -136,8 +136,9 @@ const PO_CSS = `
 .po-seg button.on{background:var(--accent,#0b72b5);color:#fff}.po-seg button:disabled{opacity:.4;cursor:default}
 .po-items{display:flex;flex-direction:column;gap:4px}
 .po-it{display:flex;align-items:center;gap:10px;font-size:14px;padding:4px 0}
-.po-it span{flex:1;min-width:0}.po-it small{color:var(--ink-3,#7a8594)}
-.po-q{width:80px;height:32px;border:1px solid var(--line,#ccd4dd);border-radius:6px;padding:0 8px;font:14px var(--body,Arial);text-align:right}
+.po-it>input[type=checkbox]{flex:none;width:18px;height:18px;margin:0}
+.po-it>span{flex:1 1 auto;min-width:0}.po-it small{color:var(--ink-3,#7a8594)}
+.po-q{flex:none;width:90px!important;max-width:90px;height:32px;border:1px solid var(--line,#ccd4dd);border-radius:6px;padding:0 8px;font:14px var(--body,Arial);text-align:right}
 .po-none{color:var(--ink-3,#7a8594)}
 .po-btns{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
 .po-msg{color:var(--danger,#c0392b);font-size:13px;margin-right:auto}.po-msg.ok{color:var(--ok,#1c9a5b)}
