@@ -24,9 +24,12 @@ export default function PoDoc({ orderId, number, job, customer, shop, customerSh
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState("");
   const set = (p: Partial<PoRow>) => { setPo((x) => ({ ...x, ...p })); setMsg(""); };
 
+  // the PO # is the job's number; a second PO for the same job is <number>-2, then -3 (Nick, Nov 23 2026)
+  const poNo = (seq: number) => (seq > 1 ? `${number}-${seq}` : number);
+  const thisNo = poNo(po.seq || (po.id ? 1 : list.length + 1));
   const picked = lines.filter((l) => po.line_ids.includes(l.id));
   const qtyOf = (l: PoLine) => (po.qty[l.id] != null ? po.qty[l.id] : l.qty);
-  const shopAddr = `${shop.name}\nAttn: Receiving · PO ${number}-${po.seq || "?"}\n${shop.address.replace(/,\s*(?=[^,]*,[^,]*$)/, "\n")}`;
+  const shopAddr = `${shop.name}\nAttn: Receiving · PO ${thisNo}\n${shop.address.replace(/,\s*(?=[^,]*,[^,]*$)/, "\n")}`;
   const shipText = po.ship_to_kind === "us" ? shopAddr : po.ship_to_kind === "customer" ? customerShip : po.ship_to;
 
   const save = async (): Promise<PoRow | null> => {
@@ -38,7 +41,7 @@ export default function PoDoc({ orderId, number, job, customer, shop, customerSh
     if (!r.ok) { setMsg(r.error); return null; }
     const next = { ...po, id: r.id, seq: r.seq };
     setPo(next); setList((xs) => [...xs.filter((x) => x.id !== r.id), next].sort((a, b) => a.seq - b.seq));
-    setMsg(`Saved PO ${number}-${r.seq}`);
+    setMsg(`Saved PO ${poNo(r.seq)}`);
     history.replaceState(null, "", `?po=${r.seq}`);
     return next;
   };
@@ -49,7 +52,7 @@ export default function PoDoc({ orderId, number, job, customer, shop, customerSh
       <style>{PO_CSS}</style>
       <div className="po-ctl">
         <div className="po-tabs">
-          {list.map((p) => <button key={p.id} type="button" className={p.id === po.id ? "on" : ""} onClick={() => { setPo(p); setMsg(""); history.replaceState(null, "", `?po=${p.seq}`); }}>PO {number}-{p.seq}<small>{p.vendor}</small></button>)}
+          {list.map((p) => <button key={p.id} type="button" className={p.id === po.id ? "on" : ""} onClick={() => { setPo(p); setMsg(""); history.replaceState(null, "", `?po=${p.seq}`); }}>PO {poNo(p.seq)}<small>{p.vendor}</small></button>)}
           <button type="button" className={!po.id ? "on" : ""} onClick={() => { setPo(blank()); setMsg(""); history.replaceState(null, "", "?"); }}>+ New PO</button>
         </div>
         <div className="po-row">
@@ -92,7 +95,7 @@ export default function PoDoc({ orderId, number, job, customer, shop, customerSh
       <div className="po-sheet">
         <div className="po-top">
           <div className="po-shop"><b>{shop.name}</b>{shop.address.split(/,\s*(?=[^,]*,[^,]*$)/).map((x, i) => <span key={i}>{x}</span>)}{shop.phone && <span>{shop.phone}</span>}</div>
-          <div className="po-meta"><h1>PURCHASE ORDER</h1><b>PO {number}-{po.seq || "?"}</b><span>Date: {day((po.created_at || new Date().toISOString()).slice(0, 10))}</span><span>Job #{number}{job ? ` · ${job}` : ""}</span>{po.needed_by && <span>Needed by: <b>{day(po.needed_by)}</b></span>}</div>
+          <div className="po-meta"><h1>PURCHASE ORDER</h1><b>PO {thisNo}</b><span>Date: {day((po.created_at || new Date().toISOString()).slice(0, 10))}</span><span>Job #{number}{job ? ` · ${job}` : ""}</span>{po.needed_by && <span>Needed by: <b>{day(po.needed_by)}</b></span>}</div>
         </div>
         <div className="po-boxes">
           <div className="po-box"><div className="po-k">Vendor</div><b>{po.vendor || "—"}</b>{po.vendor_contact.split("\n").filter(Boolean).map((x, i) => <span key={i}>{x}</span>)}</div>
@@ -110,7 +113,7 @@ export default function PoDoc({ orderId, number, job, customer, shop, customerSh
           ))}</tbody>
         </table>
         <div className="po-tot">Total pieces <b>{picked.reduce((a, l) => a + qtyOf(l), 0).toLocaleString()}</b></div>
-        {po.notes.trim() && <div className="po-note"><b>Notes:</b> {po.notes.replace(/this PO #/i, `PO ${number}-${po.seq || "?"}`)}</div>}
+        {po.notes.trim() && <div className="po-note"><b>Notes:</b> {po.notes.replace(/this PO #/i, `PO ${thisNo}`)}</div>}
         <div className="po-sign"><div>Ordered by: {po.created_by || me}</div><div>Vendor confirmation #</div></div>
         {customer && <div className="po-foot">For our customer: {customer}</div>}
       </div>
@@ -119,9 +122,9 @@ export default function PoDoc({ orderId, number, job, customer, shop, customerSh
 }
 
 const PO_CSS = `
-@page { size: letter; margin: 0.5in; }
+@page { size: letter; margin: 0; }
 .po-page{background:#e9edf2;min-height:100vh;padding:20px 16px 60px;font-family:var(--body,Arial,sans-serif);color:var(--ink,#1c2430)}
-.po-ctl{max-width:816px;margin:0 auto 16px;background:#fff;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.1);padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+.po-ctl{max-width:8.5in;margin:0 auto 16px;background:#fff;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.1);padding:14px 18px;display:flex;flex-direction:column;gap:12px}
 .po-tabs{display:flex;flex-wrap:wrap;gap:6px}
 .po-tabs button{border:1px solid var(--line,#dde3ea);background:#fff;border-radius:6px;padding:6px 10px;font-weight:700;font-size:13px;cursor:pointer;color:var(--ink-2,#3c4654);text-align:left}
 .po-tabs button small{display:block;font-weight:400;font-size:11.5px;color:var(--ink-3,#7a8594)}
@@ -142,7 +145,7 @@ const PO_CSS = `
 .po-none{color:var(--ink-3,#7a8594)}
 .po-btns{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
 .po-msg{color:var(--danger,#c0392b);font-size:13px;margin-right:auto}.po-msg.ok{color:var(--ok,#1c9a5b)}
-.po-sheet{max-width:816px;margin:0 auto;background:#fff;padding:40px 44px;box-sizing:border-box;box-shadow:0 6px 24px rgba(0,0,0,.12);font-size:13px}
+.po-sheet{width:8.5in;min-height:11in;margin:0 auto;background:#fff;padding:0.5in;box-sizing:border-box;box-shadow:0 6px 24px rgba(0,0,0,.12);font-size:13px}
 .po-top{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:3px solid #0b72b5;padding-bottom:14px}
 .po-shop,.po-meta{display:flex;flex-direction:column;line-height:1.5}
 .po-shop b{font:800 18px var(--display,Arial)}
@@ -161,6 +164,6 @@ const PO_CSS = `
 .po-note{margin-top:18px;border:1px solid #dde3ea;border-radius:6px;padding:10px 12px;background:#f7f9fb;line-height:1.5}
 .po-sign{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:34px}.po-sign div{border-top:1px solid #1c2430;padding-top:4px;font-size:11px;color:#5a6676}
 .po-foot{margin-top:14px;font-size:11px;color:#7a8594}
-@media (max-width:640px){.po-boxes{grid-template-columns:1fr}.po-sheet{padding:20px}}
-@media print{.po-page{background:#fff;padding:0;min-height:0}.po-ctl{display:none!important}.po-sheet{box-shadow:none;padding:0;max-width:none}}
+@media screen and (max-width:860px){.po-sheet{width:auto;min-height:0}}
+@media print{html,body{margin:0!important;padding:0!important;background:#fff!important;width:8.5in}.po-page{background:#fff;padding:0;min-height:0}.po-ctl{display:none!important}.po-sheet{box-shadow:none;width:8.5in;min-height:0;height:auto;padding:0.5in;margin:0}}
 `;

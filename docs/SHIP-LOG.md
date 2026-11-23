@@ -607,3 +607,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 23 1:08pm · 1.3.850 · Nick · Promotional products: Documents ▾ → Purchase order. A PO to the vendor with each item's picture, item #, description and quantity (no prices), ship to us by default (or the customer, or another address); saved as PO <order #>-<n>, vendors remembered
 - Nov 23 1:10pm · 1.3.851 · Nick · Purchase order form: the item rows sit on one line with the quantity box beside them
 - Nov 23 1:11pm · 1.3.852 · Nick · Purchase order: Ordered by fills in; no made-up 'Group 1' under items
+- Nov 23 1:15pm · 1.3.853 · Nick · Purchase order: the PO # is the job's number (a second PO on the job is -2), and it prints full size on 8.5 x 11 with half-inch margins
