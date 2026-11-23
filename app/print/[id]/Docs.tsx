@@ -6,7 +6,7 @@ import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, w
 import { persOf, PERS_SHOW, printedLines } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
-import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksOnColor, livePrint, liveInkBy } from "@/lib/inkBy";
+import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksFor, inksOnColor, livePrint, liveInkBy } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { calcOrder, changeWord, inkWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, methodShort, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
@@ -1324,11 +1324,20 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
     // Heather Autumn) are the same picture (Oct 22, Nick on #40096: "there's two black shirts… two autumn shirts")
     const shown0 = g.lines.filter((l) => l.style || l.color);
     const key = (i: number) => { const l = shown0[i]; return l ? `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}` : `#${i}`; };
+    // which garments each picture shows. A logo mockup (Group.mockupKind "logo") is one picture per version of the
+    // print, the garments that print the same way sharing it, in the order the Mockup Creator saves them (Nov 23,
+    // Amanda, #50195: 2 pictures for 3 garments, so the hoodie's white version was captioned "Graphite Heather" and the
+    // hoodie had no page); any other mockup is one picture per garment, in the lines' order
+    const sold = shown0.filter((l) => lineQty(l) > 0 || shown0.length === 1);
+    const verKey = (l: Group["lines"][number]) => g.imprints.map((im) => JSON.stringify(inksFor(im.inkBy, inkKeyOf(l)) || {})).join("|");
+    const vers: Group["lines"][number][][] = [];
+    if (g.mockupKind === "logo") for (const l of sold) { const v = vers.find((x) => verKey(x[0]) === verKey(l)); if (v) v.push(l); else vers.push([l]); }
+    const picLines = (i: number): Group["lines"][number][] => g.mockupKind === "logo" ? (vers[i] || []) : shown0[i] ? [shown0[i]] : [];
     const seen = new Set([key(0)]), idx: number[] = [];
-    for (let i = 1; i < mk.length; i++) { const k = key(i); if (seen.has(k)) continue; seen.add(k); idx.push(i); extra.push([mk[i]]); }
+    for (let i = 1; i < mk.length; i++) { const k = g.mockupKind === "logo" ? `v${i}` : key(i); if (seen.has(k)) continue; seen.add(k); idx.push(i); extra.push([mk[i]]); }
     const pcols = [...new Set(g.lines.filter((l) => lineQty(l) > 0 && l.color).map((l) => inkKeyOf(l)))] as string[];
     const pvars = g.imprints.map((d) => variantsOf(d, pcols));
-    return { mk, extra, idx, prints: g.imprints.length, pvars };
+    return { mk, extra, idx, prints: g.imprints.length, pvars, picLines };
   });
   const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
   let page = 0;
@@ -1336,7 +1345,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
   /** one print's line under a mockup: on the cover every garment's sizes (adult and youth); on a garment's own page, the
    *  size it prints at on that garment (Oct 31, Nick: the youth page "with nothing on it… put the youth information below") */
   const printLine = (g: Group, d: Imprint, on?: Group["lines"][number]) => {
-    const des = d.design_id ? p.designs[d.design_id] : null, ink = d.visualOnly ? [] : inkNames(d.inks);
+    const des = d.design_id ? p.designs[d.design_id] : null, ink = d.visualOnly ? [] : on ? inksOnColor(d, inkKeyOf(on)).map((x) => x.name) : inkNames(d.inks);
     const split = youthSplit(g, d), kid = !!on && kidLine(on);
     const sz = printSize(split && kid ? { ...d, size: d.youth?.size || "" } : d, des);
     const yLabel = (d.youth?.size || "").replace(/\s*wide$/, "");
@@ -1357,12 +1366,12 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
       {groups.map((g, gi) => {
         // a run's pre-production sample is the run's own art: no proof page of its own
         if (g.sample?.follows) return null;
-        const { mk, extra, idx } = plan[gi];
+        const { mk, extra, idx, picLines } = plan[gi];
         const hex = p.hexes[gi] || "#9aa1ab";
         const shown = g.lines.filter((l) => l.style || l.color);
         const lines = shown.filter((l) => lineQty(l) > 0 || shown.length === 1);
         // each mockup picture is one garment (in the order they were saved)
-        const capOf = (i: number) => { const l = shown[i]; return l ? [[l.brand, l.style].filter(Boolean).join(" "), l.color].filter(Boolean).join(" · ") : ""; };
+        const capOf = (i: number) => { const ls = picLines(i); const by = new Map<string, string[]>(); for (const l of ls) { const k = [l.brand, l.style].filter(Boolean).join(" "); by.set(k, [...(by.get(k) || []), ...(l.color && !(by.get(k) || []).includes(l.color) ? [l.color] : [])]); } return [...by].map(([k, cs]) => [k, cs.join(", ")].filter(Boolean).join(" · ")).join(" / "); };
         const gname = groups.filter((x) => !x.sample?.follows).length > 1 ? (g.name?.trim() || `Group ${gi + 1}`) : "";
         const sameG = (y: Group["lines"][number], l: Group["lines"][number]) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase();
         /** a garment's sizes, every line of the same garment and color added up: "S 1 · M 2 · L 6 · 16 pcs" */
@@ -1373,6 +1382,9 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
           <div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#ccc"} /><b className="nw">{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? <> <span className="nw">· {l.color}</span></> : ""}</div>
           {sizesOf(l) && <div className="pf-pr faint pf-szs">{sizesOf(l).split(" · ").map((x, k) => <span key={k}>{k ? " · " : ""}<span className="nw">{x}</span></span>)}</div>}
         </>;
+        // every garment on the pictures, once, for "Garment 2 of 3"
+        const allG = mk.flatMap((_, i) => picLines(i)).filter((l, i, a) => a.findIndex((y) => sameG(y, l)) === i);
+        const boxes = (i: number) => picLines(i).filter((l, k, a) => a.findIndex((y) => sameG(y, l)) === k).map((l) => <div key={l.id}>{garmentBox(l, allG.findIndex((y) => sameG(y, l)), Math.max(allG.length, 1))}</div>);
         return (
           <div key={g.id}>
             <section className="sheet pf pf-cover">
@@ -1402,7 +1414,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 <div>
                   {/* each page shows only the garment on it, numbered (Nov 6, Nick: "each page should just have the only
                       garment that's on there… garment one, athletic heather, these sizes"); with no mockup yet, all of them */}
-                  {mk[0] && shown[0] ? garmentBox(shown[0], 0, Math.max(mk.length, 1)) : <>
+                  {mk[0] && picLines(0).length ? boxes(0) : <>
                     <div className="lbl">Garments</div>
                     {lines.filter((l, i) => lines.findIndex((y) => sameG(y, l)) === i).map((l) => <div key={l.id}><div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b className="nw">{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? <> <span className="nw">· {l.color}</span></> : ""}</div>{sizesOf(l) && <div className="pf-pr faint pf-szs">{sizesOf(l).split(" · ").map((x, k) => <span key={k}>{k ? " · " : ""}<span className="nw">{x}</span></span>)}</div>}</div>)}
                   </>}
@@ -1419,11 +1431,11 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 {pair.map((u) => <div className={"pf-mk sumd" + (pair.length === 1 ? " one" : "")} key={u}><img src={u} alt="Mockup" /></div>)}
                 {(() => {
                   // this garment's own prints and sizes under its picture, like the cover's
-                  const l = shown[idx[xi]];
+                  const l = picLines(idx[xi])[0];
                   return l && (
                     <div className="pf-sum">
                       <div><div className="lbl">Prints</div>{g.imprints.length === 0 ? <div className="pf-pr">No prints on this group.</div> : g.imprints.map((d) => printLine(g, d, l))}</div>
-                      <div>{garmentBox(l, idx[xi], Math.max(mk.length, 1))}</div>
+                      <div>{boxes(idx[xi])}</div>
                     </div>
                   );
                 })()}
