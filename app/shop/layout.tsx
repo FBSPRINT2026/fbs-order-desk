@@ -7,6 +7,7 @@ import { createClient, getViewer } from "@/lib/supabase/server";
 import { mergeSettings } from "@/lib/pricing";
 import { accessOf, permsFor, ROLES } from "@/lib/roles";
 import ShopNav from "@/components/ShopNav";
+import StationShell from "@/components/StationShell";
 import ScanWatch from "@/components/ScanWatch";
 import PullRefresh from "@/components/PullRefresh";
 import Cheer from "@/components/Cheer";
@@ -68,15 +69,20 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const perms = permsFor(role, viewAs ? (viewAs.includes("@") ? access[viewAs] : null) : access[email]);
   // Translate to Spanish: for the crew, not Nick and Amanda (Oct 15, Nick); "View as" a crew member shows it
   const showSpanish = !["nicholas@fbsprint.com", "amanda@fbsprint.com"].includes((viewAs.includes("@") ? viewAs : email).toLowerCase());
+  // a shop computer signed in, or the owner viewing as one
+  const station = stationOf(email) || (viewAs ? stationOf(viewAs) : null);
   const people = (team || []).map((t) => ({ email: (t.email as string).toLowerCase(), name: (t.name as string) || "", role: (t.role as string) || "" }));
   return (
     <RoleProvider value={{ role, realRole, viewAs, viewName, perms, email, staffName: (me?.name as string) || "", sanebox: (me as { sanebox?: boolean } | null)?.sanebox !== false }}>
       <StockInkSeed rows={(stockInks || []) as { name: string; hex: string; line: string }[]} />
-      <div className="app">
+      <div className={"app" + (station ? " app-stn" : "")}>
         <ChatPing />
         <ScreenPin />
+        {/* a shop computer: no menu, one bar and its own page (components/StationShell.tsx; Nick, Nov 23 2026) */}
+        {station ? <StationShell station={station} page={<><CrewGuard /><PullRefresh>{children}</PullRefresh></>} /> : <>
         <ShopNav email={email} firstName={firstName} fullName={full} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
         <main className="main">{showSpanish && <div className="top-r"><Translate /></div>}<CrewGuard /><PullRefresh>{children}</PullRefresh></main>
+        </>}
         <Cheer on={!viewAs && !!me?.cheer} name={firstName} />
         <MobileTables />
         <DockSizer />

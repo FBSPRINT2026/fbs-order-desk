@@ -5,11 +5,11 @@
  * Being a real login, each one also gets the portal's search and the Orders list (look up a customer, a job that isn't
  * scheduled), limited by its role. Change what one sees on Settings → User Access, like any person.
  */
-export type Station = { key: "rec" | "press" | "ship" | "po"; name: string; label: string; role: "receiving" | "production" | "shipping"; home: string; note: string };
+export type Station = { key: "rec" | "press" | "ship" | "po"; name: string; label: string; role: "receiving" | "production" | "shipping"; home: string; note: string; /** other pages it works on (StationShell keeps it on these) */ pages?: string[] };
 export const STATIONS: Station[] = [
   { key: "rec", name: "FBS-REC", label: "Receiving", role: "receiving", home: "/shop/receiving", note: "Goods & Receiving: count-in list and trucks" },
   { key: "press", name: "FBS-PRESS", label: "Press", role: "production", home: "/crew", note: "Each press's schedule; a job opens its mockup, inks, setup and work order" },
-  { key: "ship", name: "FBS-SHIP", label: "Shipping", role: "shipping", home: "/shop/outbound", note: "The door: who's picking up, box labels, shipping" },
+  { key: "ship", name: "FBS-SHIP", label: "Shipping", role: "shipping", home: "/shop/outbound", pages: ["/shop/shipping"], note: "The door: who's picking up, box labels, shipping" },
   { key: "po", name: "FBS-PO", label: "Work orders", role: "production", home: "/shop/work-orders", note: "The color printer: print today's work orders" },
 ];
 export const STATION_DOMAIN = "station.fbsprint.com";
