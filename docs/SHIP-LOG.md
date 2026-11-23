@@ -626,3 +626,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 23 3:27pm · 1.3.869 · Nick · Separation starter file prints right on every film: crop marks and targets in registration (all films), the customer / job / size in registration, and each ink's name and number in that ink's own spot color, layered in one spot so each film carries its own
 - Nov 23 3:31pm · 1.3.870 · Nick · Separation starter file: only the center targets top and bottom, no corner crop marks
 - Nov 23 3:51pm · 1.3.871 · Nick · Learn from Separo: paste Separo's download link instead of downloading and uploading the zip; our server fetches it from Separo's file server only and learns from it the same way
+- Nov 23 3:58pm · 1.3.872 · Nick · Separo learning: every Separo job's ladder of ink choices (1 to 9 colors) and the count it picks by default, saved for learning how Separo limits colors (separo_jobs, migration 336)
