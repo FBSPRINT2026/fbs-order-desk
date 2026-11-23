@@ -24242,7 +24242,7 @@ main.main .rvg-sub{margin-bottom:10px}
 /* ── Shop computers: one bar, one page (components/StationShell.tsx; Nick, Nov 23 2026) ── */
 .app.app-stn{display:block}
 .stn{min-height:100vh;display:flex;flex-direction:column;background:var(--surface-2)}
-.stn-bar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:12px;padding:10px 20px;background:var(--fbs-navy,#141D2B);color:#fff}
+.stn-bar{position:sticky;top:0;z-index:60;overflow:visible;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 20px;background:var(--fbs-navy,#141D2B);color:#fff}
 .stn-bar svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
 .stn-home{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);color:#fff;border-radius:var(--r);padding:8px 14px;cursor:pointer;white-space:nowrap}
 .stn-home span{display:flex;flex-direction:column;line-height:1.15;text-align:left}
@@ -24253,7 +24253,7 @@ main.main .rvg-sub{margin-bottom:10px}
 .stn-find svg{color:var(--ink-3)}
 .stn-find input{flex:1;min-width:0;border:0;outline:0;font-size:17px;background:transparent;color:var(--ink);height:100%}
 .stn-x{border:0;background:var(--surface-2);border-radius:var(--r);padding:6px 10px;cursor:pointer;color:var(--ink-2)}
-.stn-hits{position:absolute;top:52px;left:0;right:0;list-style:none;margin:0;padding:6px;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 12px 30px rgba(20,29,43,.18);max-height:60vh;overflow:auto}
+.stn-hits{position:absolute;z-index:70;top:52px;left:0;right:0;list-style:none;margin:0;padding:6px;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 12px 30px rgba(20,29,43,.18);max-height:60vh;overflow:auto}
 .stn-hits li.faint{padding:12px;color:var(--ink-3)}
 .stn-hits button{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:0;background:none;text-align:left;cursor:pointer;border-radius:var(--r);font-size:15px;color:var(--ink)}
 .stn-hits button:hover{background:var(--accent-soft,#e8f3fa)}

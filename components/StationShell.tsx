@@ -50,7 +50,7 @@ export default function StationShell({ station, page }: { station: Station; page
 
   return (
     <div className="stn">
-      <header className="stn-bar" data-toolbar>
+      <header className="stn-bar">
         <button type="button" className="stn-home" onClick={() => { setPeek(null); router.push(station.home); }} title="Back to the start">
           <svg viewBox="0 0 24 24" aria-hidden><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
           <span><b data-notranslate>{station.name}</b><small>{station.label}</small></span>
