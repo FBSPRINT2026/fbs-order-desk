@@ -816,10 +816,8 @@ export default function SeparationStudio({ id }: { id: string }) {
       // Illustrator file and sizes are the ink; it settles in one step (the next separation fills the frame)
       if (vart?.ok) {
         const vb = inkBox(r);
-        if (vb) {
-          const f = { x: vart.x + (vb.x / r.w) * vart.w, y: vart.y + (vb.y / r.h) * vart.h, w: (vb.w / r.w) * vart.w, h: (vb.h / r.h) * vart.h };
-          setInkFrame(f); setBusy(""); return;
-        }
+        // (this separation still shows; the next one, in the new frame, replaces it)
+        if (vb) setInkFrame({ x: vart.x + (vb.x / r.w) * vart.w, y: vart.y + (vb.y / r.h) * vart.h, w: (vb.w / r.w) * vart.w, h: (vb.h / r.h) * vart.h });
       }
       const b = vart?.ok ? null : inkBox(r);
       const sp = b ? r.w / b.w : 1;
