@@ -12,6 +12,7 @@ import Autopilot from "./Autopilot";
 import type { Alarm, AutoState } from "@/lib/draftpunk/autopilot";
 import { saveVersion, type Version } from "@/lib/draftpunk/recipeStore";
 import { diffRecipes } from "@/lib/draftpunk/versions";
+import { shoppingList, shoppingText, starterDay, subText, type BrewPlan, type ShelfItem } from "@/lib/draftpunk/brewPlan";
 
 type Measured = {
   weather?: Weather; mashPh?: number; preBoilSg?: number; preBoilGal?: number; boilMin?: number; postBoilGal?: number;
@@ -33,7 +34,8 @@ export function learnedBoilOff(log: NonNullable<Equipment["boilLog"]>, fallback:
 /** one brew session: what was measured, what that means (efficiency, boil-off, ABV), and teaching the equipment */
 export default function BrewLog({ id, userId }: { id: string; userId: string }) {
   const { toast, node } = useToast();
-  const [row, setRow] = useState<{ brewed_on: string; recipe_id: string | null; notes: string } | null>(null);
+  const [row, setRow] = useState<{ brewed_on: string; recipe_id: string | null; notes: string; status: "planned" | "brewed"; plan: BrewPlan } | null>(null);
+  const [shelf, setShelf] = useState<ShelfItem[]>([]);
   const [ver, setVer] = useState<Version | null>(null);
   const [made, setMade] = useState(false);
   const [r, setR] = useState<Recipe | null>(null);
@@ -42,15 +44,17 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    createClient().from("dp_brews").select("brewed_on, recipe_id, version_id, notes, recipe_snapshot, measured, tasting").eq("id", id).maybeSingle().then(async ({ data }) => {
+    createClient().from("dp_ingredients").select("id, kind, name, data, in_stock").eq("owner_id", userId).then(({ data: inv }) => setShelf((inv || []) as ShelfItem[]));
+    createClient().from("dp_brews").select("brewed_on, recipe_id, version_id, notes, recipe_snapshot, measured, tasting, status, plan").eq("id", id).maybeSingle().then(async ({ data }) => {
       if (!data) return;
       if (data.version_id) { const { data: v } = await createClient().from("dp_recipe_versions").select("*").eq("id", data.version_id).maybeSingle(); setVer((v as Version) || null); }
       const rec = normalize(data.recipe_snapshot as Recipe);
-      setRow({ brewed_on: data.brewed_on as string, recipe_id: data.recipe_id as string | null, notes: (data.notes as string) || "" });
+      setRow({ brewed_on: data.brewed_on as string, recipe_id: data.recipe_id as string | null, notes: (data.notes as string) || "", status: (data.status as "planned" | "brewed") || "brewed", plan: (data.plan as BrewPlan) || {} });
       setR(rec);
       setM({ weather: rec.weather, boilMin: rec.equipment.boilMin, ...(data.measured as Measured) });
       setT((data.tasting as Tasting) || {});
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
   const c = useMemo(() => (r ? calcRecipe(r) : null), [r]);
   const [autoTouched, setAutoTouched] = useState(false);
@@ -100,13 +104,64 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
   const cmp = (label: string, planned: string, actual: string) => <tr><td>{label}</td><td className="dp-num dp-dim">{planned}</td><td className="dp-num" style={{ fontWeight: 700 }}>{actual || "-"}</td></tr>;
   return (
     <>
-      <h1 className="dp-h1">Brew log: {r.name}</h1>
+      <h1 className="dp-h1">{row.status === "planned" ? "Planned brew" : "Brew log"}: {r.name}{row.plan.label ? <span className="dp-dim"> · {row.plan.label}</span> : null}</h1>
       <div className="dp-row">
-        <F label="Brewed on"><input type="date" value={row.brewed_on} onChange={(ev) => { setRow({ ...row, brewed_on: ev.target.value }); setDirty(true); }} /></F>
+        <F label={row.status === "planned" ? "Brewing on" : "Brewed on"}><input type="date" value={row.brewed_on} onChange={(ev) => { setRow({ ...row, brewed_on: ev.target.value }); setDirty(true); }} /></F>
         {row.recipe_id && <Link className="dp-btn" href={`/draftpunk/r/${row.recipe_id}`}>Open recipe</Link>}
         <span className="dp-dim">{dirty ? "Unsaved..." : "Saved"}</span>
       </div>
-      {ver && (() => {
+      {row.status === "planned" && (() => {
+        // a planned brew (Nick, Nov 24 2026: "I'm gonna brew it Friday… so I gotta go to the store"): what it is, the
+        // shopping list against the shelf as it is now, and Brewing it today when the day comes
+        const shop = shoppingList(r, shelf), buy = shop.filter((l) => l.buy > 0), st = starterDay(r, row.brewed_on);
+        const today = new Date(); const td = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const brewNow = async () => { const { error } = await createClient().from("dp_brews").update({ status: "brewed", brewed_on: td }).eq("id", id); if (error) toast(error.message); else { setRow({ ...row, status: "brewed", brewed_on: td }); toast("Brew day: log it as you go"); } };
+        const send = async () => { const text = shoppingText(r.name, fmtDate(row.brewed_on), shop); try { if (navigator.share) { await navigator.share({ title: `${r.name} shopping list`, text }); return; } } catch { return; } try { await navigator.clipboard.writeText(text); toast("Shopping list copied"); } catch { toast(text); } };
+        return (
+          <Win title={`Planned for ${fmtDate(row.brewed_on)}`} note={[row.plan.label, row.plan.sizeLabel].filter(Boolean).join(" · ")}>
+            {!!row.plan.subs?.length && <p style={{ marginTop: 0 }}>This brew&apos;s swaps: {row.plan.subs.map(subText).join("; ")}</p>}
+            <table className="dp-tbl"><tbody>
+              {shop.map((l) => <tr key={l.kind + l.name}><td>{l.name}</td><td className="dp-num dp-dim">{l.want} {l.unit}</td><td className={`dp-num ${l.buy > 0 ? "dp-bi-buy" : "dp-grn"}`}>{l.buy > 0 ? (l.have > 0 ? `buy ${l.buy} ${l.unit}` : "buy") : "have it"}</td></tr>)}
+            </tbody></table>
+            {st && <p className="dp-note">Make a yeast starter {st <= td ? "today" : `by ${fmtDate(st)}`}.</p>}
+            <p className="dp-row" style={{ marginBottom: 0, gap: 8 }}>
+              <button className="dp-btn dp-go" onClick={brewNow}>Brewing it today</button>
+              <button className="dp-btn" onClick={send}>Send the shopping list{buy.length ? ` (${buy.length})` : ""}</button>
+            </p>
+          </Win>
+        );
+      })()}
+      {row.status === "brewed" && ver && !!row.plan.subs?.length && row.recipe_id && (() => {
+        // after tasting it (Nick, Nov 24 2026: "I liked it better with the substitute… we'll call that version two"):
+        // the swap becomes the next version, or stays a one-time change
+        const decide = async (kept: "version" | "once") => {
+          let keptNum: number | undefined;
+          if (kept === "version") {
+            const res = await saveVersion(row.recipe_id!, userId, r, `From ${row.plan.label || "the brew"} on ${fmtDate(row.brewed_on)}: ${(row.plan.subs || []).map(subText).join("; ")}`, id);
+            if (!res.version) { toast(res.error || "Not saved"); return; }
+            keptNum = res.version.num;
+          }
+          const plan = { ...row.plan, kept, keptNum };
+          const { error } = await createClient().from("dp_brews").update({ plan }).eq("id", id);
+          if (error) { toast(error.message); return; }
+          setRow({ ...row, plan }); toast(kept === "version" ? `Saved as v${keptNum}` : `The recipe stays v${ver.num}`);
+        };
+        return (
+          <Win title={`Brewed ${row.plan.label || `v${ver.num}`}`} note={ver.note}>
+            <p style={{ marginTop: 0 }}>Swapped for this brew: {row.plan.subs!.map(subText).join("; ")}</p>
+            {row.plan.kept === "version" ? <p className="dp-grn" style={{ marginBottom: 0 }}>Kept: it&apos;s v{row.plan.keptNum} of the recipe now.</p>
+              : row.plan.kept === "once" ? <p className="dp-dim" style={{ marginBottom: 0 }}>One time only: the recipe stays v{ver.num}. <button className="dp-btn" onClick={() => decide("version")}>Make it permanent after all</button></p>
+              : <>
+                <p style={{ fontWeight: 600 }}>Keep the swap?</p>
+                <p className="dp-row" style={{ marginBottom: 0, gap: 8 }}>
+                  <button className="dp-btn dp-go" onClick={() => decide("version")}>Make it permanent → next version</button>
+                  <button className="dp-btn" onClick={() => decide("once")}>One time only · stay on v{ver.num}</button>
+                </p>
+              </>}
+          </Win>
+        );
+      })()}
+      {row.status === "brewed" && ver && !row.plan.subs?.length && (() => {
         // what this brew did differently from the version it brewed (a substitution, a tweak to try)
         const tweaks = diffRecipes(normalize(ver.data), r);
         return (
@@ -127,6 +182,7 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
           </Win>
         );
       })()}
+      {row.status === "brewed" && <>
       <div className="dp-grid">
         <Win title="Measured">
           <div className="dp-row">
@@ -189,6 +245,7 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
           ))}
         </Win>
       </div>
+      </>}
       <p className="dp-dim"><Link href="/draftpunk/brews">&lt;&lt; ALL BREWS</Link> · Started from the recipe as it was on {fmtDate(row.brewed_on)}</p>
       {node}
     </>

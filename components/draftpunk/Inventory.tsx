@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { r1 } from "@/lib/draftpunk/calc";
 import { FERMENTABLES, HOPS, MISCS, YEASTS } from "@/lib/draftpunk/library";
 import type { Recipe } from "@/lib/draftpunk/types";
+import { shoppingList } from "@/lib/draftpunk/brewPlan";
 import { useToast } from "./Shell";
 import { F, Num, Picker, Win } from "./ui";
 import LibraryBrowser from "./LibraryBrowser";
@@ -60,17 +61,8 @@ export default function Inventory({ userId }: { userId: string }) {
 
   // the shopping list for the chosen recipe
   const recipe = recipes.find((x) => x.id === rid)?.data;
-  const need = useMemo(() => {
-    if (!recipe) return [];
-    const have = (kind: Item["kind"], name: string) => items.find((i) => i.kind === kind && i.name.toLowerCase() === name.toLowerCase())?.in_stock || 0;
-    const lines: { kind: Item["kind"]; name: string; want: number; have: number }[] = [];
-    const push = (kind: Item["kind"], name: string, want: number) => { const l = lines.find((x) => x.kind === kind && x.name === name); if (l) l.want += want; else lines.push({ kind, name, want, have: have(kind, name) }); };
-    recipe.ferms.forEach((f) => push("fermentable", f.name, f.lb));
-    recipe.hops.forEach((h) => push("hop", h.name, h.oz));
-    recipe.yeasts.forEach((y) => push("yeast", y.name, y.packs));
-    recipe.miscs.forEach((m) => push("misc", m.name, m.amount));
-    return lines;
-  }, [recipe, items]);
+  // the one shopping list (lib/draftpunk/brewPlan.ts), the same as the Brew it planner's
+  const need = useMemo(() => (recipe ? shoppingList(recipe, items) : []), [recipe, items]);
   const useUp = async () => {
     const sb = createClient();
     for (const l of need) {

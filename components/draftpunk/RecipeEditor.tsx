@@ -17,13 +17,15 @@ import BrewDay from "./BrewDay";
 import Assistant from "./Assistant";
 import Versions, { type Status } from "./Versions";
 import BringIn from "./BringIn";
+import Overview, { type PlannedBrew } from "./Overview";
+import BrewIt from "./BrewIt";
 import { applyProposal, type Proposal } from "@/lib/draftpunk/proposal";
 import { saveVersion, versionsOf } from "@/lib/draftpunk/recipeStore";
 import { diffRecipes } from "@/lib/draftpunk/versions";
 import { bitternessAdvice, gravityAdvice, styleTarget, type Point } from "@/lib/draftpunk/targets";
 import { entryScore, type Sheet } from "@/lib/draftpunk/judging";
 
-const TABS = ["Ingredients", "Mash", "Water", "Fermentation", "Brew day", "Versions", "Notes"] as const;
+const TABS = ["Overview", "Ingredients", "Mash", "Water", "Fermentation", "Brew day", "Versions", "Notes"] as const;
 type Tab = (typeof TABS)[number];
 const TYPES: [RecipeType, string][] = [["all_grain", "All Grain"], ["biab", "Biab"], ["partial_mash", "Partial Mash"], ["extract", "Extract"], ["mead", "Mead"], ["cider", "Cider"], ["wine", "Wine"]];
 
@@ -43,7 +45,10 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
   const [visibility, setVisibility] = useState<"private" | "club">("private");
   const [equip, setEquip] = useState<{ id: string | null; e: Equipment }[]>(DEFAULT_EQUIPMENT.map((e) => ({ id: null, e })));
   const [mine, setMine] = useState<MineItem[]>([]);
-  const [tab, setTab] = useState<Tab>("Ingredients");
+  const [tab, setTab] = useState<Tab>("Overview");
+  // Brew it (the planner) and this recipe's planned brews
+  const [brewAt, setBrewAt] = useState<number | null>(null);
+  const [planned, setPlanned] = useState<PlannedBrew[]>([]);
   const [dirty, setDirty] = useState(false);
   const [scaleTo, setScaleTo] = useState("");
   const [scaleOpen, setScaleOpen] = useState(false);
@@ -89,6 +94,8 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
       setStatus((data.status as Status) || "developing");
       setGoal((data.goal as "house" | "competition") || "house");
       setR(normalize({ ...(data.data as Recipe), name: data.name as string, styleId: (data.style_id as string) || (data.data as Recipe)?.styleId }));
+      const { data: pl } = await sb.from("dp_brews").select("id, brewed_on, plan").eq("recipe_id", id).eq("status", "planned").order("brewed_on");
+      setPlanned((pl || []) as PlannedBrew[]);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -146,27 +153,8 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
     const { data } = await createClient().from("dp_recipes").insert({ owner_id: userId, name: `${r.name} (copy)`, style_id: r.styleId || null, data: { ...r, name: `${r.name} (copy)`, brewer: brewerName }, calc: calcSummary(calcRecipe(r)), copied_from: id }).select("id").single();
     if (data) router.push(`/draftpunk/r/${data.id}`);
   };
-  // A brew says which version it brewed. The working copy's changes since that version are this brew's own (an
-  // ingredient that wasn't in stock, a tweak to try): they go with the brew, and the recipe goes back to the version;
-  // the brew log can make them the next version.
-  const startBrew = async () => {
-    if (!r || !c) return;
-    await save();
-    let versionId: string | null = null, tweaks = 0;
-    if (owner) {
-      let vs = await versionsOf(id);
-      if (!vs.length) { const made = await saveVersion(id, userId, r, "First version"); if (made.version) vs = [made.version]; }
-      // the version for the system it's brewed on (each brew system keeps its own), else the newest
-      const sameSys = vs.filter((v) => v.data.equipment?.name === r.equipment.name && Math.abs((v.data.equipment?.batchGal || 0) - r.equipment.batchGal) < 0.05);
-      const last = sameSys[sameSys.length - 1] || vs[vs.length - 1];
-      versionId = last?.id || null;
-      tweaks = last ? diffRecipes(last.data, r).length : 0;
-      if (tweaks && last) { const back = normalize(last.data); setR(back); await save(back); }
-    }
-    const { data, error } = await createClient().from("dp_brews").insert({ owner_id: userId, recipe_id: owner ? id : null, version_id: versionId, recipe_snapshot: r, measured: {}, notes: "" }).select("id").single();
-    if (data) { if (tweaks) toast(`Brewing with ${tweaks} change${tweaks === 1 ? "" : "s"} for this brew only`); router.push(`/draftpunk/brews/${data.id}`); }
-    else toast(error?.message || "Couldn't start the log");
-  };
+  // every way to start a brew opens the Brew it planner (components/draftpunk/BrewIt.tsx)
+  const startBrew = (gal?: number) => { if (!r) return; save(); setTab("Overview"); setBrewAt(gal ?? r.equipment.batchGal); };
   const setMeta = async (patch: { status?: Status; goal?: "house" | "competition" }) => {
     if (patch.status) setStatus(patch.status);
     if (patch.goal) setGoal(patch.goal);
@@ -207,7 +195,7 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
         )}
         <button className="dp-tool" onClick={() => setTab("Brew day")}><Icon name="brewday" />Brew day</button>
         <button className={`dp-tool${asstOpen ? " on" : ""}`} onClick={() => setAsstOpen((v) => !v)}><Icon name="spark" />Assistant</button>
-        <button className="dp-tool" onClick={startBrew}><Icon name="brews" />Start log</button>
+        {owner && !archive && <button className={`dp-tool dp-tool-go${brewAt != null ? " on" : ""}`} onClick={() => startBrew()}><Icon name="brews" />Brew it</button>}
         {!ro && <button className="dp-tool" onClick={() => setScaleOpen((v) => !v)}><Icon name="scale" />Scale</button>}
         <span className="dp-sep" />
         <button className="dp-tool" onClick={() => window.print()}><Icon name="print" />Print</button>
@@ -293,12 +281,14 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
           <div className="dp-tabs" role="tablist">
             {TABS.filter((t) => !(archive && t === "Versions")).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}
           </div>
-          <fieldset disabled={ro && tab !== "Brew day"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+          <fieldset disabled={ro && tab !== "Brew day" && tab !== "Overview"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {tab === "Overview" && brewAt != null && owner && <BrewIt recipeId={id} userId={userId} r={r} equip={equip} shelf={mine} gal0={brewAt} onClose={() => setBrewAt(null)} />}
+            {tab === "Overview" && <Overview r={r} equip={equip} planned={planned} canBrew={owner && !archive && brewAt == null} onBrew={(g) => startBrew(g)} />}
             {tab === "Ingredients" && <DesignTab r={r} c={c} set={set} mine={mine} />}
             {tab === "Mash" && <MashTab r={r} c={c} set={set} />}
             {tab === "Water" && <WaterTab r={r} c={c} set={set} />}
             {tab === "Fermentation" && <FermentTab r={r} c={c} set={set} />}
-            {tab === "Brew day" && <BrewDay r={r} storeKey={id} set={ro ? undefined : set} mine={mine} onStartLog={startBrew} onWeather={(w) => set((x) => ({ ...x, weather: w }))} />}
+            {tab === "Brew day" && <BrewDay r={r} storeKey={id} set={ro ? undefined : set} mine={mine} onStartLog={() => startBrew()} onWeather={(w) => set((x) => ({ ...x, weather: w }))} />}
             {tab === "Versions" && <Versions recipeId={id} userId={userId} r={r} owner={owner} status={status} goal={goal} refreshKey={verKey} onStatus={(s) => setMeta({ status: s })} onGoal={(g) => setMeta({ goal: g })} onRestore={restore} onApply={applyP} />}
             {tab === "Notes" && <NotesTab r={r} set={set} visibility={visibility} onVisibility={(v) => { setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private")); }} onExport={exportXml} />}
           </fieldset>
