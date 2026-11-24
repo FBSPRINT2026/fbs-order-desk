@@ -384,3 +384,8 @@
 .dp-app .dp-award-mark, .dp-app .dp-trophy img { background: #fff; border-radius: 50%; padding: 2px; }
 /* beside the name the award's artwork is drawn in the club's teal, like the emblem it replaces (its picture is the shape) */
 .dp-app .dp-brand-award { display: block; width: 38px; height: 38px; flex: none; background: var(--dp-acc); -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; }
+
+/* a sortable column heading in a list */
+.dp-app .dp-sortbtn { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.dp-app .dp-sortbtn:hover { color: var(--dp-acc); }
+.dp-app .dp-ver-eq { display: block; color: var(--dp-mute); font-size: 12px; margin-top: 2px; }

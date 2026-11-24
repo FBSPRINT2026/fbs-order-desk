@@ -359,7 +359,9 @@ export function calcRecipe(r: Recipe): Calc {
   const mashAdj = r.type === "extract" ? 0 : clamp((mashF - 152) * 0.006, -0.05, 0.08);
   const effAtt = clamp(att - mashAdj, 0.3, 1);
   // malt sugar by the yeast's attenuation, simple sugars all the way, lactose not at all
-  const fg = r.yeasts.length ? 1 + (ogPts * (1 - simpleShare - unfermShare) * (1 - effAtt) + ogPts * unfermShare) / 1000 : og;
+  // no yeast picked yet: a typical ale yeast (75%), as BeerSmith does, so FG and ABV still mean something
+  const fg = 1 + (ogPts * (1 - simpleShare - unfermShare) * (1 - effAtt) + ogPts * unfermShare) / 1000;
+  if (!r.yeasts.length && ogPts > 0) notes.push("No yeast picked: FG and ABV assume a typical yeast (75% attenuation).");
 
   const srm = moreySrm(mcu);
   const mw = mashWater(r, v.preBoil);

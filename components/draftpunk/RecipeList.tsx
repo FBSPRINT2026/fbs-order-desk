@@ -6,21 +6,36 @@ import { createClient } from "@/lib/supabase/client";
 import { styleById } from "@/lib/draftpunk/styles";
 import { fmtDate } from "@/lib/draftpunk/defaults";
 
-type Row = { id: string; name: string; style_id: string | null; visibility: string; status?: string; versions?: number; calc: { og?: number; fg?: number; abv?: number; ibu?: number; srm?: number; color?: string }; updated_at: string; data: { type?: string; equipment?: { batchGal?: number } } };
+type Row = { id: string; name: string; style_id: string | null; visibility: string; status?: string; versions?: number; brewed?: string; calc: { og?: number; fg?: number; abv?: number; ibu?: number; srm?: number; color?: string }; updated_at: string; data: { type?: string; equipment?: { batchGal?: number } } };
 
-/** the brewer's recipes: search, open, copy, share with the club */
+type SortBy = "name" | "style" | "og" | "ibu" | "abv" | "srm" | "brewed";
+
+/** the brewer's recipes: search, sort, open, copy, share with the club */
 export default function RecipeList({ userId }: { userId: string }) {
   const router = useRouter();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [q, setQ] = useState("");
   const load = async () => {
-    const { data } = await createClient().from("dp_recipes").select("id, name, style_id, visibility, status, calc, updated_at, data->type, data->equipment, dp_recipe_versions(count)").eq("owner_id", userId).order("updated_at", { ascending: false });
-    setRows(((data || []) as unknown as (Row & { type?: string; equipment?: { batchGal?: number }; dp_recipe_versions?: { count: number }[] })[]).map((r) => ({ ...r, versions: r.dp_recipe_versions?.[0]?.count || 0, data: { type: r.type, equipment: r.equipment } })));
+    const { data } = await createClient().from("dp_recipes").select("id, name, style_id, visibility, status, calc, updated_at, data->type, data->equipment, dp_recipe_versions(made_on), dp_brews(brewed_on)").eq("owner_id", userId).order("updated_at", { ascending: false });
+    // when it was last brewed: its newest brew log, else its newest version's date (BeerSmith's brew date)
+    setRows(((data || []) as unknown as (Row & { type?: string; equipment?: { batchGal?: number }; dp_recipe_versions?: { made_on: string }[]; dp_brews?: { brewed_on: string }[] })[]).map((r) => {
+      const dates = [...(r.dp_recipe_versions || []).map((v) => v.made_on), ...(r.dp_brews || []).map((b) => b.brewed_on)].filter(Boolean).sort();
+      return { ...r, versions: r.dp_recipe_versions?.length || 0, brewed: dates[dates.length - 1], data: { type: r.type, equipment: r.equipment } };
+    }));
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   // where each recipe is: the ones being worked on and dialed in show; retired ones wait under their own tab
   const [st, setSt] = useState<"active" | "dialed" | "retired" | "all">("active");
-  const shown = useMemo(() => (rows || []).filter((r) => (st === "all" || (st === "active" ? r.status !== "retired" : r.status === st)) && (!q || `${r.name} ${styleById(r.style_id || "")?.name || ""}`.toLowerCase().includes(q.toLowerCase()))), [rows, q, st]);
+  // sorted by any column; newest brew first to start, remembered on this device
+  const [sort, setSort] = useState<{ by: SortBy; desc: boolean }>({ by: "brewed", desc: true });
+  useEffect(() => { try { const s = JSON.parse(localStorage.getItem("dp:recipes-sort") || "null"); if (s?.by) setSort(s); } catch { /* fine */ } }, []);
+  const sortBy = (by: SortBy) => setSort((s) => { const n = { by, desc: s.by === by ? !s.desc : by === "brewed" || by === "og" || by === "ibu" || by === "abv" || by === "srm" }; try { localStorage.setItem("dp:recipes-sort", JSON.stringify(n)); } catch { /* fine */ } return n; });
+  const shown = useMemo(() => {
+    const list = (rows || []).filter((r) => (st === "all" || (st === "active" ? r.status !== "retired" : r.status === st)) && (!q || `${r.name} ${styleById(r.style_id || "")?.name || ""}`.toLowerCase().includes(q.toLowerCase())));
+    const val = (r: Row): string | number => sort.by === "name" ? r.name.toLowerCase() : sort.by === "style" ? (styleById(r.style_id || "")?.name || "~").toLowerCase() : sort.by === "brewed" ? r.brewed || "" : Number(r.calc?.[sort.by]) || 0;
+    return [...list].sort((a, b) => { const x = val(a), y = val(b); const c = x < y ? -1 : x > y ? 1 : 0; return sort.desc ? -c : c; });
+  }, [rows, q, st, sort]);
+  const th = (by: SortBy, label: string, num = false) => <th className={num ? "dp-num" : undefined} aria-sort={sort.by === by ? (sort.desc ? "descending" : "ascending") : "none"}><button type="button" className="dp-sortbtn" onClick={() => sortBy(by)}>{label}{sort.by === by ? (sort.desc ? " ↓" : " ↑") : ""}</button></th>;
   const sub = (r: Row) => [styleById(r.style_id || "")?.name || "No style", r.versions ? `v${r.versions}` : "", r.status === "dialed" ? "Dialed in" : r.status === "retired" ? "Retired" : "", r.visibility === "club" ? "shared" : ""].filter(Boolean).join(" · ");
   const copy = async (id: string) => {
     const sb = createClient();
@@ -75,7 +90,7 @@ export default function RecipeList({ userId }: { userId: string }) {
                 </div>
               </div>
               <div className="dp-rfoot" onClick={(e) => e.stopPropagation()}>
-                <span className="dp-dim">{fmtDate(r.updated_at)}</span>
+                <span className="dp-dim">{r.brewed ? `Brewed ${fmtDate(r.brewed)}` : ""}</span>
                 <span><button className="dp-btn dp-sm dp-x" onClick={() => copy(r.id)}>Copy</button><button className="dp-btn dp-sm dp-x" onClick={() => remove(r)}>Delete</button></span>
               </div>
             </article>
@@ -84,7 +99,7 @@ export default function RecipeList({ userId }: { userId: string }) {
       ) : (
         <div className="dp-card">
           <table className="dp-tbl" data-nofit>
-            <thead><tr><th>Name</th><th>Style</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">ABV</th><th className="dp-num">SRM</th><th>Saved</th><th /></tr></thead>
+            <thead><tr>{th("name", "Name")}{th("style", "Style")}{th("og", "OG", true)}{th("ibu", "IBU", true)}{th("abv", "ABV", true)}{th("srm", "SRM", true)}{th("brewed", "Brewed")}<th /></tr></thead>
             <tbody>
               {shown.map((r) => (
                 <tr key={r.id} className="dp-pick" onClick={() => router.push(`/draftpunk/r/${r.id}`)}>
@@ -94,7 +109,7 @@ export default function RecipeList({ userId }: { userId: string }) {
                   <td className="dp-num">{r.calc?.ibu ?? "–"}</td>
                   <td className="dp-num">{r.calc?.abv != null ? `${r.calc.abv}%` : "–"}</td>
                   <td className="dp-num">{r.calc?.srm ?? "–"}<span className="dp-swatch" style={{ background: r.calc?.color || "transparent" }} /></td>
-                  <td>{fmtDate(r.updated_at)}</td>
+                  <td>{r.brewed ? fmtDate(r.brewed) : <span className="dp-dim">–</span>}</td>
                   <td className="dp-num" onClick={(e) => e.stopPropagation()}><button className="dp-btn dp-sm dp-x" onClick={() => copy(r.id)}>Copy</button><button className="dp-btn dp-sm dp-x" onClick={() => remove(r)}>Delete</button></td>
                 </tr>
               ))}

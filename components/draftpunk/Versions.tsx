@@ -8,7 +8,7 @@ import { entryScore, MEDAL_LABEL, type Sheet } from "@/lib/draftpunk/judging";
 import type { Proposal } from "@/lib/draftpunk/proposal";
 import { saveVersion, versionsOf, type Version } from "@/lib/draftpunk/recipeStore";
 import type { Recipe } from "@/lib/draftpunk/types";
-import { autoNote, diffRecipes } from "@/lib/draftpunk/versions";
+import { autoNote, diffRecipes, recipeChanges } from "@/lib/draftpunk/versions";
 import Assistant from "./Assistant";
 import { Win } from "./ui";
 
@@ -119,12 +119,15 @@ export default function Versions({ recipeId, userId, r, owner, status, goal, onS
           const prev = arr[i + 1];
           const vb = brews.filter((b) => b.version_id === v.id), ve = ents.filter((e) => e.version_id === v.id);
           const d = prev ? diffRecipes(prev.data, v.data) : [];
+          // a note the app wrote from the changes (not typed) is written again with today's comparison
+          const note = prev && /→|^(Added|Took out|Scaled to|Batch )/.test(v.note) ? autoNote(d) : v.note;
+          const real = recipeChanges(d).length;
           return (
             <div key={v.id} className="dp-ver">
               <div className="dp-ver-h">
-                <b>v{v.num}</b><span>{v.note}</span><span className="dp-dim">{fmtDate(v.made_on)}</span>
+                <b>v{v.num}</b><span>{note}<small className="dp-ver-eq">{r1(v.data.equipment?.batchGal || 0, 2)} gal · {v.data.equipment?.name}</small></span><span className="dp-dim">{fmtDate(v.made_on)}</span>
                 {owner && <button className="dp-linkbtn" onClick={() => onRestore(v.data, v.num)}>{v.num === last?.num ? "Reset working copy to this" : "Go back to this"}</button>}
-                {d.length > 0 && <button className="dp-linkbtn" onClick={() => setOpen(open === v.id ? null : v.id)}>{open === v.id ? "Hide" : `${d.length} change${d.length === 1 ? "" : "s"}`}</button>}
+                {d.length > 0 && <button className="dp-linkbtn" onClick={() => setOpen(open === v.id ? null : v.id)}>{open === v.id ? "Hide" : real ? `${real} change${real === 1 ? "" : "s"}` : "Scaled only"}</button>}
               </div>
               {open === v.id && <ul className="dp-list">{d.map((l) => <li key={l}>{l}</li>)}</ul>}
               {(vb.length > 0 || ve.length > 0) && (
