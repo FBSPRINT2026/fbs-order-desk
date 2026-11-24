@@ -31,41 +31,72 @@ export default function RecipeList({ userId }: { userId: string }) {
     await createClient().from("dp_recipes").delete().eq("id", r.id);
     load();
   };
+  const [view, setView] = useState<"cards" | "list">("cards");
+  useEffect(() => { try { const v = localStorage.getItem("dp:recipes-view"); if (v === "list" || v === "cards") setView(v); } catch { /* fine */ } }, []);
+  const pickView = (v: "cards" | "list") => { setView(v); try { localStorage.setItem("dp:recipes-view", v); } catch { /* fine */ } };
   return (
     <>
-      <h1 className="dp-h1">My recipes</h1>
-      <div className="dp-row">
-        <label className="dp-f" style={{ flex: "1 1 260px" }}><span>Search</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name or style" /></label>
-        <Link href="/draftpunk/r/new" className="dp-btn dp-go">New recipe</Link>
-        <Link href="/draftpunk/import" className="dp-btn">Import</Link>
+      <div className="dp-row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <h1 className="dp-h1" style={{ margin: 0 }}>Recipes</h1>
+        <div className="dp-row" style={{ alignItems: "center" }}>
+          <Link href="/draftpunk/import" className="dp-btn">Import</Link>
+          <Link href="/draftpunk/r/new" className="dp-btn dp-go">+ New recipe</Link>
+        </div>
       </div>
-      <div className="dp-card">
-        <h2 className="dp-card-t">My recipes{rows && <small>{rows.length}</small>}</h2>
-        {!rows ? <p>Loading...</p> : !rows.length ? (
-          <p>No recipes yet. Press <b>F3</b> To start one, or <Link href="/draftpunk/import">Import from BeerSmith</Link>.</p>
-        ) : (
+      <div className="dp-row" style={{ alignItems: "center", marginBottom: 16 }}>
+        <input style={{ flex: "1 1 260px", maxWidth: 420 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or style" aria-label="Search recipes" />
+        <span className="dp-seg"><button className={view === "cards" ? "on" : ""} onClick={() => pickView("cards")}>Cards</button><button className={view === "list" ? "on" : ""} onClick={() => pickView("list")}>List</button></span>
+        {rows && <span className="dp-dim" style={{ fontSize: 13 }}>{shown.length} of {rows.length}</span>}
+      </div>
+      {!rows ? <p className="dp-dim">Loading…</p> : !rows.length ? (
+        <section className="dp-card dp-empty">
+          <h2 className="dp-card-t">No recipes yet</h2>
+          <p className="dp-dim">Start one from scratch, or bring your BeerSmith recipes over.</p>
+          <div className="dp-row"><Link href="/draftpunk/r/new" className="dp-btn dp-go">+ New recipe</Link><Link href="/draftpunk/import" className="dp-btn">Import from BeerSmith</Link></div>
+        </section>
+      ) : view === "cards" ? (
+        <div className="dp-cards">
+          {shown.map((r) => (
+            <article key={r.id} className="dp-card dp-rcard" style={{ ["--dp-beer" as string]: r.calc?.color || "#e58500" }} onClick={() => router.push(`/draftpunk/r/${r.id}`)}>
+              <div className="dp-glass dp-glass-sm" aria-hidden="true"><i /></div>
+              <div style={{ minWidth: 0 }}>
+                <h3>{r.name}</h3>
+                <div className="dp-dim" style={{ fontSize: 13 }}>{styleById(r.style_id || "")?.name || "No style"}{r.visibility === "club" ? " · shared" : ""}</div>
+                <div className="dp-rnums">
+                  <span><b>{r.calc?.og?.toFixed(3) || "–"}</b>OG</span>
+                  <span><b>{r.calc?.ibu ?? "–"}</b>IBU</span>
+                  <span><b>{r.calc?.abv != null ? `${r.calc.abv}%` : "–"}</b>ABV</span>
+                  <span><b>{r.calc?.srm ?? "–"}</b>SRM</span>
+                </div>
+              </div>
+              <div className="dp-rfoot" onClick={(e) => e.stopPropagation()}>
+                <span className="dp-dim">{fmtDate(r.updated_at)}</span>
+                <span><button className="dp-btn dp-sm dp-x" onClick={() => copy(r.id)}>Copy</button><button className="dp-btn dp-sm dp-x" onClick={() => remove(r)}>Delete</button></span>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="dp-card">
           <table className="dp-tbl" data-nofit>
             <thead><tr><th>Name</th><th>Style</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">ABV</th><th className="dp-num">SRM</th><th>Saved</th><th /></tr></thead>
             <tbody>
               {shown.map((r) => (
                 <tr key={r.id} className="dp-pick" onClick={() => router.push(`/draftpunk/r/${r.id}`)}>
-                  <td>{r.name}{r.visibility === "club" && <span className="dp-dim"> [Club]</span>}</td>
-                  <td>{styleById(r.style_id || "")?.name || <span className="dp-dim">-</span>}</td>
-                  <td className="dp-num">{r.calc?.og?.toFixed(3) || "-"}</td>
-                  <td className="dp-num">{r.calc?.ibu ?? "-"}</td>
-                  <td className="dp-num">{r.calc?.abv != null ? `${r.calc.abv}%` : "-"}</td>
-                  <td className="dp-num">{r.calc?.srm ?? "-"}<span className="dp-swatch" style={{ background: r.calc?.color || "transparent" }} /></td>
+                  <td><b>{r.name}</b>{r.visibility === "club" && <span className="dp-dim"> · shared</span>}</td>
+                  <td>{styleById(r.style_id || "")?.name || <span className="dp-dim">–</span>}</td>
+                  <td className="dp-num">{r.calc?.og?.toFixed(3) || "–"}</td>
+                  <td className="dp-num">{r.calc?.ibu ?? "–"}</td>
+                  <td className="dp-num">{r.calc?.abv != null ? `${r.calc.abv}%` : "–"}</td>
+                  <td className="dp-num">{r.calc?.srm ?? "–"}<span className="dp-swatch" style={{ background: r.calc?.color || "transparent" }} /></td>
                   <td>{fmtDate(r.updated_at)}</td>
-                  <td className="dp-num" onClick={(e) => e.stopPropagation()}>
-                    <button className="dp-btn dp-sm" onClick={() => copy(r.id)}>Copy</button>{" "}
-                    <button className="dp-btn dp-sm dp-x" title="Delete" onClick={() => remove(r)}>Del</button>
-                  </td>
+                  <td className="dp-num" onClick={(e) => e.stopPropagation()}><button className="dp-btn dp-sm dp-x" onClick={() => copy(r.id)}>Copy</button><button className="dp-btn dp-sm dp-x" onClick={() => remove(r)}>Delete</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 }

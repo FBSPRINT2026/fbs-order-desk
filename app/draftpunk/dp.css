@@ -226,6 +226,23 @@
 .dp-bd-list li.cur { background: color-mix(in srgb, var(--dp-beer) 10%, transparent); border-radius: 10px; }
 .dp-bd-list li { padding-left: 6px; padding-right: 6px; }
 
+/* the recipe cards: each glowing in its own beer color */
+.dp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.dp-rcard { position: relative; overflow: hidden; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 16px; margin: 0; cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.dp-rcard::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--dp-beer); }
+.dp-rcard:hover { transform: translateY(-2px); box-shadow: 0 10px 30px color-mix(in srgb, var(--dp-beer) 18%, transparent); }
+.dp-rcard h3 { font: 700 18px/1.2 var(--dp-head); letter-spacing: -.02em; margin: 0 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-glass-sm { width: 44px; height: 62px; }
+.dp-glass-sm > i::before { top: -8px; height: 11px; }
+.dp-rnums { display: flex; gap: 14px; margin-top: 10px; }
+.dp-rnums span { display: flex; flex-direction: column; font-size: 11px; color: var(--dp-mute); font-weight: 600; }
+.dp-rnums b { font: 700 17px/1.1 var(--dp-head); color: var(--dp-text); }
+.dp-rfoot { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--dp-line); font-size: 13px; }
+.dp-empty { text-align: left; padding: 28px; }
+.dp-app a.dp-bcard { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; margin: 0; color: var(--dp-text); }
+.dp-app a.dp-bcard:hover { text-decoration: none; border-color: var(--dp-acc); }
+.dp-bcard h3 { font: 700 18px/1.2 var(--dp-head); letter-spacing: -.02em; margin: 0 0 2px; }
+
 /* the phone's More page */
 .dp-app a.dp-more { display: flex; align-items: center; gap: 14px; color: var(--dp-text); padding: 16px 18px; margin-bottom: 10px; }
 .dp-app a.dp-more:hover { text-decoration: none; border-color: var(--dp-acc); }
