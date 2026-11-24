@@ -21,7 +21,7 @@ import Overview, { type PlannedBrew } from "./Overview";
 import BrewIt from "./BrewIt";
 import { applyProposal, type Proposal } from "@/lib/draftpunk/proposal";
 import { saveVersion, versionsOf } from "@/lib/draftpunk/recipeStore";
-import { diffRecipes } from "@/lib/draftpunk/versions";
+import { diffRecipes, recipeChanges } from "@/lib/draftpunk/versions";
 import { bitternessAdvice, gravityAdvice, styleTarget, type Point } from "@/lib/draftpunk/targets";
 import { entryScore, type Sheet } from "@/lib/draftpunk/judging";
 
@@ -48,6 +48,15 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
   const [tab, setTab] = useState<Tab>("Overview");
   // Brew it (the planner) and this recipe's planned brews
   const [brewAt, setBrewAt] = useState<number | null>(null);
+  const [brewWhen, setBrewWhen] = useState<string | undefined>(undefined);
+  // a recipe is locked once it has a version (Nick, Nov 24 2026: "you enter the ingredients and then you lock it… make
+  // it as is or make changes… we're gonna save this as version two, and here's the changes"): Make changes opens it,
+  // and saving the changes makes the next version
+  const [lastVer, setLastVer] = useState<{ id: string; num: number; data: Recipe } | null | undefined>(undefined);
+  const [editMode, setEditMode] = useState(false);
+  const [verNote, setVerNote] = useState("");
+  // Brew it's "Make changes first": the plan waits until the new version is saved
+  const [planAfter, setPlanAfter] = useState<{ when: string; gal: number } | null>(null);
   const [planned, setPlanned] = useState<PlannedBrew[]>([]);
   const [dirty, setDirty] = useState(false);
   const [scaleTo, setScaleTo] = useState("");
@@ -96,6 +105,12 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
       setR(normalize({ ...(data.data as Recipe), name: data.name as string, styleId: (data.style_id as string) || (data.data as Recipe)?.styleId }));
       const { data: pl } = await sb.from("dp_brews").select("id, brewed_on, plan").eq("recipe_id", id).eq("status", "planned").order("brewed_on");
       setPlanned((pl || []) as PlannedBrew[]);
+      if (data.owner_id === userId) {
+        const vs = await versionsOf(id), lv = vs[vs.length - 1];
+        setLastVer(lv ? { id: lv.id, num: lv.num, data: normalize(lv.data) } : null);
+        // a new recipe opens on its ingredients
+        if (!lv) setTab("Ingredients");
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -161,7 +176,7 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
     const { error } = await createClient().from("dp_recipes").update(patch).eq("id", id);
     if (error) toast(error.message);
   };
-  const applyP = (p: Proposal) => { set((x) => applyProposal(x, p)); setAsstOpen(false); setTab("Versions"); toast("On the working copy: see the changes under Versions"); };
+  const applyP = (p: Proposal) => { setEditMode(true); set((x) => applyProposal(x, p)); setAsstOpen(false); setTab("Versions"); toast("On the working copy: see the changes under Versions"); };
   const restore = (data: Recipe, num: number) => { const back = normalize(data); setR(back); setDirty(true); toast(`Working copy is v${num} again`); };
   const exportXml = () => {
     if (!r) return;
@@ -170,8 +185,24 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
     a.href = URL.createObjectURL(blob); a.download = `${(r.name || "recipe").replace(/[^\w -]+/g, "")}.xml`; a.click();
   };
 
+  // what's changed since the last version, the same beer at another size not counted (size is picked when it's viewed
+  // or brewed): the version at this size against the working copy
+  const pending = r && lastVer ? recipeChanges(diffRecipes(lastVer.data.equipment.name === r.equipment.name && Math.abs(lastVer.data.equipment.batchGal - r.equipment.batchGal) < 0.05 ? lastVer.data : scaleRecipe(lastVer.data, r.equipment), r)) : [];
+  const editing = owner && !archive && lastVer !== undefined && (lastVer === null || editMode || pending.length > 0);
+  const locked = owner && !archive && !!lastVer && !editing;
+  const lockIn = async () => {
+    if (!r) return;
+    await save();
+    const res = await saveVersion(id, userId, r, verNote.trim() || (lastVer ? "" : "First version"));
+    if (!res.version) { toast(res.error || "Not saved"); return; }
+    setLastVer({ id: res.version.id, num: res.version.num, data: normalize(res.version.data) });
+    setEditMode(false); setVerNote(""); setVerKey((k) => k + 1); setTab("Overview");
+    toast(lastVer ? `Saved as v${res.version.num}` : `Locked in as v${res.version.num}`);
+    if (planAfter) { setBrewWhen(planAfter.when); setBrewAt(planAfter.gal); setPlanAfter(null); }
+  };
+  const discard = () => { if (!lastVer) return; setR(lastVer.data); setDirty(true); setEditMode(false); setPlanAfter(null); toast(`Back to v${lastVer.num}`); };
   if (!r || !c) return <p className="dp-dim">Loading recipe…{toastNode}</p>;
-  const ro = !owner;
+  const ro = !owner || locked;
   // one line of the style guide panel: the number, where it sits in the style's range, and the range
   const kpi = (k: string, v: string, n: number, range?: [number, number], min = 0, max = 1, fmt = (x: number) => String(x)) => (
     <div className="dp-kpi">
@@ -188,21 +219,22 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
       <div className="dp-toolbar dp-noprint" role="toolbar" aria-label="Recipe">
         {archive ? (
           <button className={`dp-tool dp-tool-go${bringOpen ? " on" : ""}`} onClick={() => setBringOpen((v) => !v)}><Icon name="import" />Bring into DraftPunk</button>
-        ) : ro ? (
+        ) : !owner ? (
           <button className="dp-tool dp-tool-go" onClick={copyToMine}><Icon name="copy" />Copy to mine</button>
         ) : (
           <button className="dp-tool" onClick={() => save().then(() => toast("Saved"))}><Icon name="save" />Save</button>
         )}
         <button className="dp-tool" onClick={() => setTab("Brew day")}><Icon name="brewday" />Brew day</button>
         <button className={`dp-tool${asstOpen ? " on" : ""}`} onClick={() => setAsstOpen((v) => !v)}><Icon name="spark" />Assistant</button>
-        {owner && !archive && <button className={`dp-tool dp-tool-go${brewAt != null ? " on" : ""}`} onClick={() => startBrew()}><Icon name="brews" />Brew it</button>}
+        {owner && !archive && <button className={`dp-tool dp-tool-go${brewAt != null ? " on" : ""}`} disabled={editing} title={editing ? "Save the changes as a version first" : undefined} onClick={() => startBrew()}><Icon name="brews" />Brew it</button>}
+        {locked && <button className="dp-tool" onClick={() => { setEditMode(true); setTab("Ingredients"); }}><Icon name="scale" />Make changes</button>}
         {!ro && <button className="dp-tool" onClick={() => setScaleOpen((v) => !v)}><Icon name="scale" />Scale</button>}
         <span className="dp-sep" />
         <button className="dp-tool" onClick={() => window.print()}><Icon name="print" />Print</button>
         <button className="dp-tool" onClick={exportXml}><Icon name="export" />BeerXML</button>
-        {!ro && <button className="dp-tool" onClick={copyToMine}><Icon name="copy" />Duplicate</button>}
-        {!ro && <button className="dp-tool" onClick={() => { const v = visibility === "club" ? "private" : "club"; setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private again")); }}><Icon name="share" />{visibility === "club" ? "Shared" : "Share"}</button>}
-        <span className="dp-status">{archive ? `From BeerSmith · ${arch?.folder || ""}${arch?.brought_to ? " · in DraftPunk" : ""}` : ro ? "Club recipe · read only" : dirty ? "Saving…" : "All changes saved"}</span>
+        {owner && <button className="dp-tool" onClick={copyToMine}><Icon name="copy" />Duplicate</button>}
+        {owner && <button className="dp-tool" onClick={() => { const v = visibility === "club" ? "private" : "club"; setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private again")); }}><Icon name="share" />{visibility === "club" ? "Shared" : "Share"}</button>}
+        <span className="dp-status">{archive ? `From BeerSmith · ${arch?.folder || ""}${arch?.brought_to ? " · in DraftPunk" : ""}` : locked ? `v${lastVer!.num} · locked` : !owner ? "Club recipe · read only" : dirty ? "Saving…" : "All changes saved"}</span>
       </div>
 
       <div className="dp-recipe">
@@ -215,7 +247,8 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
               {(() => {
                 // "Brew it at": the recipe is its percents and targets; each size works out the pounds and ounces
                 const sys = equip.find((q) => q.e.name === r.equipment.name && q.e.sizes?.length) || equip.find((q) => q.e.sizes?.length);
-                if (!sys?.e.sizes) return <span className="dp-chip">{r1(r.equipment.batchGal, 2)} gal</span>;
+                // locked, the size is picked when it's viewed (Overview) or brewed (Brew it), never changed on the recipe
+                if (!sys?.e.sizes || locked) return <span className="dp-chip">{sys?.e.sizes?.find((s) => Math.abs(s.batchGal - r.equipment.batchGal) < 0.05)?.label || `${r1(r.equipment.batchGal, 2)} gal`}</span>;
                 const onSys = r.equipment.name === sys.e.name;
                 return (
                   <span className="dp-seg dp-noprint" role="group" aria-label="Brew it at">
@@ -275,15 +308,32 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
           {archive && arch?.brought_to && !bringOpen && <p className="dp-note">Already in DraftPunk: <Link href={`/draftpunk/r/${arch.brought_to}`}>open it</Link>. Bring it in again to add it as another version.</p>}
           {asstOpen && (
             <Win title="Brewing assistant" note="knows the style, what wins and how your beers scored">
-              <Assistant recipe={r} goal={goal} onApply={ro ? undefined : applyP} />
+              <Assistant recipe={r} goal={goal} onApply={!owner || archive ? undefined : applyP} />
             </Win>
+          )}
+          {editing && (
+            <div className="dp-edit">
+              {lastVer ? <>
+                <div><b>Making changes to v{lastVer.num}</b>{planAfter ? <span className="dp-dim"> · then plan the brew</span> : null}</div>
+                {pending.length ? <ul className="dp-list">{pending.map((l) => <li key={l}>{l}</li>)}</ul> : <p className="dp-dim" style={{ margin: "4px 0" }}>Change the ingredients, mash, water or fermentation below.</p>}
+                <div className="dp-row" style={{ gap: 8 }}>
+                  <input value={verNote} onChange={(e) => setVerNote(e.target.value)} placeholder="Why (optional): more oats for body" aria-label="Why this version" style={{ flex: "1 1 220px" }} />
+                  <button className="dp-btn dp-go" disabled={!pending.length} onClick={lockIn}>Save as v{lastVer.num + 1}</button>
+                  <button className="dp-btn" onClick={pending.length ? discard : () => { setEditMode(false); setPlanAfter(null); }}>{pending.length ? "Discard changes" : "Done"}</button>
+                </div>
+              </> : <>
+                <div><b>New recipe</b><span className="dp-dim"> · add the ingredients, then lock it in</span></div>
+                <div className="dp-row" style={{ gap: 8, marginTop: 6 }}><button className="dp-btn dp-go" onClick={lockIn}>Lock it in as v1</button></div>
+              </>}
+            </div>
           )}
           <div className="dp-tabs" role="tablist">
             {TABS.filter((t) => !(archive && t === "Versions")).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}
           </div>
-          <fieldset disabled={ro && tab !== "Brew day" && tab !== "Overview"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-            {tab === "Overview" && brewAt != null && owner && <BrewIt recipeId={id} userId={userId} r={r} equip={equip} shelf={mine} gal0={brewAt} onClose={() => setBrewAt(null)} />}
-            {tab === "Overview" && <Overview r={r} equip={equip} planned={planned} canBrew={owner && !archive && brewAt == null} onBrew={(g) => startBrew(g)} />}
+          <fieldset disabled={(!owner && tab !== "Brew day" && tab !== "Overview") || (locked && !["Brew day", "Overview", "Versions", "Notes"].includes(tab))} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {tab === "Overview" && brewAt != null && owner && <BrewIt recipeId={id} userId={userId} r={r} equip={equip} shelf={mine} gal0={brewAt} when0={brewWhen} onClose={() => { setBrewAt(null); setBrewWhen(undefined); }}
+              onChangeFirst={(when, gal) => { setPlanAfter({ when, gal }); setBrewAt(null); setEditMode(true); setTab("Ingredients"); }} />}
+            {tab === "Overview" && <Overview r={r} equip={equip} planned={planned} canBrew={owner && !archive && brewAt == null && !editing} onBrew={(g) => startBrew(g)} />}
             {tab === "Ingredients" && <DesignTab r={r} c={c} set={set} mine={mine} />}
             {tab === "Mash" && <MashTab r={r} c={c} set={set} />}
             {tab === "Water" && <WaterTab r={r} c={c} set={set} />}

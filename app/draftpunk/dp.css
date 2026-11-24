@@ -407,3 +407,6 @@
 .dp-bi-ver.on { border-color: var(--dp-beer); background: color-mix(in srgb, var(--dp-beer) 8%, transparent); }
 .dp-bi-sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--dp-line); }
 .dp-bi-buy { color: #b45309; font-weight: 600; }
+.dp-edit { border: 1px solid var(--dp-beer); background: color-mix(in srgb, var(--dp-beer) 7%, var(--dp-card)); border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; }
+.dp-edit .dp-list { margin: 6px 0 8px; }
+.dp-swap { margin-bottom: 4px; }

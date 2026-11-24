@@ -13,7 +13,8 @@ export type Kind = "fermentable" | "hop" | "yeast" | "misc";
 /** one change for this brew: an ingredient swapped for another (same amount, hops kept at the same bitterness) or left out */
 export type Sub = { kind: Kind; lid: string; from: string; to: string; out?: boolean };
 export type BrewPlan = {
-  /** "v2", "v2 sub A" */ label?: string; versionNum?: number; sizeLabel?: string; subs?: Sub[];
+  /** "v2", "v2 sub A" */ label?: string;
+  /** the brew before its swaps (the version at this size), so a swap can be undone */ base?: Recipe; versionNum?: number; sizeLabel?: string; subs?: Sub[];
   /** after tasting: the substitution became the next version, or stayed a one-time change */ kept?: "version" | "once"; keptNum?: number;
 };
 export type ShelfItem = { id: string; kind: string; name: string; data: Record<string, unknown>; in_stock: number | null };

@@ -12,7 +12,9 @@ import Autopilot from "./Autopilot";
 import type { Alarm, AutoState } from "@/lib/draftpunk/autopilot";
 import { saveVersion, type Version } from "@/lib/draftpunk/recipeStore";
 import { diffRecipes } from "@/lib/draftpunk/versions";
-import { shoppingList, shoppingText, starterDay, subText, type BrewPlan, type ShelfItem } from "@/lib/draftpunk/brewPlan";
+import { applySubs, planLabel, shoppingList, shoppingText, starterDay, subText, type BrewPlan, type ShelfItem, type Sub } from "@/lib/draftpunk/brewPlan";
+import { fromPercents } from "@/lib/draftpunk/calc";
+import SwapPicker from "./SwapPicker";
 
 type Measured = {
   weather?: Weather; mashPh?: number; preBoilSg?: number; preBoilGal?: number; boilMin?: number; postBoilGal?: number;
@@ -74,6 +76,22 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
 
   if (!r || !c || !row) return <p className="dp-dim">Loading…</p>;
   const e = r.equipment;
+  // a swap made at the store or on brew day (Nick, Nov 24 2026): the brew becomes "v2 sub A"; the recipe never changes
+  const swapTo = async (next: Sub[]) => {
+    const base = row.plan.base || r;
+    const sb = createClient();
+    let label = row.plan.label || (ver ? `v${ver.num}` : "");
+    if (ver && next.length && !/ sub /.test(label)) {
+      const { data: others } = await sb.from("dp_brews").select("id, plan").eq("version_id", ver.id).neq("id", id);
+      label = planLabel(ver.num, next, ((others || []) as { plan: BrewPlan }[]).filter((b) => b.plan?.subs?.length).length);
+    } else if (ver && !next.length) label = `v${ver.num}`;
+    const snap = { ...fromPercents(applySubs(base, next, shelf)), name: r.name };
+    const plan: BrewPlan = { ...row.plan, base, subs: next, label };
+    const { error } = await sb.from("dp_brews").update({ plan, recipe_snapshot: snap }).eq("id", id);
+    if (error) { toast(error.message); return; }
+    setRow({ ...row, plan }); setR(snap);
+  };
+  const canSwap = !row.plan.kept && (row.status === "planned" || row.brewed_on >= new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10));
   const setMv = (patch: Partial<Measured>) => { setM((x) => ({ ...x, ...patch })); setDirty(true); };
   const shrink = 1 - (e.shrinkPct || 0) / 100;
   // what the day really did
@@ -119,7 +137,9 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
         const send = async () => { const text = shoppingText(r.name, fmtDate(row.brewed_on), shop); try { if (navigator.share) { await navigator.share({ title: `${r.name} shopping list`, text }); return; } } catch { return; } try { await navigator.clipboard.writeText(text); toast("Shopping list copied"); } catch { toast(text); } };
         return (
           <Win title={`Planned for ${fmtDate(row.brewed_on)}`} note={[row.plan.label, row.plan.sizeLabel].filter(Boolean).join(" · ")}>
-            {!!row.plan.subs?.length && <p style={{ marginTop: 0 }}>This brew&apos;s swaps: {row.plan.subs.map(subText).join("; ")}</p>}
+            <div className="dp-bi-l">Store out of something? Swap it for this brew</div>
+            <SwapPicker r={row.plan.base || r} subs={row.plan.subs || []} shelf={shelf} onChange={swapTo} />
+            <div className="dp-bi-l" style={{ marginTop: 14 }}>Shopping list</div>
             <table className="dp-tbl"><tbody>
               {shop.map((l) => <tr key={l.kind + l.name}><td>{l.name}</td><td className="dp-num dp-dim">{l.want} {l.unit}</td><td className={`dp-num ${l.buy > 0 ? "dp-bi-buy" : "dp-grn"}`}>{l.buy > 0 ? (l.have > 0 ? `buy ${l.buy} ${l.unit}` : "buy") : "have it"}</td></tr>)}
             </tbody></table>
@@ -131,6 +151,11 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
           </Win>
         );
       })()}
+      {row.status === "brewed" && canSwap && !row.plan.subs?.length && (
+        <Win title="Had to swap something?" note="for this brew only">
+          <SwapPicker r={row.plan.base || r} subs={[]} shelf={shelf} onChange={swapTo} />
+        </Win>
+      )}
       {row.status === "brewed" && ver && !!row.plan.subs?.length && row.recipe_id && (() => {
         // after tasting it (Nick, Nov 24 2026: "I liked it better with the substitute… we'll call that version two"):
         // the swap becomes the next version, or stays a one-time change
@@ -148,7 +173,7 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
         };
         return (
           <Win title={`Brewed ${row.plan.label || `v${ver.num}`}`} note={ver.note}>
-            <p style={{ marginTop: 0 }}>Swapped for this brew: {row.plan.subs!.map(subText).join("; ")}</p>
+            {canSwap ? <SwapPicker r={row.plan.base || r} subs={row.plan.subs || []} shelf={shelf} onChange={swapTo} /> : <p style={{ marginTop: 0 }}>Swapped for this brew: {row.plan.subs!.map(subText).join("; ")}</p>}
             {row.plan.kept === "version" ? <p className="dp-grn" style={{ marginBottom: 0 }}>Kept: it&apos;s v{row.plan.keptNum} of the recipe now.</p>
               : row.plan.kept === "once" ? <p className="dp-dim" style={{ marginBottom: 0 }}>One time only: the recipe stays v{ver.num}. <button className="dp-btn" onClick={() => decide("version")}>Make it permanent after all</button></p>
               : <>
