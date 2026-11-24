@@ -16,6 +16,7 @@ import { DesignTab, FermentTab, MashTab, MineItem, NotesTab, WaterTab } from "./
 import BrewDay from "./BrewDay";
 import Assistant from "./Assistant";
 import Versions, { type Status } from "./Versions";
+import BringIn from "./BringIn";
 import { applyProposal, type Proposal } from "@/lib/draftpunk/proposal";
 import { saveVersion, versionsOf } from "@/lib/draftpunk/recipeStore";
 import { diffRecipes } from "@/lib/draftpunk/versions";
@@ -31,7 +32,10 @@ const TYPES: [RecipeType, string][] = [["all_grain", "All Grain"], ["biab", "Bia
  * worked out as you type and checked against the style. Saves itself a moment after each change (and on F2). A club
  * member's shared recipe opens read-only with a Copy button.
  */
-export default function RecipeEditor({ id, userId, brewerName }: { id: string; userId: string; brewerName: string }) {
+export default function RecipeEditor({ id, userId, brewerName, archive = false }: { id: string; userId: string; brewerName: string; archive?: boolean }) {
+  // archive: a recipe as it was in BeerSmith (dp_archive), read only, brought into DraftPunk from the toolbar
+  const [arch, setArch] = useState<{ folder: string; brewed_on: string | null; brought_to: string | null } | null>(null);
+  const [bringOpen, setBringOpen] = useState(false);
   const router = useRouter();
   const { toast, node: toastNode } = useToast();
   const [r, setR] = useState<Recipe | null>(null);
@@ -66,6 +70,14 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
         const { data: made, error } = await sb.from("dp_recipes").insert({ owner_id: userId, name: fresh.name, data: fresh, calc: calcSummary(calcRecipe(fresh)) }).select("id").single();
         if (made) router.replace(`/draftpunk/r/${made.id}`);
         else toast(error?.message || "Couldn't start a recipe");
+        return;
+      }
+      if (archive) {
+        const { data: a } = await sb.from("dp_archive").select("name, folder, brewed_on, brought_to, data").eq("id", id).maybeSingle();
+        if (!a) { toast("Recipe not found"); return; }
+        setOwner(false);
+        setArch({ folder: a.folder as string, brewed_on: a.brewed_on as string | null, brought_to: a.brought_to as string | null });
+        setR(normalize({ ...(a.data as Recipe), name: a.name as string }));
         return;
       }
       const { data } = await sb.from("dp_recipes").select("owner_id, name, style_id, visibility, data, status, goal").eq("id", id).maybeSingle();
@@ -142,7 +154,9 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
     if (owner) {
       let vs = await versionsOf(id);
       if (!vs.length) { const made = await saveVersion(id, userId, r, "First version"); if (made.version) vs = [made.version]; }
-      const last = vs[vs.length - 1];
+      // the version for the system it's brewed on (each brew system keeps its own), else the newest
+      const sameSys = vs.filter((v) => v.data.equipment?.name === r.equipment.name && Math.abs((v.data.equipment?.batchGal || 0) - r.equipment.batchGal) < 0.05);
+      const last = sameSys[sameSys.length - 1] || vs[vs.length - 1];
       versionId = last?.id || null;
       tweaks = last ? diffRecipes(last.data, r).length : 0;
       if (tweaks && last) { const back = normalize(last.data); setR(back); await save(back); }
@@ -182,7 +196,9 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
     <>
       {/* the toolbar, like BeerSmith's ribbon */}
       <div className="dp-toolbar dp-noprint" role="toolbar" aria-label="Recipe">
-        {ro ? (
+        {archive ? (
+          <button className={`dp-tool dp-tool-go${bringOpen ? " on" : ""}`} onClick={() => setBringOpen((v) => !v)}><Icon name="import" />Bring into DraftPunk</button>
+        ) : ro ? (
           <button className="dp-tool dp-tool-go" onClick={copyToMine}><Icon name="copy" />Copy to mine</button>
         ) : (
           <button className="dp-tool" onClick={() => save().then(() => toast("Saved"))}><Icon name="save" />Save</button>
@@ -196,7 +212,7 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
         <button className="dp-tool" onClick={exportXml}><Icon name="export" />BeerXML</button>
         {!ro && <button className="dp-tool" onClick={copyToMine}><Icon name="copy" />Duplicate</button>}
         {!ro && <button className="dp-tool" onClick={() => { const v = visibility === "club" ? "private" : "club"; setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private again")); }}><Icon name="share" />{visibility === "club" ? "Shared" : "Share"}</button>}
-        <span className="dp-status">{ro ? "Club recipe · read only" : dirty ? "Saving…" : "All changes saved"}</span>
+        <span className="dp-status">{archive ? `From BeerSmith · ${arch?.folder || ""}${arch?.brought_to ? " · in DraftPunk" : ""}` : ro ? "Club recipe · read only" : dirty ? "Saving…" : "All changes saved"}</span>
       </div>
 
       <div className="dp-recipe">
@@ -255,13 +271,15 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
             </Win>
           </fieldset>
 
+          {archive && bringOpen && arch && <BringIn archiveId={id} r={r} folder={arch.folder} date={arch.brewed_on} userId={userId} onDone={() => setBringOpen(false)} />}
+          {archive && arch?.brought_to && !bringOpen && <p className="dp-note">Already in DraftPunk: <Link href={`/draftpunk/r/${arch.brought_to}`}>open it</Link>. Bring it in again to add it as another version.</p>}
           {asstOpen && (
             <Win title="Brewing assistant" note="knows the style, what wins and how your beers scored">
               <Assistant recipe={r} goal={goal} onApply={ro ? undefined : applyP} />
             </Win>
           )}
           <div className="dp-tabs" role="tablist">
-            {TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}
+            {TABS.filter((t) => !(archive && t === "Versions")).map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}
           </div>
           <fieldset disabled={ro && tab !== "Brew day"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
             {tab === "Ingredients" && <DesignTab r={r} c={c} set={set} mine={mine} />}
@@ -318,7 +336,7 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
           </section>
         </aside>
       </div>
-      <p className="dp-dim dp-noprint" style={{ marginTop: 18 }}><Link href="/draftpunk">← All recipes</Link></p>
+      <p className="dp-dim dp-noprint" style={{ marginTop: 18 }}><Link href={archive ? "/draftpunk?tab=beersmith" : "/draftpunk"}>← {archive ? "From BeerSmith" : "All recipes"}</Link></p>
       {toastNode}
     </>
   );

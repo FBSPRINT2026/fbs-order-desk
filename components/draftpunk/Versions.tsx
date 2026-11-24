@@ -46,7 +46,17 @@ export default function Versions({ recipeId, userId, r, owner, status, goal, onS
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [recipeId, refreshKey]);
 
   const last = vers?.[vers.length - 1];
-  const pending = useMemo(() => (last ? diffRecipes(last.data, r) : []), [last, r]);
+  // brew systems: the newest version made for each equipment profile (Witstanbul's 3, 5 and 10 gallon)
+  const systems = useMemo(() => {
+    const m = new Map<string, Version>();
+    for (const v of vers || []) { const k = `${v.data.equipment?.name || ""}|${r1(v.data.equipment?.batchGal || 0, 1)}`; m.set(k, v); }
+    return [...m.values()].sort((a, b) => (b.data.equipment?.batchGal || 0) - (a.data.equipment?.batchGal || 0));
+  }, [vers]);
+  const onSystem = (v: Version) => r.equipment.name === v.data.equipment?.name && Math.abs(r.equipment.batchGal - (v.data.equipment?.batchGal || 0)) < 0.05;
+  // the working copy is compared with the version for its own system (else the newest)
+  const base = useMemo(() => [...(vers || [])].reverse().find(onSystem) || last, [vers, last, r]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pending = useMemo(() => (base ? diffRecipes(base.data, r) : []), [base, r]);
+
   const saveNew = async () => {
     setBusy(true);
     const res = await saveVersion(recipeId, userId, r, note || (last ? autoNote(pending) : "First version"));
@@ -73,18 +83,31 @@ export default function Versions({ recipeId, userId, r, owner, status, goal, onS
         <p className="dp-dim" style={{ marginBottom: 0 }}>Competition aims the gravity and bitterness targets at what wins. Dialed in recipes teach the style targets too.</p>
       </Win>
 
+      {systems.length > 1 && (
+        <Win title="Brew systems" note="each system's own version">
+          <div className="dp-row" style={{ gap: 8 }}>
+            {systems.map((v) => (
+              <button key={v.id} type="button" className={`dp-btn${onSystem(v) ? " dp-go" : ""}`} disabled={!owner} onClick={() => onRestore(v.data, v.num)} title={`Put v${v.num} on the working copy`}>
+                {r1(v.data.equipment?.batchGal || 0, 2)} gal · v{v.num}<small className="dp-dim" style={{ display: "block", fontWeight: 400 }}>{v.data.equipment?.name}</small>
+              </button>
+            ))}
+          </div>
+          <p className="dp-dim" style={{ marginBottom: 0 }}>A brew uses the newest version made for the equipment it&apos;s brewed on.</p>
+        </Win>
+      )}
+
       {owner && (
-        <Win title={last ? `Working copy · changes since v${last.num}` : "Working copy"} note={last ? (pending.length ? `${pending.length} change${pending.length === 1 ? "" : "s"}` : "same as v" + last.num) : "no versions yet"}>
+        <Win title={base ? `Working copy · changes since v${base.num}` : "Working copy"} note={base ? (pending.length ? `${pending.length} change${pending.length === 1 ? "" : "s"}` : "same as v" + base.num) : "no versions yet"}>
           {!last && <p>Save it as v1 when it's ready to brew. Every brew then says which version it used.</p>}
           {!!pending.length && <ul className="dp-list">{pending.map((l) => <li key={l}>{l}</li>)}</ul>}
           {(!last || pending.length > 0) && (
             <div className="dp-row">
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={last ? `Why? (blank: "${autoNote(pending)}")` : "First version"} style={{ flex: "1 1 260px" }} aria-label="Why this version" />
               <button className="dp-btn dp-go" disabled={busy} onClick={saveNew}>Save as v{(last?.num || 0) + 1}</button>
-              {last && <button className="dp-btn" onClick={() => onRestore(last.data, last.num)}>Throw away, back to v{last.num}</button>}
+              {base && <button className="dp-btn" onClick={() => onRestore(base.data, base.num)}>Throw away, back to v{base.num}</button>}
             </div>
           )}
-          {last && !pending.length && <p className="dp-dim" style={{ margin: 0 }}>Change anything and it shows here. Brew it as is, or save the changes as v{last.num + 1}. Changes you only make for one brew stay on that brew.</p>}
+          {base && last && !pending.length && <p className="dp-dim" style={{ margin: 0 }}>Change anything and it shows here. Brew it as is, or save the changes as v{last.num + 1}. Changes you only make for one brew stay on that brew.</p>}
         </Win>
       )}
 

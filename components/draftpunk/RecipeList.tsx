@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { styleById } from "@/lib/draftpunk/styles";
 import { fmtDate } from "@/lib/draftpunk/defaults";
+import BeerSmithList from "./BeerSmithList";
 
 type Row = { id: string; name: string; style_id: string | null; visibility: string; status?: string; versions?: number; brewed?: string; calc: { og?: number; fg?: number; abv?: number; ibu?: number; srm?: number; color?: string }; updated_at: string; data: { type?: string; equipment?: { batchGal?: number } } };
 
@@ -50,6 +51,14 @@ export default function RecipeList({ userId }: { userId: string }) {
     load();
   };
   const [view, setView] = useState<"cards" | "list">("cards");
+  // DraftPunk's own recipes, or the BeerSmith recipes as they were
+  const [src, setSrc] = useState<"mine" | "beersmith">("mine");
+  const [bsCount, setBsCount] = useState(0);
+  useEffect(() => {
+    try { const s = new URLSearchParams(window.location.search).get("tab") || localStorage.getItem("dp:recipes-src"); if (s === "beersmith" || s === "mine") setSrc(s); } catch { /* fine */ }
+    createClient().from("dp_archive").select("id", { count: "exact", head: true }).eq("owner_id", userId).then(({ count }) => setBsCount(count || 0));
+  }, [userId]);
+  const pickSrc = (s: "mine" | "beersmith") => { setSrc(s); try { localStorage.setItem("dp:recipes-src", s); } catch { /* fine */ } };
   useEffect(() => { try { const v = localStorage.getItem("dp:recipes-view"); if (v === "list" || v === "cards") setView(v); } catch { /* fine */ } }, []);
   const pickView = (v: "cards" | "list") => { setView(v); try { localStorage.setItem("dp:recipes-view", v); } catch { /* fine */ } };
   return (
@@ -62,6 +71,11 @@ export default function RecipeList({ userId }: { userId: string }) {
           <Link href="/draftpunk/r/new" className="dp-btn dp-go">+ New recipe</Link>
         </div>
       </div>
+      <div className="dp-tabs" role="tablist" style={{ marginTop: 0 }}>
+        <button role="tab" aria-selected={src === "mine"} className={src === "mine" ? "on" : ""} onClick={() => pickSrc("mine")}>My recipes{rows ? ` (${rows.length})` : ""}</button>
+        <button role="tab" aria-selected={src === "beersmith"} className={src === "beersmith" ? "on" : ""} onClick={() => pickSrc("beersmith")}>From BeerSmith{bsCount ? ` (${bsCount})` : ""}</button>
+      </div>
+      {src === "beersmith" ? <BeerSmithList userId={userId} /> : <>
       <div className="dp-row" style={{ alignItems: "center", marginBottom: 16 }}>
         <input style={{ flex: "1 1 260px", maxWidth: 420 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or style" aria-label="Search recipes" />
         <span className="dp-seg" role="group" aria-label="Which recipes">{([["active", "Active"], ["dialed", "Dialed in"], ["retired", "Retired"], ["all", "All"]] as const).map(([k, l]) => <button key={k} className={st === k ? "on" : ""} onClick={() => setSt(k)}>{l}</button>)}</span>
@@ -117,6 +131,7 @@ export default function RecipeList({ userId }: { userId: string }) {
           </table>
         </div>
       )}
+      </>}
     </>
   );
 }

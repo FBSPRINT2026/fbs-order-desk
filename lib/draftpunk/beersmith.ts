@@ -49,13 +49,13 @@ export function itemElements(xml: string, tag: string, nameField: string): strin
   const has = new RegExp(`<${nameField}>`, "i"), nested = new RegExp(`<${tag}(?:\\s[^>]*)?>`, "i");
   return xmlElements(xml, tag).filter((e) => has.test(e.inner) && !nested.test(e.inner)).map((e) => e.inner);
 }
-export function recipeElements(xml: string): string[] {
-  const found: { start: number; inner: string }[] = [];
+export function recipeElements(xml: string): { inner: string; cloud: boolean }[] {
+  const found: { start: number; inner: string; cloud: boolean }[] = [];
   for (const tag of ["Recipe", "F_C_RECIPE"]) for (const e of xmlElements(xml, tag)) {
     if (!/<F_R_NAME>/i.test(e.inner) || /<(?:Recipe|F_C_RECIPE)(?:\s[^>]*)?>/i.test(e.inner)) continue;
-    found.push(e);
+    found.push({ ...e, cloud: tag === "F_C_RECIPE" });
   }
-  return found.sort((a, b) => a.start - b.start).map((e) => e.inner);
+  return found.sort((a, b) => a.start - b.start).map(({ inner, cloud }) => ({ inner, cloud }));
 }
 
 export function xmlNode(xml: string): BsNode {
@@ -244,7 +244,7 @@ export const recipeKey = (r: Recipe) => JSON.stringify([r.name.toLowerCase(), r.
 
 // ---------------- whole files ----------------
 export type BsLibrary = { fermentable: Fermentable[]; hop: Hop[]; yeast: Yeast[]; misc: Misc[]; water: WaterProfile[] };
-export type BsRead = { recipes: (Recipe & { folder?: string; sample?: boolean; date?: string })[]; library: BsLibrary };
+export type BsRead = { recipes: (Recipe & { folder?: string; sample?: boolean; date?: string; cloud?: boolean })[]; library: BsLibrary };
 /** BeerSmith's recipe date: seconds since 1970 in the backup, a date string in a .bsmx */
 export const bsDate = (v: string): string | undefined => {
   const n = Number(v);
@@ -255,7 +255,7 @@ const emptyLib = (): BsLibrary => ({ fermentable: [], hop: [], yeast: [], misc: 
 
 /** a .bsmx file: recipes (<Recipe>), or one of BeerSmith's ingredient lists (<Grain>, <Hops>, <Yeast>, <Misc>, <Water>) */
 export function readBsmx(xml: string): BsRead {
-  const recipes = recipeElements(xml).map(xmlNode).map((x) => ({ ...bsRecipe(x), folder: x.get("F_R_FOLDER_NAME") || undefined, date: bsDate(x.get("F_R_DATE")) }));
+  const recipes = recipeElements(xml).map(({ inner, cloud }) => { const x = xmlNode(inner); return { ...bsRecipe(x), folder: x.get("F_R_FOLDER_NAME") || undefined, date: bsDate(x.get("F_R_DATE")), cloud }; });
   const lib = emptyLib();
   if (!recipes.length) {
     // each list's items are the innermost elements of their kind that have a name (a list file wraps them in its own)
@@ -266,7 +266,7 @@ export function readBsmx(xml: string): BsRead {
     lib.misc = items("Misc", "F_M_NAME").map(bsMisc);
     lib.water = items("Water", "F_W_NAME").map(bsWater);
   }
-  return { recipes: dedupe(recipes.filter(hasLines)), library: dedupeLib(lib) };
+  return { recipes: recipes.filter(hasLines), library: dedupeLib(lib) };
 }
 
 /**
@@ -278,7 +278,7 @@ export function readBsTables(tables: Record<string, Record<string, unknown>[]>):
   const recipes: BsRead["recipes"] = [];
   for (const t of ["M_RECIPE", "M_CLOUD"]) for (const row of tables[t] || []) {
     const folder = String(row.F_R_FOLDER_NAME || "") || undefined;
-    recipes.push({ ...bsRecipe(rowNode(row)), folder, sample: /beersmith \d samples/i.test(folder || ""), date: bsDate(String(row.F_R_DATE ?? "")) });
+    recipes.push({ ...bsRecipe(rowNode(row)), folder, sample: /beersmith \d samples/i.test(folder || ""), date: bsDate(String(row.F_R_DATE ?? "")), cloud: t === "M_CLOUD" });
   }
   const lib = emptyLib();
   const both = (a: string) => [...(tables[`M_${a}`] || []), ...(tables[`M_CLOUD_${a}`] || [])].map((row) => rowNode(row));
@@ -287,7 +287,7 @@ export function readBsTables(tables: Record<string, Record<string, unknown>[]>):
   lib.yeast = both("YEAST").map(bsYeast);
   lib.misc = both("MISC").map(bsMisc);
   lib.water = both("WATER").map(bsWater);
-  return { recipes: dedupe(recipes.filter(hasLines)), library: dedupeLib(lib) };
+  return { recipes: recipes.filter(hasLines), library: dedupeLib(lib) };
 }
 
 const hasLines = (r: Recipe) => !!(r.ferms.length || r.hops.length || r.yeasts.length);
