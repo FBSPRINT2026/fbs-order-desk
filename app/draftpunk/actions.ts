@@ -53,3 +53,32 @@ export async function tiltUrl(): Promise<string> {
   const { SITE_URL } = await import("@/lib/config");
   return `${SITE_URL}/api/draftpunk/tilt?k=${key}`;
 }
+
+/**
+ * The club's ingredient library: lists brought in from BeerSmith (its Hops / Fermentables / Yeast / MISC exports, or a
+ * backup) are kept once for every member (dp_ingredients with no owner). A name already in the library for that kind
+ * is updated with the newer numbers, never added twice. Club admins only; sent in batches by the importer.
+ */
+export async function addToLibrary(kind: "fermentable" | "hop" | "yeast" | "misc" | "water", items: { name: string; [k: string]: unknown }[]): Promise<{ ok: boolean; added: number; updated: number; msg?: string }> {
+  const me = await getBrewer();
+  if (me.brewer?.club_role !== "admin") return { ok: false, added: 0, updated: 0, msg: "Only a club admin can add to the club's library" };
+  if (!["fermentable", "hop", "yeast", "misc", "water"].includes(kind) || !Array.isArray(items) || items.length > 500) return { ok: false, added: 0, updated: 0, msg: "Send at most 500 at a time" };
+  const admin = createAdminClient();
+  const key = (x: { name: string; lab?: unknown; code?: unknown }) => `${x.lab || ""}|${x.code || ""}|${x.name}`.toLowerCase().trim();
+  const names = [...new Set(items.map((i) => String(i.name || "").trim()).filter(Boolean))];
+  const have = new Map<string, string>();
+  for (let i = 0; i < names.length; i += 100) {
+    const { data } = await admin.from("dp_ingredients").select("id, name, data").is("owner_id", null).eq("kind", kind).in("name", names.slice(i, i + 100));
+    for (const r of data || []) have.set(key({ name: r.name as string, ...(r.data as object) }), r.id as string);
+  }
+  const clean = (i: { name: string; [k: string]: unknown }) => { const d: { name: string; [k: string]: unknown } = { ...i, name: String(i.name).trim() }; if (typeof d.notes === "string" && d.notes.length > 2000) d.notes = d.notes.slice(0, 2000) + "…"; return d; };
+  const fresh: { owner_id: null; kind: string; name: string; data: object }[] = [];
+  let updated = 0;
+  for (const it of items.filter((i) => String(i.name || "").trim())) {
+    const d = clean(it), id = have.get(key(d));
+    if (id) { await admin.from("dp_ingredients").update({ data: d }).eq("id", id); updated++; }
+    else { have.set(key(d), "new"); fresh.push({ owner_id: null, kind, name: d.name, data: d }); }
+  }
+  if (fresh.length) { const { error } = await admin.from("dp_ingredients").insert(fresh); if (error) return { ok: false, added: 0, updated, msg: error.message }; }
+  return { ok: true, added: fresh.length, updated };
+}

@@ -6,6 +6,7 @@
 import { lid, newRecipe } from "./defaults";
 import type { FermType, HopUse, MashStep, Recipe, RFerm, RHop, RMisc, RYeast } from "./types";
 import { STYLES } from "./styles";
+import { readBsmx } from "./beersmith";
 
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", deg: "°", nbsp: " " };
 const unent = (s: string) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&(#\d+|[a-z]+);/gi, (m, e: string) => (e[0] === "#" ? String.fromCharCode(Number(e.slice(1))) : ENT[e.toLowerCase()] ?? m)).trim();
@@ -104,39 +105,9 @@ ${tag("NOTES", r.notes)}${tag("TASTE_NOTES", r.tasteNotes)}${tag("PRIMARY_AGE", 
   return `<?xml version="1.0" encoding="UTF-8"?>\n<!-- exported by DraftPunk -->\n<RECIPES>\n${body}\n</RECIPES>\n`;
 }
 
-// ---------------- BeerSmith .bsmx ----------------
-/** BeerSmith's own file: recipes as <Recipe> with F_R_ fields; grain, hops, yeast and misc inside <Ingredients>. Ounces. */
-export function fromBsmx(xml: string): Recipe[] {
-  return blocks(xml, "Recipe").map((x) => {
-    const r = newRecipe();
-    r.name = val(x, "F_R_NAME") || "Imported Recipe";
-    r.brewer = val(x, "F_R_BREWER") || undefined;
-    const st = blocks(x, "F_R_STYLE")[0];
-    if (st) r.styleId = styleFor(val(st, "F_S_NAME"), val(st, "F_S_CATEGORY"), val(st, "F_S_LETTER"));
-    const eq = blocks(x, "F_R_EQUIPMENT")[0];
-    if (eq) {
-      const flOz = (t: string) => num(eq, t) / 128;
-      r.equipment = { ...r.equipment, name: val(eq, "F_E_NAME") || r.equipment.name, batchGal: flOz("F_E_BATCH_VOL") || r.equipment.batchGal, boilMin: num(eq, "F_E_BOIL_TIME", r.equipment.boilMin),
-        mashEff: num(eq, "F_E_EFFICIENCY", r.equipment.mashEff), trubGal: flOz("F_E_TRUB_LOSS") || r.equipment.trubGal, fermLossGal: flOz("F_E_FERMENTER_LOSS") || r.equipment.fermLossGal,
-        tunDeadGal: flOz("F_E_TUN_DEADSPACE") || r.equipment.tunDeadGal, boilOffGal: flOz("F_E_BOIL_OFF") || r.equipment.boilOffGal };
-    }
-    r.ferms = blocks(x, "Grain").map((g): RFerm => ({ lid: lid(), name: val(g, "F_G_NAME"), type: ["grain", "extract", "sugar", "adjunct", "dry_extract", "fruit", "juice", "honey"][num(g, "F_G_TYPE")] as FermType || "grain",
-      lb: num(g, "F_G_AMOUNT") / 16, potential: num(g, "F_G_YIELD") > 2 ? 1 + (num(g, "F_G_YIELD") / 100) * 0.04621 : num(g, "F_G_YIELD", 1.036), color: num(g, "F_G_COLOR", 2), origin: val(g, "F_G_ORIGIN") || undefined, late: num(g, "F_G_ADD_AFTER_BOIL") === 1 }));
-    r.hops = blocks(x, "Hops").map((h): RHop => {
-      const u = num(h, "F_H_USE");
-      const use: HopUse = ([ "boil", "dry_hop", "mash", "first_wort", "whirlpool" ] as HopUse[])[u] || "boil";
-      return { lid: lid(), name: val(h, "F_H_NAME"), alpha: num(h, "F_H_ALPHA", 5), oz: num(h, "F_H_AMOUNT"), use, form: (["pellet", "plug", "leaf"] as const)[num(h, "F_H_TYPE")] || "pellet",
-        min: use === "dry_hop" ? 0 : num(h, "F_H_BOIL_TIME"), days: use === "dry_hop" ? num(h, "F_H_DRY_HOP_TIME", 4) : undefined, tempF: use === "whirlpool" ? num(h, "F_H_TEMP", 180) || 180 : undefined };
-    });
-    r.yeasts = blocks(x, "Yeast").map((y): RYeast => ({ lid: lid(), name: val(y, "F_Y_NAME"), lab: val(y, "F_Y_LAB") || undefined, code: val(y, "F_Y_PRODUCT_ID") || undefined,
-      form: num(y, "F_Y_FORM") === 1 ? "dry" : "liquid", attenuation: (num(y, "F_Y_MIN_ATTENUATION", 73) + num(y, "F_Y_MAX_ATTENUATION", 77)) / 2,
-      tempLow: num(y, "F_Y_MIN_TEMP") || undefined, tempHigh: num(y, "F_Y_MAX_TEMP") || undefined, packs: num(y, "F_Y_AMOUNT", 1) || 1 }));
-    r.miscs = blocks(x, "Misc").map((m): RMisc => ({ lid: lid(), name: val(m, "F_M_NAME"), type: "other", use: (["boil", "mash", "primary", "secondary", "bottling"] as const)[num(m, "F_M_USE")] || "boil",
-      amount: num(m, "F_M_AMOUNT"), unit: "oz", min: num(m, "F_M_TIME") || undefined }));
-    r.notes = val(x, "F_R_NOTES") || undefined;
-    return r;
-  }).filter((r) => r.ferms.length || r.hops.length || r.yeasts.length);
-}
+// ---------------- BeerSmith ----------------
+/** BeerSmith's own .bsmx: read by the one BeerSmith reader (lib/draftpunk/beersmith.ts), which also reads its backups */
+export const fromBsmx = (xml: string): Recipe[] => readBsmx(xml).recipes;
 
 /** read either kind of file */
 export function parseRecipes(text: string, fileName = ""): Recipe[] {
