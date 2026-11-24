@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { atSize, calcRecipe, fromPercents, isAid, r1, scaleRecipe, toPercents } from "@/lib/draftpunk/calc";
+import { atSize, calcRecipe, fromPercents, isAid, r1, scaleRecipe, toPercents, volumes } from "@/lib/draftpunk/calc";
 import type { Equipment } from "@/lib/draftpunk/types";
 import { createRecipe, saveVersion } from "@/lib/draftpunk/recipeStore";
 import type { Recipe } from "@/lib/draftpunk/types";
@@ -36,7 +36,9 @@ export default function BringIn({ archiveId, r, folder, date, userId, onDone }: 
     const og = Math.round(calcRecipe(r).og * 1000) / 1000;
     const d = { ...toPercents(r), byPercent: { on: true, targetOg: og }, imported: r.imported || r.equipment };
     if (!sys) return d;
-    const size = sys.sizes?.length ? sys.sizes.reduce((a, b) => (Math.abs(b.batchGal - r.equipment.batchGal) < Math.abs(a.batchGal - r.equipment.batchGal) ? b : a)) : null;
+    // the size whose wort at the end of the boil is nearest this recipe's (BeerSmith's 7 gal with no trub is the 5 gal)
+    const wort = (e: Equipment) => volumes(e).postBoilCold, want = wort(r.equipment);
+    const size = sys.sizes?.length ? sys.sizes.reduce((a, b) => (Math.abs(wort(atSize(sys, b.batchGal)) - want) < Math.abs(wort(atSize(sys, a.batchGal)) - want) ? b : a)) : null;
     return fromPercents({ ...scaleRecipe(d, size ? atSize(sys, size.batchGal) : sys), imported: d.imported });
   })();
   const dc = calcRecipe(design);

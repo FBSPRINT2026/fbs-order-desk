@@ -435,16 +435,22 @@ export function atSize(e: Equipment, batchGal: number): Equipment {
 
 export function scaleRecipe(r: Recipe, to: Equipment): Recipe {
   const from = r.equipment;
-  const vol = to.batchGal / Math.max(from.batchGal, 0.01);
+  // Two volumes, not one (Nick, Nov 24 2026: BeerSmith's 7 gal batch with no trub is his 5 gal batch, 5.5 into the
+  // fermenter and 1.5 left in the kettle: the same 7 gal of wort). What goes in the kettle (grain, boil hops, boil and
+  // mash additions, salts) scales with the wort at the end of the boil; what goes in the fermenter (dry hops, primary,
+  // secondary and bottling additions) with the beer in the fermenter.
+  const vf = volumes(from), vt = volumes(to);
+  const kettle = vt.postBoilCold / Math.max(vf.postBoilCold, 0.01), ferm = vt.intoFerm / Math.max(vf.intoFerm, 0.01);
   const effR = (from.mashEff || 75) / (to.mashEff || 75);
+  const inFerm = (use?: string) => use === "primary" || use === "secondary" || use === "bottling" || use === "dry_hop";
   const before = calcRecipe(r);
   const out: Recipe = {
     ...r, equipment: { ...to },
-    ferms: r.ferms.map((f) => ({ ...f, lb: f.lb * vol * (isMashed(f) ? effR : 1) })),
-    hops: r.hops.map((h) => ({ ...h, oz: h.oz * vol })),
-    miscs: r.miscs.map((m) => ({ ...m, amount: m.amount * vol })),
-    yeasts: r.yeasts.map((y) => ({ ...y, packs: Math.max(1, Math.round(y.packs * vol)) })),
-    water: { ...r.water, salts: Object.fromEntries(Object.entries(r.water.salts).map(([k, g]) => [k, (g || 0) * vol])) as Salts },
+    ferms: r.ferms.map((f) => ({ ...f, lb: f.lb * kettle * (isMashed(f) ? effR : 1) })),
+    hops: r.hops.map((h) => ({ ...h, oz: h.oz * (inFerm(h.use) ? ferm : kettle) })),
+    miscs: r.miscs.map((m) => ({ ...m, amount: m.amount * (inFerm(m.use) ? ferm : kettle) })),
+    yeasts: r.yeasts.map((y) => ({ ...y, packs: Math.max(1, Math.round(y.packs * ferm)) })),
+    water: { ...r.water, salts: Object.fromEntries(Object.entries(r.water.salts).map(([k, g]) => [k, (g || 0) * kettle])) as Salts },
   };
   // a recipe designed by percent works its pounds out again for the new system (its target OG) before the hops
   if (out.byPercent?.on) Object.assign(out, fromPercents(out));
