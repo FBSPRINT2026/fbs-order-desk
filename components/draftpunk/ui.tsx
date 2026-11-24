@@ -20,8 +20,9 @@ export function F({ label, children, grow }: { label: string; children: React.Re
   return <label className="dp-f" style={grow ? { flex: grow } : undefined}><span>{label}</span>{children}</label>;
 }
 
-export function Win({ title, children, className }: { title: string; children: React.ReactNode; className?: string }) {
-  return <section className={`dp-win ${className || ""}`}><span className="dp-wt">{title}</span>{children}</section>;
+/** a card with its title; `note` is a quieter line next to the title (a total, a count) */
+export function Win({ title, children, className, note }: { title: string; children: React.ReactNode; className?: string; note?: React.ReactNode }) {
+  return <section className={`dp-card ${className || ""}`}><h2 className="dp-card-t">{title}{note != null && <small>{note}</small>}</h2>{children}</section>;
 }
 
 /** where a number sits in its style's range: the range shaded, a marker at the value (red when outside) */
@@ -47,8 +48,8 @@ export function Picker({ title, items, head, onPick, onCustom, onClose }: { titl
   useEffect(() => { const on = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", on); return () => window.removeEventListener("keydown", on); }, [onClose]);
   return (
     <div className="dp-modal" onClick={onClose}>
-      <div className="dp-win" onClick={(e) => e.stopPropagation()}>
-        <span className="dp-wt">{title}</span>
+      <div className="dp-card" onClick={(e) => e.stopPropagation()}>
+        <h2 className="dp-card-t">{title}</h2>
         <div className="dp-row">
           <F label="Search" grow="1 1 240px"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && shown[0]) onPick(shown[0].key); }} /></F>
           {onCustom && <button className="dp-btn" onClick={() => onCustom(q.trim() || "Custom")}>Add &quot;{q.trim() || "custom"}&quot;</button>}

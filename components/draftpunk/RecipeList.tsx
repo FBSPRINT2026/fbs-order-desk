@@ -39,8 +39,8 @@ export default function RecipeList({ userId }: { userId: string }) {
         <Link href="/draftpunk/r/new" className="dp-btn dp-go">New recipe</Link>
         <Link href="/draftpunk/import" className="dp-btn">Import</Link>
       </div>
-      <div className="dp-win">
-        <span className="dp-wt">My recipes {rows ? `(${rows.length})` : ""}</span>
+      <div className="dp-card">
+        <h2 className="dp-card-t">My recipes{rows && <small>{rows.length}</small>}</h2>
         {!rows ? <p>Loading...</p> : !rows.length ? (
           <p>No recipes yet. Press <b>F3</b> To start one, or <Link href="/draftpunk/import">Import from BeerSmith</Link>.</p>
         ) : (

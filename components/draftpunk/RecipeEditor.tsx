@@ -11,10 +11,11 @@ import { toBeerXml } from "@/lib/draftpunk/beerxml";
 import type { Equipment, IbuMethod, Recipe, RecipeType } from "@/lib/draftpunk/types";
 import { useToast } from "./Shell";
 import { F, Num, StyleBar, Win } from "./ui";
+import Icon from "./icons";
 import { DesignTab, FermentTab, MashTab, MineItem, NotesTab, WaterTab } from "./RecipeTabs";
 import BrewDay from "./BrewDay";
 
-const TABS = ["Design", "Mash", "Water", "Ferment", "Brew day", "Notes"] as const;
+const TABS = ["Ingredients", "Mash", "Water", "Fermentation", "Brew day", "Notes"] as const;
 type Tab = (typeof TABS)[number];
 const TYPES: [RecipeType, string][] = [["all_grain", "All Grain"], ["biab", "Biab"], ["partial_mash", "Partial Mash"], ["extract", "Extract"], ["mead", "Mead"], ["cider", "Cider"], ["wine", "Wine"]];
 
@@ -31,9 +32,10 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
   const [visibility, setVisibility] = useState<"private" | "club">("private");
   const [equip, setEquip] = useState<{ id: string | null; e: Equipment }[]>(DEFAULT_EQUIPMENT.map((e) => ({ id: null, e })));
   const [mine, setMine] = useState<MineItem[]>([]);
-  const [tab, setTab] = useState<Tab>("Design");
+  const [tab, setTab] = useState<Tab>("Ingredients");
   const [dirty, setDirty] = useState(false);
   const [scaleTo, setScaleTo] = useState("");
+  const [scaleOpen, setScaleOpen] = useState(false);
   const saving = useRef(false);
 
   // load (or make) the recipe, the brewer's equipment and their own ingredients
@@ -66,7 +68,7 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
   const c = useMemo(() => (r ? calcRecipe(r) : null), [r]);
   // the page takes on the beer's color (its SRM): the glow behind everything and the pint in the numbers card
   useEffect(() => {
-    const el = document.querySelector<HTMLElement>(".dp-crt");
+    const el = document.querySelector<HTMLElement>(".dp-app");
     if (el && c) el.style.setProperty("--dp-beer", c.color);
     return () => { el?.style.removeProperty("--dp-beer"); };
   }, [c]);
@@ -107,99 +109,143 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
 
   if (!r || !c) return <p className="dp-dim">Loading recipe…{toastNode}</p>;
   const ro = !owner;
-  const stat = (k: string, v: string, n: number, range?: [number, number], min = 0, max = 1) => (
-    <div className="dp-stat">
-      <b>{k}</b><span className="dp-v">{v}{k === "SRM" && <span className="dp-swatch" style={{ background: c.color }} />}</span>
+  // one line of the style guide panel: the number, where it sits in the style's range, and the range
+  const kpi = (k: string, v: string, n: number, range?: [number, number], min = 0, max = 1, fmt = (x: number) => String(x)) => (
+    <div className="dp-kpi">
+      <b>{k}</b><span className="dp-v">{v}{k === "Color" && <span className="dp-swatch" style={{ background: c.color }} />}</span>
       <StyleBar v={n} lo={range?.[0]} hi={range?.[1]} min={min} max={max} />
+      {range && <span className="dp-range"><span>{fmt(range[0])}</span><span>{fmt(range[1])}</span></span>}
     </div>
   );
+  const sg = (x: number) => x.toFixed(3);
 
   return (
     <>
-      <div className="dp-row" style={{ justifyContent: "space-between" }}>
-        <h1 className="dp-h1" style={{ margin: 0 }}>{r.name}</h1>
-        <span className="dp-dim">{ro ? "Club recipe · read only" : dirty ? "Unsaved..." : "Saved"}</span>
-      </div>
-      {ro && <p><button className="dp-btn dp-go" onClick={copyToMine}>Copy to my recipes</button> <span className="dp-dim">to brew it or change it</span></p>}
-
-      <Win title="Recipe">
-        <fieldset disabled={ro} style={{ border: 0, padding: 0, margin: 0 }}>
-          <div className="dp-row">
-            <F label="Name" grow="2 1 240px"><input value={r.name} onChange={(e) => set((x) => ({ ...x, name: e.target.value }))} /></F>
-            <F label="Style" grow="2 1 240px">
-              <select value={r.styleId || ""} onChange={(e) => set((x) => ({ ...x, styleId: e.target.value || undefined }))}>
-                <option value="">(none)</option>
-                {STYLE_GROUPS.map((g) => <optgroup key={g.key} label={g.label}>{g.styles.map((s) => <option key={s.id} value={s.id}>{styleLabel(s)}</option>)}</optgroup>)}
-              </select>
-            </F>
-            <F label="Type" grow="1 1 140px">
-              <select value={r.type} onChange={(e) => set((x) => ({ ...x, type: e.target.value as RecipeType }))}>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-            </F>
-          </div>
-          <div className="dp-row" style={{ marginTop: 8 }}>
-            <F label="Equipment" grow="2 1 260px">
-              <select value={r.equipment.name} onChange={(e) => { const p = equip.find((q) => q.e.name === e.target.value); if (p) set((x) => ({ ...x, equipment: { ...p.e } })); }}>
-                {!equip.some((q) => q.e.name === r.equipment.name) && <option>{r.equipment.name}</option>}
-                {equip.map((q) => <option key={q.e.name} value={q.e.name}>{q.e.name}{q.id ? "" : " (starter)"}</option>)}
-              </select>
-            </F>
-            <F label="Batch gal"><Num value={r.equipment.batchGal} onChange={(n) => setE({ batchGal: n })} /></F>
-            <F label="Boil min"><Num value={r.equipment.boilMin} onChange={(n) => setE({ boilMin: n })} /></F>
-            <F label="Mash eff %"><Num value={r.equipment.mashEff} onChange={(n) => setE({ mashEff: n })} /></F>
-            <F label="Boil-off gal/hr"><Num value={r.equipment.boilOffGal} onChange={(n) => setE({ boilOffGal: n })} /></F>
-            <F label="IBU formula">
-              <select value={r.ibuMethod} onChange={(e) => set((x) => ({ ...x, ibuMethod: e.target.value as IbuMethod }))}>
-                <option value="tinseth">Tinseth</option><option value="rager">Rager</option><option value="garetz">Garetz</option>
-              </select>
-            </F>
-          </div>
-        </fieldset>
-        {!ro && (
-          <div className="dp-row" style={{ marginTop: 8 }}>
-            <F label="Scale to" grow="1 1 260px">
-              <select value={scaleTo} onChange={(e) => setScaleTo(e.target.value)}>
-                <option value="">(pick equipment; set its batch size on the Equipment screen)</option>
-                {equip.map((q) => <option key={q.e.name} value={q.e.name}>{q.e.name} · {q.e.batchGal} gal</option>)}
-              </select>
-            </F>
-            <button className="dp-btn" disabled={!scaleTo} onClick={() => { const p = equip.find((q) => q.e.name === scaleTo); if (p) { set((x) => scaleRecipe(x, p.e)); setScaleTo(""); toast("Scaled"); } }}>Scale</button>
-          </div>
+      {/* the toolbar, like BeerSmith's ribbon */}
+      <div className="dp-toolbar dp-noprint" role="toolbar" aria-label="Recipe">
+        {ro ? (
+          <button className="dp-tool dp-tool-go" onClick={copyToMine}><Icon name="copy" />Copy to mine</button>
+        ) : (
+          <button className="dp-tool" onClick={() => save().then(() => toast("Saved"))}><Icon name="save" />Save</button>
         )}
-      </Win>
-
-      <Win title={style ? `Numbers vs ${style.name}` : "Numbers"} className="dp-hero">
-        <div className="dp-stats">
-          {stat("OG", sgFmt(c.og), c.og, style?.og, 1.0, 1.13)}
-          {stat("FG", sgFmt(c.fg), c.fg, style?.fg, 0.99, 1.04)}
-          {stat("ABV", `${r1(c.abv, 1)}%`, c.abv, style?.abv, 0, 14)}
-          {stat("IBU", `${r1(c.ibu, 0)}`, c.ibu, style?.ibu, 0, 120)}
-          {stat("SRM", `${r1(c.srm, 1)}`, c.srm, style?.srm, 0, 40)}
-          {stat("BU:GU", `${r1(c.buGu, 2)}`, c.buGu, undefined, 0, 2)}
-        </div>
-        <div className="dp-glass" role="img" aria-label={`Beer color, SRM ${r1(c.srm, 1)}`}><i /></div>
-        <div className="dp-row dp-dim" style={{ gridColumn: "1 / -1", fontSize: 13, gap: "4px 18px" }}>
-          <span>Pre-boil {r1(c.preBoilGal, 2)} gal @ {sgFmt(c.preBoilGravity)}</span>
-          <span>Into fermenter {r1(c.intoFermGal, 2)} gal</span>
-          <span>Boil-off {r1(c.boilOffGal, 2)} gal/hr{r.weather ? ` (${r.weather.tempF}°F ${r.weather.rh}%)` : ""}</span>
-          <span>MASH pH {c.mashPh ? r1(c.mashPh, 2) : "-"}</span>
-          <span>Brewhouse eff {r1(c.brewhouseEff, 0)}% (result)</span>
-          <span>{r1(c.calories, 0)} CAL/12oz</span>
-        </div>
-        {!!c.notes.length && <div style={{ gridColumn: "1 / -1" }}>{c.notes.map((n) => <div key={n} className="dp-note">{n}</div>)}</div>}
-      </Win>
-
-      <div className="dp-tabs" role="tablist">
-        {TABS.map((t) => <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}
+        <button className="dp-tool" onClick={() => setTab("Brew day")}><Icon name="brewday" />Brew day</button>
+        <button className="dp-tool" onClick={startBrew}><Icon name="brews" />Start log</button>
+        {!ro && <button className="dp-tool" onClick={() => setScaleOpen((v) => !v)}><Icon name="scale" />Scale</button>}
+        <span className="dp-sep" />
+        <button className="dp-tool" onClick={() => window.print()}><Icon name="print" />Print</button>
+        <button className="dp-tool" onClick={exportXml}><Icon name="export" />BeerXML</button>
+        {!ro && <button className="dp-tool" onClick={copyToMine}><Icon name="copy" />Duplicate</button>}
+        {!ro && <button className="dp-tool" onClick={() => { const v = visibility === "club" ? "private" : "club"; setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private again")); }}><Icon name="share" />{visibility === "club" ? "Shared" : "Share"}</button>}
+        <span className="dp-status">{ro ? "Club recipe · read only" : dirty ? "Saving…" : "All changes saved"}</span>
       </div>
-      <fieldset disabled={ro && tab !== "Brew day"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-        {tab === "Design" && <DesignTab r={r} c={c} set={set} mine={mine} />}
-        {tab === "Mash" && <MashTab r={r} c={c} set={set} />}
-        {tab === "Water" && <WaterTab r={r} c={c} set={set} />}
-        {tab === "Ferment" && <FermentTab r={r} c={c} set={set} />}
-        {tab === "Brew day" && <BrewDay r={r} onStartLog={startBrew} onWeather={(w) => set((x) => ({ ...x, weather: w }))} />}
-        {tab === "Notes" && <NotesTab r={r} set={set} visibility={visibility} onVisibility={(v) => { setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private")); }} onExport={exportXml} />}
-      </fieldset>
-      <p className="dp-dim dp-noprint" style={{ marginTop: 18 }}><Link href="/draftpunk">&lt;&lt; BACK TO RECIPES</Link></p>
+
+      <div className="dp-recipe">
+        <div>
+          <fieldset disabled={ro} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            <input className="dp-title" aria-label="Recipe name" value={r.name} onChange={(e) => set((x) => ({ ...x, name: e.target.value }))} />
+            <div className="dp-row" style={{ margin: "6px 0 18px", gap: 8 }}>
+              <span className="dp-chip dp-beer">{style ? styleLabel(style) : "No style"}</span>
+              <span className="dp-chip">{TYPES.find(([v]) => v === r.type)?.[1]}</span>
+              <span className="dp-chip">{r1(r.equipment.batchGal, 2)} gal</span>
+              <span className="dp-chip">{r.equipment.name}</span>
+            </div>
+            {scaleOpen && !ro && (
+              <Win title="Scale this recipe">
+                <div className="dp-row">
+                  <F label="To equipment" grow="1 1 260px">
+                    <select value={scaleTo} onChange={(e) => setScaleTo(e.target.value)}>
+                      <option value="">Pick equipment (set its batch size on the Equipment page)</option>
+                      {equip.map((q) => <option key={q.e.name} value={q.e.name}>{q.e.name} · {q.e.batchGal} gal</option>)}
+                    </select>
+                  </F>
+                  <button className="dp-btn dp-go" disabled={!scaleTo} onClick={() => { const p = equip.find((q) => q.e.name === scaleTo); if (p) { set((x) => scaleRecipe(x, p.e)); setScaleTo(""); setScaleOpen(false); toast("Scaled"); } }}>Scale</button>
+                </div>
+                <p className="dp-dim" style={{ marginBottom: 0 }}>Grain scales by volume and mash efficiency, hops to keep the same IBU.</p>
+              </Win>
+            )}
+            <Win title="Recipe setup">
+              <div className="dp-row">
+                <F label="Style" grow="2 1 260px">
+                  <select value={r.styleId || ""} onChange={(e) => set((x) => ({ ...x, styleId: e.target.value || undefined }))}>
+                    <option value="">(none)</option>
+                    {STYLE_GROUPS.map((g) => <optgroup key={g.key} label={g.label}>{g.styles.map((s) => <option key={s.id} value={s.id}>{styleLabel(s)}</option>)}</optgroup>)}
+                  </select>
+                </F>
+                <F label="Type" grow="1 1 140px">
+                  <select value={r.type} onChange={(e) => set((x) => ({ ...x, type: e.target.value as RecipeType }))}>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+                </F>
+                <F label="Equipment" grow="2 1 260px">
+                  <select value={r.equipment.name} onChange={(e) => { const p = equip.find((q) => q.e.name === e.target.value); if (p) set((x) => ({ ...x, equipment: { ...p.e } })); }}>
+                    {!equip.some((q) => q.e.name === r.equipment.name) && <option>{r.equipment.name}</option>}
+                    {equip.map((q) => <option key={q.e.name} value={q.e.name}>{q.e.name}{q.id ? "" : " (starter)"}</option>)}
+                  </select>
+                </F>
+              </div>
+              <div className="dp-row" style={{ marginTop: 10 }}>
+                <F label="Batch gal"><Num value={r.equipment.batchGal} onChange={(n) => setE({ batchGal: n })} /></F>
+                <F label="Boil min"><Num value={r.equipment.boilMin} onChange={(n) => setE({ boilMin: n })} /></F>
+                <F label="Mash eff %"><Num value={r.equipment.mashEff} onChange={(n) => setE({ mashEff: n })} /></F>
+                <F label="Boil-off gal/hr"><Num value={r.equipment.boilOffGal} onChange={(n) => setE({ boilOffGal: n })} /></F>
+                <F label="IBU formula">
+                  <select value={r.ibuMethod} onChange={(e) => set((x) => ({ ...x, ibuMethod: e.target.value as IbuMethod }))}>
+                    <option value="tinseth">Tinseth</option><option value="rager">Rager</option><option value="garetz">Garetz</option>
+                  </select>
+                </F>
+              </div>
+            </Win>
+          </fieldset>
+
+          <div className="dp-tabs" role="tablist">
+            {TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}
+          </div>
+          <fieldset disabled={ro && tab !== "Brew day"} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+            {tab === "Ingredients" && <DesignTab r={r} c={c} set={set} mine={mine} />}
+            {tab === "Mash" && <MashTab r={r} c={c} set={set} />}
+            {tab === "Water" && <WaterTab r={r} c={c} set={set} />}
+            {tab === "Fermentation" && <FermentTab r={r} c={c} set={set} />}
+            {tab === "Brew day" && <BrewDay r={r} storeKey={id} onStartLog={startBrew} onWeather={(w) => set((x) => ({ ...x, weather: w }))} />}
+            {tab === "Notes" && <NotesTab r={r} set={set} visibility={visibility} onVisibility={(v) => { setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private")); }} onExport={exportXml} />}
+          </fieldset>
+        </div>
+
+        {/* the style guide panel, pinned while you work */}
+        <aside className="dp-aside">
+          <section className="dp-card dp-glasscard">
+            <div className="dp-glass" role="img" aria-label={`Beer color, SRM ${r1(c.srm, 1)}`}><i /></div>
+            <div>
+              <div className="dp-dim" style={{ fontSize: 12, fontWeight: 600 }}>Est. original gravity</div>
+              <div className="dp-big">{sgFmt(c.og)}</div>
+              <div className="dp-dim" style={{ marginTop: 4 }}>{r1(c.abv, 1)}% ABV · {r1(c.ibu, 0)} IBU · SRM {r1(c.srm, 1)}</div>
+            </div>
+          </section>
+          <section className="dp-card">
+            <h2 className="dp-card-t">Style guide<small>{style ? style.name : "pick a style to compare"}</small></h2>
+            <div className="dp-kpis">
+              {kpi("Original gravity", sgFmt(c.og), c.og, style?.og, 1.0, 1.13, sg)}
+              {kpi("Final gravity", sgFmt(c.fg), c.fg, style?.fg, 0.99, 1.04, sg)}
+              {kpi("Alcohol", `${r1(c.abv, 1)}%`, c.abv, style?.abv, 0, 14, (x) => `${x}%`)}
+              {kpi("Bitterness", `${r1(c.ibu, 0)} IBU`, c.ibu, style?.ibu, 0, 120)}
+              {kpi("Color", `${r1(c.srm, 1)} SRM`, c.srm, style?.srm, 0, 40)}
+              {kpi("BU:GU", `${r1(c.buGu, 2)}`, c.buGu, undefined, 0, 2)}
+            </div>
+          </section>
+          <section className="dp-card">
+            <h2 className="dp-card-t">Brew numbers</h2>
+            <div className="dp-facts">
+              <span>Pre-boil</span><span>{r1(c.preBoilGal, 2)} gal @ {sgFmt(c.preBoilGravity)}</span>
+              <span>Boil-off{r.weather ? " (weather)" : ""}</span><span>{r1(c.boilOffGal, 2)} gal/hr</span>
+              <span>Into fermenter</span><span>{r1(c.intoFermGal, 2)} gal</span>
+              <span>Total water</span><span>{r1(c.mashWaterGal + c.spargeWaterGal, 2)} gal</span>
+              <span>Mash pH</span><span>{c.mashPh ? r1(c.mashPh, 2).toFixed(2) : "-"}</span>
+              <span>Mash efficiency</span><span>{r.equipment.mashEff}%</span>
+              <span>Brewhouse eff. (result)</span><span>{r1(c.brewhouseEff, 0)}%</span>
+              <span>Calories / 12 oz</span><span>{r1(c.calories, 0)}</span>
+            </div>
+            {c.notes.map((n) => <div key={n} className="dp-note">{n}</div>)}
+          </section>
+        </aside>
+      </div>
+      <p className="dp-dim dp-noprint" style={{ marginTop: 18 }}><Link href="/draftpunk">← All recipes</Link></p>
       {toastNode}
     </>
   );

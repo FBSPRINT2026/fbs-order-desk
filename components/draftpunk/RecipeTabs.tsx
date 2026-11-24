@@ -51,92 +51,89 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
   const move = (k: "ferms" | "hops", i: number, d: -1 | 1) => set((x) => { const a = x[k] as unknown[]; const j = i + d; if (j < 0 || j >= a.length) return x; [a[i], a[j]] = [a[j], a[i]]; return x; });
   const sortHops = () => set((x) => ({ ...x, hops: [...x.hops].sort((a, b) => USES.findIndex((u) => u[0] === a.use) - USES.findIndex((u) => u[0] === b.use) || b.min - a.min) }));
 
+  const totalYeast = r.yeasts.reduce((a, y) => a + y.packs, 0);
+  const tdl = (l: string) => ({ "data-l": l });
   return (
     <>
-      <Win title={`Fermentables · ${r1(totalLb, 2)} lb`}>
+      <Win title="Ingredients" note={`${r1(totalLb, 2)} lb fermentables · ${r1(totalHop, 2)} oz hops · ${r1(c.ibu, 1)} IBU · ${totalYeast} yeast`}>
+        <div className="dp-addbar">
+          <button className="dp-btn dp-sm" onClick={() => setPick("ferm")}>+ Grain</button>
+          <button className="dp-btn dp-sm" onClick={() => setPick("hop")}>+ Hops</button>
+          <button className="dp-btn dp-sm" onClick={() => setPick("yeast")}>+ Yeast</button>
+          <button className="dp-btn dp-sm" onClick={() => setPick("misc")}>+ Misc</button>
+          <button className="dp-btn dp-sm dp-x" onClick={sortHops}>Sort hops by time</button>
+        </div>
         <table className="dp-tbl" data-nofit>
-          <thead><tr><th className="dp-num">LB</th><th>Name</th><th>Type</th><th className="dp-num">PPG</th><th className="dp-num">°L</th><th className="dp-num">%</th><th>Late</th><th className="dp-num">Stock</th><th /></tr></thead>
+          <thead><tr><th className="dp-num">Amount</th><th>Name</th><th>Type / use</th><th>Details</th><th className="dp-num">% / IBU</th><th /></tr></thead>
           <tbody>
+            {!!r.ferms.length && <tr className="dp-group"><td colSpan={6}>Fermentables</td></tr>}
             {r.ferms.map((f, i) => (
               <tr key={f.lid}>
-                <td className="dp-num"><Num value={f.lb} onChange={(n) => up("ferms", i, { lb: n })} digits={3} /></td>
-                <td><input value={f.name} onChange={(e) => up("ferms", i, { name: e.target.value })} /></td>
-                <td><select value={f.type} onChange={(e) => up("ferms", i, { type: e.target.value as FermType })}>{FTYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select></td>
-                <td className="dp-num"><Num value={r1((f.potential - 1) * 1000, 1)} onChange={(n) => up("ferms", i, { potential: 1 + n / 1000 })} /></td>
-                <td className="dp-num"><Num value={f.color} onChange={(n) => up("ferms", i, { color: n })} /></td>
-                <td className="dp-num">{r1(c.fermPct[f.lid] || 0, 1)}</td>
-                <td><input type="checkbox" checked={!!f.late} title="Added late in the boil" onChange={(e) => up("ferms", i, { late: e.target.checked })} /></td>
-                <td className="dp-num dp-dim">{stockOf(f.name) ?? ""}</td>
-                <td className="dp-num"><button className="dp-btn dp-x" onClick={() => move("ferms", i, -1)}>↑</button><button className="dp-btn dp-x" onClick={() => del("ferms", i)}>X</button></td>
+                <td className="dp-num" {...tdl("lb")}><Num value={f.lb} onChange={(n) => up("ferms", i, { lb: n })} digits={3} /> lb</td>
+                <td><input aria-label="Name" value={f.name} onChange={(e) => up("ferms", i, { name: e.target.value })} /></td>
+                <td {...tdl("Type")}><select value={f.type} onChange={(e) => up("ferms", i, { type: e.target.value as FermType })}>{FTYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select></td>
+                <td>
+                  <span className="dp-row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                    <Num value={r1((f.potential - 1) * 1000, 1)} title="Points per pound per gallon" onChange={(n) => up("ferms", i, { potential: 1 + n / 1000 })} /><span className="dp-dim">ppg</span>
+                    <Num value={f.color} title="Color, °Lovibond" onChange={(n) => up("ferms", i, { color: n })} /><span className="dp-dim">°L</span>
+                    <label className="dp-dim" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={!!f.late} onChange={(e) => up("ferms", i, { late: e.target.checked })} />late</label>
+                    {stockOf(f.name) != null && <span className="dp-chip" title="In stock">{stockOf(f.name)} lb</span>}
+                  </span>
+                </td>
+                <td className="dp-num" {...tdl("%")}>{r1(c.fermPct[f.lid] || 0, 1)}%</td>
+                <td className="dp-num"><button className="dp-btn dp-x" aria-label="Move up" onClick={() => move("ferms", i, -1)}>↑</button><button className="dp-btn dp-x" aria-label={`Remove ${f.name}`} onClick={() => del("ferms", i)}>✕</button></td>
               </tr>
             ))}
-          </tbody>
-        </table>
-        <p><button className="dp-btn" onClick={() => setPick("ferm")}>Add fermentable</button></p>
-      </Win>
-
-      <Win title={`Hops · ${r1(totalHop, 2)} oz · ${r1(c.ibu, 1)} IBU`}>
-        <table className="dp-tbl" data-nofit>
-          <thead><tr><th className="dp-num">OZ</th><th>Name</th><th className="dp-num">AA%</th><th>Form</th><th>Use</th><th className="dp-num">Time</th><th className="dp-num">IBU</th><th /></tr></thead>
-          <tbody>
+            {!!r.hops.length && <tr className="dp-group"><td colSpan={6}>Hops</td></tr>}
             {r.hops.map((h, i) => (
               <tr key={h.lid}>
-                <td className="dp-num"><Num value={h.oz} onChange={(n) => up("hops", i, { oz: n })} digits={3} /></td>
-                <td><input value={h.name} onChange={(e) => up("hops", i, { name: e.target.value })} /></td>
-                <td className="dp-num"><Num value={h.alpha} onChange={(n) => up("hops", i, { alpha: n })} /></td>
-                <td><select value={h.form || "pellet"} onChange={(e) => up("hops", i, { form: e.target.value as HopForm })}>{["pellet", "leaf", "plug", "extract"].map((t) => <option key={t}>{t}</option>)}</select></td>
-                <td><select value={h.use} onChange={(e) => { const use = e.target.value as HopUse; up("hops", i, { use, tempF: use === "whirlpool" ? h.tempF || 180 : h.tempF, days: use === "dry_hop" ? h.days || 4 : h.days, min: use === "whirlpool" ? 20 : use === "dry_hop" ? 0 : h.min }); }}>{USES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></td>
-                <td className="dp-num">
-                  {h.use === "dry_hop" ? <><Num value={h.days} onChange={(n) => up("hops", i, { days: n })} /> D</>
-                    : h.use === "whirlpool" ? <><Num value={h.min} onChange={(n) => up("hops", i, { min: n })} />M @<Num value={h.tempF} onChange={(n) => up("hops", i, { tempF: n })} />°</>
-                    : h.use === "boil" ? <><Num value={h.min} onChange={(n) => up("hops", i, { min: n })} /> M</> : <span className="dp-dim">-</span>}
+                <td className="dp-num" {...tdl("oz")}><Num value={h.oz} onChange={(n) => up("hops", i, { oz: n })} digits={3} /> oz</td>
+                <td><input aria-label="Name" value={h.name} onChange={(e) => up("hops", i, { name: e.target.value })} /></td>
+                <td {...tdl("Use")}><select value={h.use} onChange={(e) => { const use = e.target.value as HopUse; up("hops", i, { use, tempF: use === "whirlpool" ? h.tempF || 180 : h.tempF, days: use === "dry_hop" ? h.days || 4 : h.days, min: use === "whirlpool" ? 20 : use === "dry_hop" ? 0 : h.min }); }}>{USES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></td>
+                <td>
+                  <span className="dp-row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                    <Num value={h.alpha} title="Alpha acid %" onChange={(n) => up("hops", i, { alpha: n })} /><span className="dp-dim">AA%</span>
+                    {h.use === "dry_hop" ? <><Num value={h.days} onChange={(n) => up("hops", i, { days: n })} /><span className="dp-dim">days</span></>
+                      : h.use === "whirlpool" ? <><Num value={h.min} onChange={(n) => up("hops", i, { min: n })} /><span className="dp-dim">min @</span><Num value={h.tempF} onChange={(n) => up("hops", i, { tempF: n })} /><span className="dp-dim">°F</span></>
+                      : h.use === "boil" ? <><Num value={h.min} onChange={(n) => up("hops", i, { min: n })} /><span className="dp-dim">min</span></> : null}
+                    <select style={{ width: "auto" }} aria-label="Form" value={h.form || "pellet"} onChange={(e) => up("hops", i, { form: e.target.value as HopForm })}>{["pellet", "leaf", "plug", "extract"].map((t) => <option key={t}>{t}</option>)}</select>
+                  </span>
                 </td>
-                <td className="dp-num">{r1(c.hopIbus[h.lid] || 0, 1)}</td>
-                <td className="dp-num"><button className="dp-btn dp-x" onClick={() => move("hops", i, -1)}>↑</button><button className="dp-btn dp-x" onClick={() => del("hops", i)}>X</button></td>
+                <td className="dp-num" {...tdl("IBU")}>{r1(c.hopIbus[h.lid] || 0, 1)}</td>
+                <td className="dp-num"><button className="dp-btn dp-x" aria-label="Move up" onClick={() => move("hops", i, -1)}>↑</button><button className="dp-btn dp-x" aria-label={`Remove ${h.name}`} onClick={() => del("hops", i)}>✕</button></td>
+              </tr>
+            ))}
+            {!!r.yeasts.length && <tr className="dp-group"><td colSpan={6}>Yeast · {r1(c.attenuation, 0)}% attenuation</td></tr>}
+            {r.yeasts.map((y, i) => (
+              <tr key={y.lid}>
+                <td className="dp-num" {...tdl("Packs")}><Num value={y.packs} onChange={(n) => up("yeasts", i, { packs: n })} /> pk</td>
+                <td><input aria-label="Name" value={y.name} onChange={(e) => up("yeasts", i, { name: e.target.value })} /></td>
+                <td className="dp-dim">{[y.lab, y.code].filter(Boolean).join(" ")}{y.form ? ` · ${y.form}` : ""}</td>
+                <td>
+                  <span className="dp-row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                    <Num value={y.attenuation} title="Attenuation %" onChange={(n) => up("yeasts", i, { attenuation: n })} /><span className="dp-dim">% atten.</span>
+                    <label className="dp-dim" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={!!y.starter} onChange={(e) => up("yeasts", i, { starter: e.target.checked })} />starter</label>
+                  </span>
+                </td>
+                <td className="dp-num dp-dim">{y.tempLow && y.tempHigh ? `${y.tempLow}–${y.tempHigh}°F` : ""}</td>
+                <td className="dp-num"><button className="dp-btn dp-x" aria-label={`Remove ${y.name}`} onClick={() => del("yeasts", i)}>✕</button></td>
+              </tr>
+            ))}
+            {!!r.miscs.length && <tr className="dp-group"><td colSpan={6}>Misc</td></tr>}
+            {r.miscs.map((m, i) => (
+              <tr key={m.lid}>
+                <td className="dp-num" {...tdl("Amount")}><Num value={m.amount} onChange={(n) => up("miscs", i, { amount: n })} /> <input aria-label="Unit" style={{ width: "6ch" }} value={m.unit} onChange={(e) => up("miscs", i, { unit: e.target.value })} /></td>
+                <td><input aria-label="Name" value={m.name} onChange={(e) => up("miscs", i, { name: e.target.value })} /></td>
+                <td {...tdl("Use")}><select value={m.use} onChange={(e) => up("miscs", i, { use: e.target.value as Misc["use"] })}>{["boil", "mash", "primary", "secondary", "bottling"].map((u) => <option key={u}>{u}</option>)}</select></td>
+                <td>{m.use === "boil" && <span className="dp-row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}><Num value={m.min} onChange={(n) => up("miscs", i, { min: n })} /><span className="dp-dim">min</span></span>}</td>
+                <td />
+                <td className="dp-num"><button className="dp-btn dp-x" aria-label={`Remove ${m.name}`} onClick={() => del("miscs", i)}>✕</button></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="dp-row"><button className="dp-btn" onClick={() => setPick("hop")}>Add hops</button><button className="dp-btn" onClick={sortHops}>Sort by time</button></p>
+        {!r.ferms.length && !r.hops.length && !r.yeasts.length && <p className="dp-dim">Start with + Grain. Every number on the right updates as you go.</p>}
       </Win>
-
-      <div className="dp-grid">
-        <Win title={`Yeast · ${r1(c.attenuation, 0)}% attenuation`}>
-          <table className="dp-tbl" data-nofit>
-            <thead><tr><th className="dp-num">Qty</th><th>Name</th><th className="dp-num">Atten%</th><th>Starter</th><th /></tr></thead>
-            <tbody>
-              {r.yeasts.map((y, i) => (
-                <tr key={y.lid}>
-                  <td className="dp-num"><Num value={y.packs} onChange={(n) => up("yeasts", i, { packs: n })} /></td>
-                  <td>{y.lab ? `${y.lab} ${y.code || ""} ` : ""}<input value={y.name} onChange={(e) => up("yeasts", i, { name: e.target.value })} /></td>
-                  <td className="dp-num"><Num value={y.attenuation} onChange={(n) => up("yeasts", i, { attenuation: n })} /></td>
-                  <td><input type="checkbox" checked={!!y.starter} onChange={(e) => up("yeasts", i, { starter: e.target.checked })} /></td>
-                  <td className="dp-num"><button className="dp-btn dp-x" onClick={() => del("yeasts", i)}>X</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p><button className="dp-btn" onClick={() => setPick("yeast")}>Add yeast</button></p>
-        </Win>
-        <Win title="Misc">
-          <table className="dp-tbl" data-nofit>
-            <thead><tr><th className="dp-num">Amt</th><th>Unit</th><th>Name</th><th>Use</th><th className="dp-num">Min</th><th /></tr></thead>
-            <tbody>
-              {r.miscs.map((m, i) => (
-                <tr key={m.lid}>
-                  <td className="dp-num"><Num value={m.amount} onChange={(n) => up("miscs", i, { amount: n })} /></td>
-                  <td><input style={{ width: "6ch" }} value={m.unit} onChange={(e) => up("miscs", i, { unit: e.target.value })} /></td>
-                  <td><input value={m.name} onChange={(e) => up("miscs", i, { name: e.target.value })} /></td>
-                  <td><select value={m.use} onChange={(e) => up("miscs", i, { use: e.target.value as Misc["use"] })}>{["boil", "mash", "primary", "secondary", "bottling"].map((u) => <option key={u}>{u}</option>)}</select></td>
-                  <td className="dp-num">{m.use === "boil" ? <Num value={m.min} onChange={(n) => up("miscs", i, { min: n })} /> : ""}</td>
-                  <td className="dp-num"><button className="dp-btn dp-x" onClick={() => del("miscs", i)}>X</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p><button className="dp-btn" onClick={() => setPick("misc")}>Add misc</button></p>
-        </Win>
-      </div>
       {pick && <Picker {...pickers[pick]} onPick={onPick} onCustom={onCustom} onClose={() => setPick("")} />}
     </>
   );
@@ -297,7 +294,7 @@ export function WaterTab({ r, c, set }: Props) {
           <tbody>
             <tr><td>Start ({r.water.source.name})</td>{IONS.map(([k]) => <td key={k} className="dp-num">{r1(r.water.source[k] as number, 0)}</td>)}</tr>
             {target && <tr><td>Target</td>{IONS.map(([k]) => <td key={k} className="dp-num">{r1(target[k] as number, 0)}</td>)}</tr>}
-            <tr><td className="dp-hi">Result</td>{IONS.map(([k]) => <td key={k} className="dp-num" style={{ color: "var(--dp-hi)" }}>{r1(c.water[k] as number, 0)}</td>)}</tr>
+            <tr><td style={{ fontWeight: 700 }}>Result</td>{IONS.map(([k]) => <td key={k} className="dp-num" style={{ fontWeight: 700 }}>{r1(c.water[k] as number, 0)}</td>)}</tr>
             <tr className="dp-dim"><td>Good range</td>{IONS.map(([k]) => <td key={k} className="dp-num">{RANGES[k]}</td>)}</tr>
           </tbody>
         </table>

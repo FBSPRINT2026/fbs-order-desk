@@ -15,8 +15,8 @@ export default async function Brews() {
   return (
     <Shell name={brewer.name}>
       <h1 className="dp-h1">Brew log</h1>
-      <div className="dp-win">
-        <span className="dp-wt">Brew sessions ({rows.length})</span>
+      <div className="dp-card">
+        <h2 className="dp-card-t">Brew sessions<small>{rows.length}</small></h2>
         {!rows.length ? <p>No brews logged yet. Open a recipe, go to brew day, and press start a brew log.</p> : (
           <table className="dp-tbl" data-nofit>
             <thead><tr><th>Date</th><th>Recipe</th><th className="dp-num">OG</th><th className="dp-num">FG</th><th className="dp-num">ABV</th><th>Rating</th></tr></thead>

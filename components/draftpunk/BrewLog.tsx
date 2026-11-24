@@ -92,7 +92,7 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
     toast(error ? `Not saved: ${error.message}` : `${e.name} updated: mash eff ${next.mashEff}% · boil-off ${next.boilOffGal} gal/hr (calm day)`);
   };
 
-  const cmp = (label: string, planned: string, actual: string) => <tr><td>{label}</td><td className="dp-num dp-dim">{planned}</td><td className="dp-num" style={{ color: "var(--dp-hi)" }}>{actual || "-"}</td></tr>;
+  const cmp = (label: string, planned: string, actual: string) => <tr><td>{label}</td><td className="dp-num dp-dim">{planned}</td><td className="dp-num" style={{ fontWeight: 700 }}>{actual || "-"}</td></tr>;
   return (
     <>
       <h1 className="dp-h1">Brew log: {r.name}</h1>

@@ -3,75 +3,58 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Icon from "./icons";
 
-/** keyboard shortcuts: F1–F9 jump around, F2 saves whatever screen is open (it listens for "dp-save") */
-const KEYS: { k: string; label: string; href?: string; event?: string }[] = [
-  { k: "F1", label: "Recipes", href: "/draftpunk" },
-  { k: "F2", label: "Save", event: "dp-save" },
-  { k: "F3", label: "New", href: "/draftpunk/r/new" },
-  { k: "F4", label: "Brews", href: "/draftpunk/brews" },
-  { k: "F5", label: "Tools", href: "/draftpunk/tools" },
-  { k: "F6", label: "Equip", href: "/draftpunk/equipment" },
-  { k: "F7", label: "Stock", href: "/draftpunk/inventory" },
-  { k: "F8", label: "Club", href: "/draftpunk/club" },
-  { k: "F9", label: "Import", href: "/draftpunk/import" },
-];
-const MENU = [
-  { href: "/draftpunk", label: "Recipes" },
-  { href: "/draftpunk/brews", label: "Brew log" },
-  { href: "/draftpunk/tools", label: "Tools" },
-  { href: "/draftpunk/equipment", label: "Equipment" },
-  { href: "/draftpunk/inventory", label: "Stock" },
-  { href: "/draftpunk/club", label: "Club" },
+/**
+ * DraftPunk's frame, laid out like BeerSmith: the "folders" down the left (a bottom tab bar on a phone), the work on the
+ * right. Ctrl/Cmd+S (or F2) saves whatever screen is open; the screen listens for "dp-save".
+ */
+const NAV = [
+  { href: "/draftpunk", label: "Recipes", icon: "recipes" },
+  { href: "/draftpunk/brews", label: "Brew log", icon: "brews" },
+  { href: "/draftpunk/equipment", label: "Equipment", icon: "equip" },
+  { href: "/draftpunk/inventory", label: "Ingredients", icon: "stock" },
+  { href: "/draftpunk/tools", label: "Tools", icon: "tools" },
+  { href: "/draftpunk/club", label: "Club", icon: "club" },
 ];
 
 export default function Shell({ name, children }: { name: string; children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
-  const press = (key: (typeof KEYS)[number]) => {
-    if (key.event) window.dispatchEvent(new Event(key.event));
-    else if (key.href) router.push(key.href);
-  };
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      const key = KEYS.find((k) => k.k === e.key);
-      if (!key) return;
-      e.preventDefault();
-      press(key);
+      if ((e.key === "s" && (e.metaKey || e.ctrlKey)) || e.key === "F2") { e.preventDefault(); window.dispatchEvent(new Event("dp-save")); }
     };
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const signOut = async () => { await createClient().auth.signOut(); router.push("/draftpunk"); router.refresh(); };
-  const on = (href: string) => (href === "/draftpunk" ? path === "/draftpunk" || path.startsWith("/draftpunk/r/") : path.startsWith(href));
+  const on = (href: string) => (href === "/draftpunk" ? path === "/draftpunk" || path.startsWith("/draftpunk/r/") || path.startsWith("/draftpunk/import") : path.startsWith(href));
   return (
-    <>
-      <nav className="dp-menu dp-noprint">
-        <Link href="/draftpunk" className="dp-logo">DraftPunk</Link>
-        {MENU.map((m) => (
-          <Link key={m.href} href={m.href} className={on(m.href) ? "on" : ""}>
-            {m.label}
-          </Link>
+    <div className="dp-shell">
+      <nav className="dp-side dp-noprint" aria-label="DraftPunk">
+        <Link href="/draftpunk" className="dp-brand"><span className="dp-mark" aria-hidden="true" />DraftPunk</Link>
+        {NAV.map((n) => (
+          <Link key={n.href} href={n.href} className={`dp-nav ${on(n.href) ? "on" : ""}`}><Icon name={n.icon} />{n.label}</Link>
         ))}
-        <span className="dp-who">
-          <span>{name}</span>
-          <button type="button" onClick={signOut}>Sign out</button>
-        </span>
+        <div className="dp-me">
+          <b>{name}</b>
+          <button type="button" className="dp-linkbtn" onClick={signOut}>Sign out</button>
+        </div>
       </nav>
       <main className="dp-main">{children}</main>
-      <div className="dp-fkeys dp-noprint">
-        {KEYS.map((k) => (
-          <button key={k.k} type="button" onClick={() => press(k)}><i>{k.k}</i>{k.label}</button>
+      <nav className="dp-bottom dp-noprint" aria-label="DraftPunk">
+        {NAV.slice(0, 5).map((n) => (
+          <Link key={n.href} href={n.href} className={on(n.href) ? "on" : ""}><Icon name={n.icon} />{n.label === "Ingredients" ? "Stock" : n.label}</Link>
         ))}
-      </div>
-    </>
+      </nav>
+    </div>
   );
 }
 
 /** a short "Saved" note in the corner */
 export function useToast() {
   const [msg, setMsg] = useState("");
-  useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(""), 2200); return () => clearTimeout(t); }, [msg]);
+  useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(""), 2400); return () => clearTimeout(t); }, [msg]);
   return { toast: setMsg, node: msg ? <div className="dp-toast" role="status">{msg}</div> : null };
 }

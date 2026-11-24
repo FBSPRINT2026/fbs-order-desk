@@ -23,16 +23,16 @@ function Chart({ rows, capSg, fg, cham = [] }: { rows: Reading[]; capSg?: number
   const line = (pts: [number, number][]) => pts.map(([a, b], i) => `${i ? "L" : "M"}${a.toFixed(1)},${b.toFixed(1)}`).join("");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Gravity and temperature over time">
-      <rect x={P} y={P} width={W - P * 2} height={H - P * 2} fill="none" stroke="var(--dp-faint)" />
-      <line x1={P} x2={W - P} y1={y(fg)} y2={y(fg)} stroke="var(--dp-dim)" strokeDasharray="4 4" />
-      <text x={W - P + 2} y={y(fg) + 4} fill="var(--dp-dim)" fontSize="12">FG</text>
+      <rect x={P} y={P} width={W - P * 2} height={H - P * 2} fill="none" stroke="var(--dp-line)" />
+      <line x1={P} x2={W - P} y1={y(fg)} y2={y(fg)} stroke="var(--dp-mute)" strokeDasharray="4 4" />
+      <text x={W - P + 2} y={y(fg) + 4} fill="var(--dp-mute)" fontSize="12">FG</text>
       {capSg && <><line x1={P} x2={W - P} y1={y(capSg)} y2={y(capSg)} stroke="var(--dp-red)" strokeDasharray="2 4" /><text x={W - P + 2} y={y(capSg) + 4} fill="var(--dp-red)" fontSize="12">Spund</text></>}
       {cham.length > 1 && <path d={line(cham.filter((r) => r.set_f != null && new Date(r.read_at).getTime() >= t0).map((r) => [x(r.read_at), yt(r.set_f!)]))} fill="none" stroke="var(--dp-grn)" strokeWidth="1" strokeDasharray="3 3" />}
       {cham.length > 1 && <path d={line(cham.filter((r) => r.temp_f != null && new Date(r.read_at).getTime() >= t0).map((r) => [x(r.read_at), yt(r.temp_f!)]))} fill="none" stroke="var(--dp-grn)" strokeWidth="1.5" opacity=".8" />}
-      {temps.length > 1 && <path d={line(rows.filter((r) => r.temp_f != null).map((r) => [x(r.read_at), yt(r.temp_f!)]))} fill="none" stroke="var(--dp-dim)" strokeWidth="1.5" />}
-      <path d={line(rows.map((r) => [x(r.read_at), y(r.sg)]))} fill="none" stroke="var(--dp-amb)" strokeWidth="2.5" style={{ filter: "drop-shadow(0 0 3px var(--dp-amb))" }} />
-      <text x={4} y={y(hi - 0.002) + 4} fill="var(--dp-amb)" fontSize="12">{sgFmt(hi - 0.002)}</text>
-      <text x={4} y={y(lo + 0.002) + 4} fill="var(--dp-amb)" fontSize="12">{sgFmt(lo + 0.002)}</text>
+      {temps.length > 1 && <path d={line(rows.filter((r) => r.temp_f != null).map((r) => [x(r.read_at), yt(r.temp_f!)]))} fill="none" stroke="var(--dp-mute)" strokeWidth="1.5" />}
+      <path d={line(rows.map((r) => [x(r.read_at), y(r.sg)]))} fill="none" stroke="var(--dp-beer)" strokeWidth="2.5" style={{ filter: "none" }} />
+      <text x={4} y={y(hi - 0.002) + 4} fill="var(--dp-beer)" fontSize="12">{sgFmt(hi - 0.002)}</text>
+      <text x={4} y={y(lo + 0.002) + 4} fill="var(--dp-beer)" fontSize="12">{sgFmt(lo + 0.002)}</text>
     </svg>
   );
 }
@@ -71,11 +71,11 @@ export default function TiltPanel({ brewId, r, og, color, chamberId, onColor }: 
         {last && <span className="dp-v" style={{ fontSize: 26 }}>{sgFmt(last.sg)} · {last.temp_f != null ? `${r1(last.temp_f, 1)}°F` : ""}</span>}
         {last && start && <span>{r1(att, 0)}% atten · {r1(abvOf(start, last.sg), 1)}% ABV so far</span>}
       </div>
-      {sp && last && last.sg <= sp.capSg + 0.0005 && last.sg > fg - 0.002 && <p className="dp-red dp-blink" style={{ fontSize: 26 }}>Set the spunding valve now: {r1(sp.psi, 1)} PSI</p>}
+      {sp && last && last.sg <= sp.capSg + 0.0005 && last.sg > fg - 0.002 && <p className="dp-red dp-pulse" style={{ fontSize: 26 }}>Set the spunding valve now: {r1(sp.psi, 1)} PSI</p>}
       {sp && <p className="dp-dim">Spund at {sgFmt(sp.capSg)} · expected FG about {sgFmt(fg)}</p>}
       {flat && <p className="dp-grn">No change in 24 hours: Fermentation looks done.</p>}
       <Chart rows={rows} capSg={sp?.capSg} fg={fg} cham={cham} />
-      {rows.length > 1 && <p className="dp-dim" style={{ fontSize: 12 }}>Amber: gravity · grey: beer temp{cham.length ? " · green: chamber temp (dashed: setpoint)" : ""}</p>}
+      {rows.length > 1 && <p className="dp-dim" style={{ fontSize: 12 }}>Gravity in the beer color · grey: beer temp{cham.length ? " · green: chamber temp (dashed: setpoint)" : ""}</p>}
       {!rows.length && <p className="dp-dim">No readings yet.</p>}
       <details style={{ marginTop: 8 }}>
         <summary className="dp-dim" style={{ cursor: "pointer" }}>Hook up your Tilt</summary>
