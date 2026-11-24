@@ -8,7 +8,7 @@ import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "
 import { PrintThumb } from "@/components/LogoThumb";
 import { estimateStitches, threadByName } from "@/lib/embroidery";
 import { kidLine, screenFeeOf } from "@/lib/pricing";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled, specialInks, specialInkEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled, specialInks, specialInkEach, BLACKLIGHT_INK, hasBlacklight, isBlacklightInk } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
@@ -873,6 +873,21 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
     return <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Specialty ink?</span><span className="pr-scr-v">{names.join(", ")}</span>
       <button type="button" className="btn sm" onClick={() => update((x) => { delete x.imprints[di].specialInk; })}>Charge it{!hidePrices && ` (+${money(rate)} each)`}</button></div>;
   };
+  // blacklight effect (Nick, Nov 24 2026, #50225): one more screen and color with the Blacklight UV ink; it's a specialty
+  // ink (charged by the line above), and the proof shows it beside a blacklight view (a production file labeled so)
+  const blacklightCtl = (d: Group["imprints"][number]) => {
+    if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
+    const di = g.imprints.indexOf(d), on = hasBlacklight(d);
+    if (fixed && !on) return null;
+    const setBl = (want: boolean) => update((x) => {
+      const im = x.imprints[di], inks = inkNames(im.inks);
+      if (want) { im.inks = [...inks, BLACKLIGHT_INK].join(", "); im.colors = (im.colors || 0) + 1; }
+      else { im.inks = inks.filter((n) => !isBlacklightInk(n)).join(", "); im.colors = Math.max(1, (im.colors || 1) - 1); }
+    });
+    return on
+      ? <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Blacklight effect</span><span className="pr-scr-v">{BLACKLIGHT_INK} · 1 extra screen · add a Blacklight view to Production files for the proof</span>{!fixed && <button type="button" className="linkbtn" onClick={() => setBl(false)}>Remove</button>}</div>
+      : <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Blacklight?</span><span className="pr-scr-v faint">UV-reactive ink, 1 extra screen</span><button type="button" className="btn sm" onClick={() => setBl(true)}>+ Blacklight effect</button></div>;
+  };
   const puffCtl = (d: Group["imprints"][number]) => {
     if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
     const di = g.imprints.indexOf(d);
@@ -1602,6 +1617,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
                 {youthInfo(d) && <div className="imp-scr"><YouthSpec y={youthInfo(d)!} note /></div>}
                 {!d.supplied && puffCtl(d) && <div className="imp-scr">{puffCtl(d)}</div>}
                 {!d.supplied && specialCtl(d) && <div className="imp-scr">{specialCtl(d)}</div>}
+                {!d.supplied && blacklightCtl(d) && <div className="imp-scr">{blacklightCtl(d)}</div>}
                 {!d.supplied && inkCtl(d, false) && <div className="imp-scr">{inkCtl(d, false)}</div>}
                 {/* retail prints have no screens line: the fashion hit / soft hand choice on its own (Oct 16, Nick) */}
                 {d.method === "screen" && d.colors < FULL_COLOR && !scrImps.includes(d) && (

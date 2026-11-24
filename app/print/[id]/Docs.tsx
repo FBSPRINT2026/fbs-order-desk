@@ -3,7 +3,7 @@ import { choicesOf, optionName, withPicked } from "@/lib/quoteOptions";
 import { samplePieces, samplePiecesText, sampleOnLines, offTheTop } from "@/lib/samples";
 import { billBlock, billToOf } from "@/lib/billTo";
 import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile, withSewThreads } from "@/lib/brands";
-import { persOf, PERS_SHOW, printedLines } from "@/lib/pricing";
+import { persOf, PERS_SHOW, printedLines, hasBlacklight, BLACKLIGHT_INK } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
 import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksFor, inksOnColor, livePrint, liveInkBy } from "@/lib/inkBy";
@@ -44,6 +44,7 @@ export type DocData = {
   /** each garment color's shirt color (lower-case letters and digits → hex) */ colorHexes?: Record<string, string>;
   /** per group, per print: the largest it can print (inches) and on which size */ maxes: ({ w: number; h: number; on: string } | null)[][];
   printavo: boolean;
+  /** the order's "Blacklight view" production files (signed pictures), shown beside the daylight mockup on the proof */ blacklight?: string[];
 };
 
 const DELIVERY: Record<string, string> = { pickup: "Pickup", ship: "Ship", deliver: "Delivery", tbd: "Pickup / ship: TBD" };
@@ -1339,7 +1340,10 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
     const pvars = g.imprints.map((d) => variantsOf(d, pcols));
     return { mk, extra, idx, prints: g.imprints.length, pvars, picLines };
   });
-  const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
+  // a group with a blacklight ink gets one more page: the mockup in daylight beside how it looks under a blacklight
+  // (Nick, Nov 24 2026, #50225: "it just needs to show to the customer somehow that we're doing that")
+  const blOn = (g: Group) => !g.sample?.follows && g.imprints.some((d) => !d.visualOnly && hasBlacklight(d));
+  const total = plan.reduce((a, x, gi) => a + 1 + x.extra.length + x.prints + (blOn(groups[gi]) ? 1 : 0), 0);
   let page = 0;
   const foot = () => { page++; return <div className="foot"><span>Art proof{p.version ? ` v${p.version}` : ""} · #{o.number} {o.nickname}{who ? ` · ${who}` : ""}</span><span>Page {page} of {total}</span></div>; };
   /** one print's line under a mockup: on the cover every garment's sizes (adult and youth); on a garment's own page, the
@@ -1357,6 +1361,23 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
         <b>{d.location}</b> · {d.visualOnly ? MATCH_PREV : <>{printHow(d)}{sz.label ? <> · {split && !on ? "Adult " : ""}<b>{sz.label}</b></> : null}{tail}</>}
         {ink.length > 0 && <div className="pf-inks">{ink.map((k) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{k}</span>)}</div>}
       </div>
+    );
+  };
+  const blPage = (g: Group, gi: number, mk: string[], gname: string) => {
+    if (!blOn(g)) return null;
+    const bl = p.blacklight || [], hex = p.hexes[gi] || "#9aa1ab";
+    const where = g.imprints.filter((d) => hasBlacklight(d)).map((d) => d.location).join(", ");
+    return (
+      <section className="sheet pf">
+        <div className="p2h"><div className="t disp">Under blacklight{gname ? ` · ${gname}` : ""}</div><div className="r">#{o.number} · {o.nickname}</div></div>
+        <div className="pf-bl">
+          <figure>{mk[0] ? <img src={mk[0]} alt="In daylight" /> : <div className="none" style={{ background: hex }}>Mockup coming</div>}<figcaption>In daylight</figcaption></figure>
+          <figure className="uv">{bl[0] ? <img src={bl[0]} alt="Under blacklight" /> : <div className="none">Blacklight view coming</div>}<figcaption>Under blacklight</figcaption></figure>
+        </div>
+        {bl.slice(1).map((u) => <div className="pf-mk sumd one" key={u}><img src={u} alt="Under blacklight" /></div>)}
+        <div className="pf-pr"><Swatch c={colorHex(BLACKLIGHT_INK)} /><b>{BLACKLIGHT_INK} ink</b>{where ? ` · ${where}` : ""}: printed on its own screen. It glows under UV (black) light and is clear or faint in daylight.</div>
+        {foot()}
+      </section>
     );
   };
   const approved = o.approved_at ? `${o.approved_name || "Approved"}, ${new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" })}` : "";
@@ -1442,6 +1463,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 {foot()}
               </section>
             ))}
+            {blPage(g, gi, mk, gname)}
             {g.imprints.map((d, di) => (
               <div key={d.id} style={{ display: "contents" }}>
                 <ProofPrint d={d} di={di} n={g.imprints.length} p={p} gi={gi} gname={gname} foot={foot()} />

@@ -236,6 +236,12 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .pf-hero img{flex:1 1 0;min-height:0;width:100%;object-fit:contain}
 .pdoc .pf-mk span{font-size:13pt;font-weight:700;color:var(--ink)}
 .pdoc .pf-hero span,.pdoc .pf-mk span{font-size:10.5pt;color:var(--ink2);font-weight:600}
+.pdoc .pf-bl{display:grid;grid-template-columns:1fr 1fr;gap:.25in;margin:.2in 0}
+.pdoc .pf-bl figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:.08in}
+.pdoc .pf-bl img{width:100%;height:auto;max-height:6.5in;object-fit:contain;border-radius:6px}
+.pdoc .pf-bl .uv img,.pdoc .pf-bl .uv .none{background:#0b0614}
+.pdoc .pf-bl .none{width:100%;aspect-ratio:1;display:grid;place-items:center;border-radius:6px;color:#fff;font-weight:600}
+.pdoc .pf-bl figcaption{font-size:11pt;font-weight:700;color:var(--ink)}
 .pdoc .pf-hero .none{width:100%;flex:1;border-radius:12px;display:grid;place-items:center;color:rgba(0,0,0,.5);font-size:13pt}
 .pdoc .pf-tiles{flex:1 1 0;min-height:0;display:flex;gap:16px;align-items:stretch;justify-content:center;margin:4px 0}
 .pdoc .pf-tile{flex:1 1 0;min-width:0;max-width:3.8in;display:flex;flex-direction:column;gap:5px}

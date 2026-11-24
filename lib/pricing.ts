@@ -575,7 +575,12 @@ export const patchEach = (d: Pick<Imprint, "patch">, pl: Pick<PriceList, "patchA
 /** puff ink on a screen print, each piece per puffed location (Imprint.puff) */
 export const PUFF_PRICE = 1;
 /** inks that are specialty inks by their name (Nov 10, Nick: "the speciality ink charge… for the gold metallic") */
-export const SPECIAL_INK = /\b(metallic|shimmer|glitter|glow|reflective|foil|high[- ]?density|pearl(escent)?|sparkle|chrome)\b/i;
+export const SPECIAL_INK = /\b(metallic|shimmer|glitter|glow|reflective|foil|high[- ]?density|pearl(escent)?|sparkle|chrome|black ?light|uv)\b/i;
+/** the blacklight (UV-reactive) ink (Nick, Nov 24 2026, #50225: "one extra screen… apply the blacklight effect, and it
+ *  needs to show to the customer"): one more screen and color on the print, a specialty ink, and its own view on the proof */
+export const BLACKLIGHT_INK = "Blacklight UV";
+export const isBlacklightInk = (n: string) => /\bblack ?light\b|\buv\b/i.test(n);
+export const hasBlacklight = (d: Pick<Imprint, "inks">) => inkNames(d.inks).some(isBlacklightInk);
 /** the specialty inks a screen print uses, by name ("Gold Shimmer") */
 export const specialInks = (d: Pick<Imprint, "inks">) => inkNames(d.inks).filter((n) => SPECIAL_INK.test(n));
 /** does this screen print carry the specialty ink charge: set by hand, else read from its inks */
