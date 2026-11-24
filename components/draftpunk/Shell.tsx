@@ -14,6 +14,7 @@ const NAV = [
   { href: "/draftpunk/brews", label: "Brew log", icon: "brews" },
   { href: "/draftpunk/equipment", label: "Equipment", icon: "equip" },
   { href: "/draftpunk/inventory", label: "Ingredients", icon: "stock" },
+  { href: "/draftpunk/competitions", label: "Competitions", icon: "medal" },
   { href: "/draftpunk/tools", label: "Tools", icon: "tools" },
   { href: "/draftpunk/club", label: "Club", icon: "club" },
 ];
@@ -53,9 +54,11 @@ export default function Shell({ name, children }: { name: string; children: Reac
       </nav>
       <main className="dp-main">{children}</main>
       <nav className="dp-bottom dp-noprint" aria-label="DraftPunk">
-        {NAV.slice(0, 5).map((n) => (
+        {/* a phone's bottom bar: the four used most, and More for the rest */}
+        {NAV.filter((n) => ["Recipes", "Brew log", "Ingredients", "Tools"].includes(n.label)).map((n) => (
           <Link key={n.href} href={n.href} className={on(n.href) ? "on" : ""}><Icon name={n.icon} />{n.label === "Ingredients" ? "Stock" : n.label}</Link>
         ))}
+        <Link href="/draftpunk/more" className={path.startsWith("/draftpunk/more") || ["/draftpunk/equipment", "/draftpunk/competitions", "/draftpunk/club"].some((h) => path.startsWith(h)) ? "on" : ""}><Icon name="more" />More</Link>
       </nav>
     </div>
   );
