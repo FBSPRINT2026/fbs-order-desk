@@ -28,6 +28,15 @@ export default function Shell({ name, children }: { name: string; children: Reac
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);
   }, []);
+  // the look (Nick, Nov 24 2026: three to choose from): kept on this device
+  const [theme, setTheme] = useState("taproom");
+  useEffect(() => { try { const t = localStorage.getItem("dp:theme"); if (t) setTheme(t); } catch { /* fine */ } }, []);
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>(".dp-app");
+    if (!el) return;
+    if (theme === "taproom") el.removeAttribute("data-theme"); else el.setAttribute("data-theme", theme);
+    try { localStorage.setItem("dp:theme", theme); } catch { /* fine */ }
+  }, [theme]);
   const signOut = async () => { await createClient().auth.signOut(); router.push("/draftpunk"); router.refresh(); };
   const on = (href: string) => (href === "/draftpunk" ? path === "/draftpunk" || path.startsWith("/draftpunk/r/") || path.startsWith("/draftpunk/import") : path.startsWith(href));
   return (
@@ -39,6 +48,11 @@ export default function Shell({ name, children }: { name: string; children: Reac
         ))}
         <div className="dp-me">
           <b>{name}</b>
+          <label className="dp-dim" style={{ fontSize: 12, display: "grid", gap: 4 }}>Look
+            <select value={theme} onChange={(e) => setTheme(e.target.value)}>
+              <option value="taproom">Taproom</option><option value="lab">Brew Lab</option><option value="hop">Hop Yard</option>
+            </select>
+          </label>
           <button type="button" className="dp-linkbtn" onClick={signOut}>Sign out</button>
         </div>
       </nav>

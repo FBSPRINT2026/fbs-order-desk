@@ -12,7 +12,7 @@ export default function DraftPunkLayout({ children }: { children: React.ReactNod
   return (
     <div className="dp-app" data-notranslate>
       {/* Inter for text, Bricolage Grotesque for headings and big numbers */}
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Inter:wght@400;500;600;700&display=swap" />
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Archivo:wdth,wght@100..125,600..900&family=DM+Sans:wght@400;500;700&display=swap" />
       {children}
     </div>
   );

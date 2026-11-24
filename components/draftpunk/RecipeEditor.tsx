@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { calcRecipe, calcSummary, r1, scaleRecipe, sgFmt } from "@/lib/draftpunk/calc";
+import { calcRecipe, calcSummary, fromPercents, r1, scaleRecipe, sgFmt } from "@/lib/draftpunk/calc";
 import { normalize, newRecipe } from "@/lib/draftpunk/defaults";
 import { DEFAULT_EQUIPMENT } from "@/lib/draftpunk/library";
 import { STYLE_GROUPS, styleById, styleLabel } from "@/lib/draftpunk/styles";
@@ -86,7 +86,8 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
   useEffect(() => { if (!dirty) return; const t = setTimeout(() => save(), 1200); return () => clearTimeout(t); }, [dirty, r, save]);
   useEffect(() => { const on = () => { save().then(() => toast("Saved")); }; window.addEventListener("dp-save", on); return () => window.removeEventListener("dp-save", on); }, [save, toast]);
 
-  const set = useCallback((fn: (x: Recipe) => Recipe) => { setR((x) => (x ? fn(structuredClone(x)) : x)); if (owner) setDirty(true); }, [owner]);
+  // a recipe designed by grain percentages gets its pounds worked out again after every change (equipment, efficiency…)
+  const set = useCallback((fn: (x: Recipe) => Recipe) => { setR((x) => (x ? fromPercents(fn(structuredClone(x))) : x)); if (owner) setDirty(true); }, [owner]);
   const setE = (patch: Partial<Equipment>) => set((x) => ({ ...x, equipment: { ...x.equipment, ...patch } }));
 
   const copyToMine = async () => {
@@ -203,7 +204,7 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
             {tab === "Mash" && <MashTab r={r} c={c} set={set} />}
             {tab === "Water" && <WaterTab r={r} c={c} set={set} />}
             {tab === "Fermentation" && <FermentTab r={r} c={c} set={set} />}
-            {tab === "Brew day" && <BrewDay r={r} storeKey={id} onStartLog={startBrew} onWeather={(w) => set((x) => ({ ...x, weather: w }))} />}
+            {tab === "Brew day" && <BrewDay r={r} storeKey={id} set={ro ? undefined : set} mine={mine} onStartLog={startBrew} onWeather={(w) => set((x) => ({ ...x, weather: w }))} />}
             {tab === "Notes" && <NotesTab r={r} set={set} visibility={visibility} onVisibility={(v) => { setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private")); }} onExport={exportXml} />}
           </fieldset>
         </div>

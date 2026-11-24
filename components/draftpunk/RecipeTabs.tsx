@@ -1,11 +1,12 @@
 "use client";
 import { useMemo, useState } from "react";
-import { cellsNeeded, clSo4, co2Harvest, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
+import { cellsNeeded, clSo4, co2Harvest, fromPercents, toPercents, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
 import { asFerm, asHop, asMisc, asYeast } from "@/lib/draftpunk/defaults";
 import { FERMENTABLES, HOPS, MASH_PROFILES, MISCS, WATERS, YEASTS } from "@/lib/draftpunk/library";
 import type { Calc, Carb, Fermentable, FermType, Hop, HopForm, HopUse, Misc, MashStep, Recipe, Salts, WaterProfile, Yeast } from "@/lib/draftpunk/types";
 import { F, Num, Picker, Win } from "./ui";
 import { FERMENT_PRESETS } from "@/lib/draftpunk/autopilot";
+import HopAdjust from "./HopAdjust";
 
 type Set = (fn: (x: Recipe) => Recipe) => void;
 export type MineItem = { id: string; kind: "fermentable" | "hop" | "yeast" | "misc" | "water"; name: string; data: Record<string, unknown>; in_stock: number | null };
@@ -17,6 +18,7 @@ const USES: [HopUse, string][] = [["boil", "Boil"], ["first_wort", "First Wort"]
 // ---------------- DESIGN: fermentables, hops, yeast, misc ----------------
 export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
   const [pick, setPick] = useState<"" | "ferm" | "hop" | "yeast" | "misc">("");
+  const [hopFix, setHopFix] = useState(false);
   // the brewer's own ingredients (not stock entries of library items), with the numbers a recipe needs
   const needs: Record<string, string> = { fermentable: "potential", hop: "alpha", yeast: "attenuation", misc: "use" };
   const my = (kind: MineItem["kind"]) => mine.filter((m) => m.kind === kind && !(m.data as { ref?: string }).ref && (m.data as Record<string, unknown>)[needs[kind]] != null);
@@ -33,7 +35,7 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
   const onPick = (key: string) => {
     const m = key.startsWith("m:") ? mine.find((x) => x.id === key.slice(2)) : null;
     const dat = (lib: { id: string }[]) => (m ? ({ ...m.data, name: m.name } as never) : (lib.find((x) => x.id === key) as never));
-    if (pick === "ferm") set((x) => ({ ...x, ferms: [...x.ferms, asFerm(dat(FERMENTABLES), 1)] }));
+    if (pick === "ferm") set((x) => ({ ...x, ferms: [...x.ferms, { ...asFerm(dat(FERMENTABLES), 1), pct: x.byPercent?.on ? 5 : undefined }] }));
     if (pick === "hop") set((x) => ({ ...x, hops: [...x.hops, asHop(dat(HOPS), 1, "boil", x.hops.length ? 10 : 60)] }));
     if (pick === "yeast") set((x) => ({ ...x, yeasts: [...x.yeasts, asYeast(dat(YEASTS))] }));
     if (pick === "misc") set((x) => ({ ...x, miscs: [...x.miscs, asMisc(dat(MISCS))] }));
@@ -52,6 +54,9 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
   const sortHops = () => set((x) => ({ ...x, hops: [...x.hops].sort((a, b) => USES.findIndex((u) => u[0] === a.use) - USES.findIndex((u) => u[0] === b.use) || b.min - a.min) }));
 
   const totalYeast = r.yeasts.reduce((a, y) => a + y.packs, 0);
+  const pctMode = !!r.byPercent?.on;
+  const pctSum = r.ferms.reduce((a, f) => a + (f.pct || 0), 0);
+  const setMode = (on: boolean) => set((x) => (on ? fromPercents({ ...toPercents(x), byPercent: { on: true, targetOg: x.byPercent?.targetOg || r1(c.og, 3) || 1.055 } }) : { ...x, byPercent: x.byPercent ? { ...x.byPercent, on: false } : undefined }));
   const tdl = (l: string) => ({ "data-l": l });
   return (
     <>
@@ -62,70 +67,69 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
           <button className="dp-btn dp-sm" onClick={() => setPick("yeast")}>+ Yeast</button>
           <button className="dp-btn dp-sm" onClick={() => setPick("misc")}>+ Misc</button>
           <button className="dp-btn dp-sm dp-x" onClick={sortHops}>Sort hops by time</button>
+          {!!r.hops.length && <button className="dp-btn dp-sm" onClick={() => setHopFix((v) => !v)}>Adjust for my hops&apos; alpha</button>}
+        </div>
+        {hopFix && <HopAdjust r={r} set={set} mine={mine} onDone={() => setHopFix(false)} />}
+        <div className="dp-row" style={{ margin: "4px 0 8px", alignItems: "center" }}>
+          <span className="dp-dim" style={{ fontSize: 13, fontWeight: 600 }}>Grain bill by</span>
+          <span className="dp-seg" role="group" aria-label="Grain bill by">
+            <button className={!pctMode ? "on" : ""} onClick={() => setMode(false)}>Pounds</button>
+            <button className={pctMode ? "on" : ""} onClick={() => setMode(true)}>Percent</button>
+          </span>
+          {pctMode && <><F label="Target OG"><Num className="dp-nw" value={r.byPercent!.targetOg} onChange={(n) => set((x) => ({ ...x, byPercent: { on: true, targetOg: n } }))} /></F>
+            <span className={Math.abs(pctSum - 100) > 0.05 ? "dp-red" : "dp-dim"} style={{ fontSize: 13 }}>Total {r1(pctSum, 1)}%{Math.abs(pctSum - 100) > 0.05 ? " (taken as parts of 100)" : ""}</span></>}
         </div>
         <table className="dp-tbl" data-nofit>
-          <thead><tr><th className="dp-num">Amount</th><th>Name</th><th>Type / use</th><th>Details</th><th className="dp-num">% / IBU</th><th /></tr></thead>
+          <thead><tr><th className="dp-num">Amount</th><th>Ingredient</th><th className="dp-num">{pctMode ? "lb / IBU" : "% / IBU"}</th><th /></tr></thead>
           <tbody>
-            {!!r.ferms.length && <tr className="dp-group"><td colSpan={6}>Fermentables</td></tr>}
+            {!!r.ferms.length && <tr className="dp-group"><td colSpan={4}>Fermentables</td></tr>}
             {r.ferms.map((f, i) => (
               <tr key={f.lid}>
-                <td className="dp-num" {...tdl("lb")}><Num value={f.lb} onChange={(n) => up("ferms", i, { lb: n })} digits={3} /> lb</td>
-                <td><input aria-label="Name" value={f.name} onChange={(e) => up("ferms", i, { name: e.target.value })} /></td>
-                <td {...tdl("Type")}><select value={f.type} onChange={(e) => up("ferms", i, { type: e.target.value as FermType })}>{FTYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select></td>
-                <td>
-                  <span className="dp-row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                <td className="dp-num" {...tdl(pctMode ? "%" : "lb")}>{pctMode
+                  ? <><Num value={f.pct} onChange={(n) => up("ferms", i, { pct: n })} digits={1} /> %</>
+                  : <><Num value={f.lb} onChange={(n) => up("ferms", i, { lb: n })} digits={3} /> lb</>}</td>
+                <td className="dp-namecell"><input aria-label="Name" value={f.name} onChange={(e) => up("ferms", i, { name: e.target.value })} /><div className="dp-sub"><select value={f.type} onChange={(e) => up("ferms", i, { type: e.target.value as FermType })}>{FTYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select><span className="dp-row" style={{ gap: 6, alignItems: "center" }}>
                     <Num value={r1((f.potential - 1) * 1000, 1)} title="Points per pound per gallon" onChange={(n) => up("ferms", i, { potential: 1 + n / 1000 })} /><span className="dp-dim">ppg</span>
                     <Num value={f.color} title="Color, °Lovibond" onChange={(n) => up("ferms", i, { color: n })} /><span className="dp-dim">°L</span>
                     <label className="dp-dim" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={!!f.late} onChange={(e) => up("ferms", i, { late: e.target.checked })} />late</label>
                     {stockOf(f.name) != null && <span className="dp-chip" title="In stock">{stockOf(f.name)} lb</span>}
-                  </span>
-                </td>
-                <td className="dp-num" {...tdl("%")}>{r1(c.fermPct[f.lid] || 0, 1)}%</td>
+                  </span></div></td>
+                <td className="dp-num" {...tdl(pctMode ? "lb" : "%")}>{pctMode ? `${r1(f.lb, 2)} lb` : `${r1(c.fermPct[f.lid] || 0, 1)}%`}</td>
                 <td className="dp-num"><button className="dp-btn dp-x" aria-label="Move up" onClick={() => move("ferms", i, -1)}>↑</button><button className="dp-btn dp-x" aria-label={`Remove ${f.name}`} onClick={() => del("ferms", i)}>✕</button></td>
               </tr>
             ))}
-            {!!r.hops.length && <tr className="dp-group"><td colSpan={6}>Hops</td></tr>}
+            {!!r.hops.length && <tr className="dp-group"><td colSpan={4}>Hops</td></tr>}
             {r.hops.map((h, i) => (
               <tr key={h.lid}>
                 <td className="dp-num" {...tdl("oz")}><Num value={h.oz} onChange={(n) => up("hops", i, { oz: n })} digits={3} /> oz</td>
-                <td><input aria-label="Name" value={h.name} onChange={(e) => up("hops", i, { name: e.target.value })} /></td>
-                <td {...tdl("Use")}><select value={h.use} onChange={(e) => { const use = e.target.value as HopUse; up("hops", i, { use, tempF: use === "whirlpool" ? h.tempF || 180 : h.tempF, days: use === "dry_hop" ? h.days || 4 : h.days, min: use === "whirlpool" ? 20 : use === "dry_hop" ? 0 : h.min }); }}>{USES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></td>
-                <td>
-                  <span className="dp-row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
-                    <Num value={h.alpha} title="Alpha acid %" onChange={(n) => up("hops", i, { alpha: n })} /><span className="dp-dim">AA%</span>
+                <td className="dp-namecell"><input aria-label="Name" value={h.name} onChange={(e) => up("hops", i, { name: e.target.value })} /><div className="dp-sub"><select value={h.use} onChange={(e) => { const use = e.target.value as HopUse; up("hops", i, { use, tempF: use === "whirlpool" ? h.tempF || 180 : h.tempF, days: use === "dry_hop" ? h.days || 4 : h.days, min: use === "whirlpool" ? 20 : use === "dry_hop" ? 0 : h.min }); }}>{USES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><span className="dp-row" style={{ gap: 6, alignItems: "center" }}>
+                    <Num value={h.alpha} title={h.designAlpha ? `Alpha acid % (designed at ${h.designAlpha}%)` : "Alpha acid %"} onChange={(n) => up("hops", i, { alpha: n })} /><span className="dp-dim">AA%{h.designAlpha && h.designAlpha !== h.alpha ? ` (was ${h.designAlpha})` : ""}</span>
                     {h.use === "dry_hop" ? <><Num value={h.days} onChange={(n) => up("hops", i, { days: n })} /><span className="dp-dim">days</span></>
                       : h.use === "whirlpool" ? <><Num value={h.min} onChange={(n) => up("hops", i, { min: n })} /><span className="dp-dim">min @</span><Num value={h.tempF} onChange={(n) => up("hops", i, { tempF: n })} /><span className="dp-dim">°F</span></>
                       : h.use === "boil" ? <><Num value={h.min} onChange={(n) => up("hops", i, { min: n })} /><span className="dp-dim">min</span></> : null}
                     <select style={{ width: "auto" }} aria-label="Form" value={h.form || "pellet"} onChange={(e) => up("hops", i, { form: e.target.value as HopForm })}>{["pellet", "leaf", "plug", "extract"].map((t) => <option key={t}>{t}</option>)}</select>
-                  </span>
-                </td>
+                  </span></div></td>
                 <td className="dp-num" {...tdl("IBU")}>{r1(c.hopIbus[h.lid] || 0, 1)}</td>
                 <td className="dp-num"><button className="dp-btn dp-x" aria-label="Move up" onClick={() => move("hops", i, -1)}>↑</button><button className="dp-btn dp-x" aria-label={`Remove ${h.name}`} onClick={() => del("hops", i)}>✕</button></td>
               </tr>
             ))}
-            {!!r.yeasts.length && <tr className="dp-group"><td colSpan={6}>Yeast · {r1(c.attenuation, 0)}% attenuation</td></tr>}
+            {!!r.yeasts.length && <tr className="dp-group"><td colSpan={4}>Yeast · {r1(c.attenuation, 0)}% attenuation</td></tr>}
             {r.yeasts.map((y, i) => (
               <tr key={y.lid}>
                 <td className="dp-num" {...tdl("Packs")}><Num value={y.packs} onChange={(n) => up("yeasts", i, { packs: n })} /> pk</td>
-                <td><input aria-label="Name" value={y.name} onChange={(e) => up("yeasts", i, { name: e.target.value })} /></td>
-                <td className="dp-dim">{[y.lab, y.code].filter(Boolean).join(" ")}{y.form ? ` · ${y.form}` : ""}</td>
-                <td>
-                  <span className="dp-row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}>
+                <td className="dp-namecell"><input aria-label="Name" value={y.name} onChange={(e) => up("yeasts", i, { name: e.target.value })} /><div className="dp-sub">{[y.lab, y.code].filter(Boolean).join(" ")}{y.form ? ` · ${y.form}` : ""}<span className="dp-row" style={{ gap: 6, alignItems: "center" }}>
                     <Num value={y.attenuation} title="Attenuation %" onChange={(n) => up("yeasts", i, { attenuation: n })} /><span className="dp-dim">% atten.</span>
                     <label className="dp-dim" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={!!y.starter} onChange={(e) => up("yeasts", i, { starter: e.target.checked })} />starter</label>
-                  </span>
-                </td>
+                  </span></div></td>
                 <td className="dp-num dp-dim">{y.tempLow && y.tempHigh ? `${y.tempLow}–${y.tempHigh}°F` : ""}</td>
                 <td className="dp-num"><button className="dp-btn dp-x" aria-label={`Remove ${y.name}`} onClick={() => del("yeasts", i)}>✕</button></td>
               </tr>
             ))}
-            {!!r.miscs.length && <tr className="dp-group"><td colSpan={6}>Misc</td></tr>}
+            {!!r.miscs.length && <tr className="dp-group"><td colSpan={4}>Misc</td></tr>}
             {r.miscs.map((m, i) => (
               <tr key={m.lid}>
                 <td className="dp-num" {...tdl("Amount")}><Num value={m.amount} onChange={(n) => up("miscs", i, { amount: n })} /> <input aria-label="Unit" style={{ width: "6ch" }} value={m.unit} onChange={(e) => up("miscs", i, { unit: e.target.value })} /></td>
-                <td><input aria-label="Name" value={m.name} onChange={(e) => up("miscs", i, { name: e.target.value })} /></td>
-                <td {...tdl("Use")}><select value={m.use} onChange={(e) => up("miscs", i, { use: e.target.value as Misc["use"] })}>{["boil", "mash", "primary", "secondary", "bottling"].map((u) => <option key={u}>{u}</option>)}</select></td>
-                <td>{m.use === "boil" && <span className="dp-row" style={{ gap: 6, alignItems: "center", flexWrap: "nowrap" }}><Num value={m.min} onChange={(n) => up("miscs", i, { min: n })} /><span className="dp-dim">min</span></span>}</td>
+                <td className="dp-namecell"><input aria-label="Name" value={m.name} onChange={(e) => up("miscs", i, { name: e.target.value })} /><div className="dp-sub"><select value={m.use} onChange={(e) => up("miscs", i, { use: e.target.value as Misc["use"] })}>{["boil", "mash", "primary", "secondary", "bottling"].map((u) => <option key={u}>{u}</option>)}</select>{m.use === "boil" && <span className="dp-row" style={{ gap: 6, alignItems: "center" }}><Num value={m.min} onChange={(n) => up("miscs", i, { min: n })} /><span className="dp-dim">min</span></span>}</div></td>
                 <td />
                 <td className="dp-num"><button className="dp-btn dp-x" aria-label={`Remove ${m.name}`} onClick={() => del("miscs", i)}>✕</button></td>
               </tr>

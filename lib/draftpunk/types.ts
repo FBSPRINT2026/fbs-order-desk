@@ -38,8 +38,11 @@ export type Misc = { name: string; type: "spice" | "fining" | "water_agent" | "h
 export type WaterProfile = { name: string; ca: number; mg: number; na: number; so4: number; cl: number; hco3: number; ph?: number; notes?: string };
 
 /** a line in a recipe: the ingredient plus how much and when */
-export type RFerm = Fermentable & { lid: string; lb: number; late?: boolean };
-export type RHop = Hop & { lid: string; oz: number; use: HopUse; min: number; tempF?: number; days?: number };
+/** pct: its share of the grain bill by weight, when the recipe is designed by percentages */
+export type RFerm = Fermentable & { lid: string; lb: number; late?: boolean; pct?: number };
+/** a hop addition; designAlpha is the alpha it was designed around when the brewer has adjusted it for the lot they
+ *  bought (alpha is then the lot's; Nick, Nov 24 2026) */
+export type RHop = Hop & { lid: string; oz: number; use: HopUse; min: number; tempF?: number; days?: number; designAlpha?: number; designOz?: number; designName?: string };
 export type RYeast = Yeast & { lid: string; packs: number; starter?: boolean };
 export type RMisc = Misc & { lid: string; amount: number; unit: string; min?: number };
 
@@ -118,6 +121,11 @@ export type Recipe = {
   name: string; brewer?: string; type: RecipeType; styleId?: string; notes?: string; tasteNotes?: string;
   equipment: Equipment;
   ferms: RFerm[]; hops: RHop[]; yeasts: RYeast[]; miscs: RMisc[];
+  /**
+   * Designing by grain percentages (Nick, Nov 24 2026: "we design around grain percentages"): each fermentable's share
+   * of the bill and a target OG; the pounds are worked out (fromPercents) for this equipment and mash efficiency.
+   */
+  byPercent?: { on: boolean; targetOg: number };
   ibuMethod: IbuMethod;
   mash: Mash;
   water: { source: WaterProfile; target?: WaterProfile; salts: Salts; spargeSalts?: boolean; spargeAcidMl?: number;

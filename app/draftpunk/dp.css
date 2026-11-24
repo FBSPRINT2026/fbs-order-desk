@@ -19,6 +19,28 @@
   .dp-app { --dp-bg: #121110; --dp-card: #1b1a18; --dp-sunk: #232120; --dp-line: #2e2b28; --dp-text: #f2eee8; --dp-mute: #a39b90;
     --dp-acc: #f0a03c; --dp-acc-ink: #1b1206; --dp-red: #ff7a5c; --dp-grn: #7ccf88; --dp-shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.25); color-scheme: dark; }
 }
+/* three looks to pick from (Nick, Nov 24 2026: "show me three different styles… fonts and colors"); data-theme on .dp-app.
+   Taproom is the default above. */
+.dp-app[data-theme="lab"] {
+  --dp-bg: #f5f7fa; --dp-card: #ffffff; --dp-sunk: #eef2f6; --dp-line: #dbe2ea; --dp-text: #0f1b2d; --dp-mute: #5b6b80;
+  --dp-acc: #0e7c86; --dp-red: #c2410c; --dp-grn: #15803d;
+  --dp-font: "IBM Plex Sans", system-ui, sans-serif; --dp-head: "IBM Plex Sans", system-ui, sans-serif; --dp-shadow: 0 1px 2px rgba(15,27,45,.06);
+}
+.dp-app[data-theme="lab"] .dp-big, .dp-app[data-theme="lab"] .dp-v, .dp-app[data-theme="lab"] .dp-clock, .dp-app[data-theme="lab"] .dp-tbl .dp-num { font-family: "IBM Plex Mono", ui-monospace, monospace; letter-spacing: -.02em; }
+.dp-app[data-theme="lab"] .dp-card { border-radius: 8px; }
+.dp-app[data-theme="lab"] .dp-nav.on, .dp-app[data-theme="lab"] .dp-btn.dp-go { background: var(--dp-acc); border-color: var(--dp-acc); color: #fff; }
+.dp-app[data-theme="lab"] .dp-tabs button.on { border-bottom-color: var(--dp-acc); }
+.dp-app[data-theme="lab"] .dp-h1, .dp-app[data-theme="lab"] .dp-title { font-weight: 700 !important; letter-spacing: -.03em !important; }
+.dp-app[data-theme="hop"] {
+  --dp-bg: #0d1a13; --dp-card: #13251b; --dp-sunk: #1a3124; --dp-line: #24412f; --dp-text: #eef6e8; --dp-mute: #9db8a3;
+  --dp-acc: #c4ef5a; --dp-red: #ff8a6b; --dp-grn: #c4ef5a; color-scheme: dark;
+  --dp-font: "DM Sans", system-ui, sans-serif; --dp-head: "Archivo", system-ui, sans-serif; --dp-shadow: 0 10px 30px rgba(0,0,0,.25);
+}
+.dp-app[data-theme="hop"] .dp-h1, .dp-app[data-theme="hop"] .dp-title, .dp-app[data-theme="hop"] .dp-big, .dp-app[data-theme="hop"] .dp-brand { font-stretch: 125%; font-weight: 900 !important; text-transform: uppercase; letter-spacing: -.02em !important; }
+.dp-app[data-theme="hop"] .dp-nav.on, .dp-app[data-theme="hop"] .dp-btn.dp-go { background: var(--dp-acc); border-color: var(--dp-acc); color: #0d1a13; }
+.dp-app[data-theme="hop"] .dp-tabs button.on { border-bottom-color: var(--dp-acc); }
+.dp-app[data-theme="hop"] .dp-mark { background: var(--dp-acc); }
+.dp-app[data-theme="hop"] .dp-bar > u { background: var(--dp-acc); }
 .dp-app *, .dp-app *::before, .dp-app *::after { box-sizing: border-box; }
 .dp-app ::selection { background: var(--dp-beer); color: #fff; }
 .dp-app a { color: var(--dp-acc); text-decoration: none; }
@@ -105,6 +127,11 @@
 /* ingredient groups inside the one ingredients list */
 .dp-group td { padding-top: 16px; font: 700 13px/1 var(--dp-head); letter-spacing: -.01em; color: var(--dp-mute); border-bottom: 1px solid var(--dp-line); }
 .dp-addbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+
+/* a two-way switch (pounds / percent) */
+.dp-seg { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--dp-sunk); border: 1px solid var(--dp-line); }
+.dp-seg button { border: 0; background: none; font: 600 13px/1 var(--dp-font); color: var(--dp-mute); padding: 7px 12px; border-radius: 7px; cursor: pointer; }
+.dp-seg button.on { background: var(--dp-card); color: var(--dp-text); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
 /* tabs: underlined, like a document's sections */
 .dp-tabs { display: flex; flex-wrap: wrap; gap: 2px 22px; border-bottom: 1px solid var(--dp-line); margin: 6px 0 18px; }
@@ -207,7 +234,12 @@
 .dp-toast { position: fixed; right: 20px; bottom: 20px; z-index: 70; background: var(--dp-text); color: var(--dp-bg); border-radius: 12px; padding: 11px 16px; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
 
 /* ingredient rows: the name gets the room */
-.dp-tbl td:has(> input[aria-label="Name"]) { min-width: 190px; width: 34%; }
+.dp-tbl td.dp-namecell { width: 100%; padding-top: 10px; padding-bottom: 10px; }
+.dp-tbl td.dp-namecell > input { font-weight: 600; }
+.dp-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 6px; font-size: 13px; color: var(--dp-mute); }
+.dp-sub .dp-row { gap: 4px 6px !important; flex-wrap: wrap; }
+.dp-app .dp-sub input, .dp-app .dp-sub select { padding: 4px 7px; font-size: 13px; border-radius: 7px; }
+.dp-app .dp-sub input.dp-n, .dp-app .dp-sub input.dp-nw { width: 6ch; }
 .dp-tbl td select { width: auto; min-width: 9ch; }
 @media (max-width: 1100px) {
   .dp-recipe { grid-template-columns: minmax(0, 1fr); }

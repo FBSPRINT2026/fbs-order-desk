@@ -35,6 +35,12 @@ export default function Inventory({ userId }: { userId: string }) {
     setItems((xs) => xs.map((x) => (x.id === it.id ? { ...x, in_stock: n } : x)));
     await createClient().from("dp_ingredients").update({ in_stock: n }).eq("id", it.id);
   };
+  // the alpha on the package of hops on the shelf: brew day's "Adjust for my hops" fills it in
+  const setLot = async (it: Item, n: number) => {
+    const data = { ...it.data, lotAlpha: n || undefined };
+    setItems((xs) => xs.map((x) => (x.id === it.id ? { ...x, data } : x)));
+    await createClient().from("dp_ingredients").update({ data }).eq("id", it.id);
+  };
   const add = async (kind: Item["kind"], key: string, custom?: string) => {
     const lib = (LIB[kind] as unknown as { id: string; name: string }[]).find((x) => x.id === key);
     const name = custom || lib?.name || "Item";
@@ -74,12 +80,13 @@ export default function Inventory({ userId }: { userId: string }) {
       <div className="dp-grid">
         <Win title="On the shelf">
           <table className="dp-tbl" data-nofit>
-            <thead><tr><th>Item</th><th>Kind</th><th className="dp-num">Have</th><th /></tr></thead>
+            <thead><tr><th>Item</th><th>Kind</th><th className="dp-num">Have</th><th className="dp-num">Lot AA%</th><th /></tr></thead>
             <tbody>
               {items.map((i) => (
                 <tr key={i.id}>
                   <td>{i.name}</td><td className="dp-dim">{i.kind}</td>
                   <td className="dp-num"><Num value={i.in_stock ?? 0} onChange={(n) => setStock(i, n)} /> {UNIT[i.kind]}</td>
+                  <td className="dp-num">{i.kind === "hop" ? <Num value={(i.data as { lotAlpha?: number }).lotAlpha} title="Alpha acid % on this package (recipes adjust to it on brew day)" onChange={(n) => setLot(i, n)} /> : null}</td>
                   <td className="dp-num"><button className="dp-btn dp-x" onClick={() => remove(i)}>X</button></td>
                 </tr>
               ))}

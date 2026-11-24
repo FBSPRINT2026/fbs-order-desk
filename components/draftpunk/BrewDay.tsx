@@ -4,6 +4,8 @@ import { calcRecipe, r1, sgFmt, weatherFactor } from "@/lib/draftpunk/calc";
 import { brewSteps, type BrewStep } from "@/lib/draftpunk/steps";
 import type { Recipe, Weather } from "@/lib/draftpunk/types";
 import { F, Num, Win } from "./ui";
+import HopAdjust from "./HopAdjust";
+import type { MineItem } from "./RecipeTabs";
 
 /**
  * Brew day (Nick, Nov 24 2026: "brewday layout is important. Steps… timers… easy to use"): built for a phone on the
@@ -46,7 +48,7 @@ async function fetchWeather(place?: { lat: number; lon: number }): Promise<Weath
   return { tempF: Math.round(j.current.temperature_2m), rh: Math.round(j.current.relative_humidity_2m), windMph: Math.round(j.current.wind_speed_10m) };
 }
 
-export default function BrewDay({ r, storeKey, onStartLog, onWeather }: { r: Recipe; storeKey?: string; onStartLog: () => void; onWeather?: (w: Weather | undefined) => void }) {
+export default function BrewDay({ r, storeKey, onStartLog, onWeather, set, mine }: { r: Recipe; storeKey?: string; onStartLog: () => void; onWeather?: (w: Weather | undefined) => void; set?: (fn: (x: Recipe) => Recipe) => void; mine?: MineItem[] }) {
   const steps = useMemo(() => brewSteps(r), [r]);
   const c = useMemo(() => calcRecipe(r), [r]);
   const key = `dp:brewday:${storeKey || r.name}`;
@@ -54,6 +56,7 @@ export default function BrewDay({ r, storeKey, onStartLog, onWeather }: { r: Rec
   const [now, setNow] = useState(Date.now());
   const [banner, setBanner] = useState<string[]>([]);
   const [wErr, setWErr] = useState("");
+  const [hopFix, setHopFix] = useState(false);
   const loaded = useRef(false);
 
   // where you were on this device
@@ -136,6 +139,15 @@ export default function BrewDay({ r, storeKey, onStartLog, onWeather }: { r: Rec
           <button className="dp-btn dp-go" onClick={() => setBanner([])}>Got it</button>
         </div>
       )}
+
+      {/* first thing on brew day: the hops you actually bought */}
+      {set && !!r.hops.length && s.cur <= 1 && !hopFix && (
+        <div className="dp-card dp-noprint dp-row" style={{ alignItems: "center", justifyContent: "space-between" }}>
+          <div><b>Got your hops?</b> <span className="dp-dim">Snap each package (or type its alpha), or swap a variety, and the amounts adjust.</span></div>
+          <button className="dp-btn dp-go" onClick={() => setHopFix(true)}>📷 Adjust or substitute hops</button>
+        </div>
+      )}
+      {set && hopFix && <HopAdjust r={r} set={set} mine={mine} onDone={() => setHopFix(false)} />}
 
       {/* where the day stands */}
       <div className="dp-bd-phases dp-noprint">

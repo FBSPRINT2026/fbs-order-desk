@@ -389,6 +389,29 @@ export function calcRecipe(r: Recipe): Calc {
 /** the numbers kept in dp_recipes.calc (for the recipe list and the club page, without loading the whole recipe) */
 export const calcSummary = (c: Calc) => ({ og: r1(c.og, 3), fg: r1(c.fg, 3), abv: r1(c.abv, 1), ibu: r1(c.ibu, 0), srm: r1(c.srm, 1), buGu: r1(c.buGu, 2), color: c.color });
 
+// ---------- designing by percentages ----------
+/**
+ * The pounds for a grain bill given as percentages by weight and a target OG: the sugar the batch needs (target points
+ * × the end-of-boil volume) split by each fermentable's share, mashed grain at the mash efficiency, the rest whole.
+ * Percentages that don't add to 100 are taken as parts of the whole.
+ */
+export function fromPercents(r: Recipe): Recipe {
+  if (!r.byPercent?.on) return r;
+  const v = volumes(r.equipment, r.weather);
+  const need = (r.byPercent.targetOg - 1) * 1000 * v.postBoilCold;
+  const eff = (r.equipment.mashEff || 75) / 100;
+  const total = r.ferms.reduce((a, f) => a + (f.pct || 0), 0);
+  if (!total || need <= 0) return r;
+  const perLbOfBill = r.ferms.reduce((a, f) => a + ((f.pct || 0) / total) * (f.potential - 1) * 1000 * (isMashed(f) ? eff : 1), 0);
+  const billLb = perLbOfBill > 0 ? need / perLbOfBill : 0;
+  return { ...r, ferms: r.ferms.map((f) => ({ ...f, lb: Math.round(((f.pct || 0) / total) * billLb * 100) / 100 })) };
+}
+/** the percentages of a bill given in pounds (to switch a recipe to designing by percentages) */
+export function toPercents(r: Recipe): Recipe {
+  const lb = r.ferms.reduce((a, f) => a + f.lb, 0);
+  return { ...r, ferms: r.ferms.map((f) => ({ ...f, pct: lb ? Math.round((f.lb / lb) * 1000) / 10 : 0 })) };
+}
+
 // ---------- scaling ----------
 /**
  * The recipe on other equipment or at another size: grain is scaled by volume and by the difference in efficiency,
