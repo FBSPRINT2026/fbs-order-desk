@@ -8,7 +8,7 @@ import { dragFile } from "@/lib/dragFile";
 import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
 
 /** `fileName`: what a download saves as (defaults to `name`) */
-export type ProdFile = { id: string; name: string; url?: string; /** a stamped customer mockup: their file without the stamp (hold to see it) */ plain?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null; /** shown, not labeled or removed here (a job photo) */ readOnly?: boolean };
+export type ProdFile = { id: string; name: string; url?: string; /** a stamped customer mockup: their file without the stamp (hold to see it) */ plain?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null; /** shown, not labeled here (a job photo) */ readOnly?: boolean; /** a job photo of this order that can still be removed here (Nick, Nov 24 2026) */ removable?: boolean };
 
 const isImg = (f: ProdFile) => /^image\//.test(f.mime || "") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
 
@@ -43,7 +43,11 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
             : <div className="prod-note">{note || <span className="faint">No production notes.</span>}</div>}
         </div>
         <div>
-          <div className="lbl" style={{ marginBottom: 6 }}>Production files{files.length ? ` (${files.length})` : ""}</div>
+          {/* an Add button right by the heading (Nick, Nov 24 2026: "there needs to be an add button"), besides the drop tile */}
+          <div className="prod-files-h">
+            <div className="lbl">Production files{files.length ? ` (${files.length})` : ""}</div>
+            {onUpload && <button type="button" className="btn sm" disabled={uploading} onClick={() => input.current?.click()}>{uploading ? "Uploading…" : "+ Add files"}</button>}
+          </div>
           <div className={"prod-files" + (over ? " over" : "")}
             onDragOver={onUpload ? (e) => { e.preventDefault(); setOver(true); } : undefined}
             onDragLeave={onUpload ? () => setOver(false) : undefined}
@@ -67,7 +71,7 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
                   : f.note ? <div className="prod-fnote ro">{f.note}</div> : null}
                 <div className="prod-facts">
                   {f.url && <a href={downloadUrl(f.url, f.fileName || f.name)} target="_blank" rel="noreferrer" download={f.fileName || f.name}>Download</a>}
-                  {onRemove && !f.readOnly && <button type="button" className={"linkish" + (armed === f.id ? " armed" : "")} onClick={() => { if (armed === f.id) { onRemove(f); setArmed(""); } else { setArmed(f.id); setTimeout(() => setArmed((a) => (a === f.id ? "" : a)), 3500); } }}>{armed === f.id ? "Confirm remove" : "Remove"}</button>}
+                  {onRemove && (!f.readOnly || f.removable) && <button type="button" className={"linkish" + (armed === f.id ? " armed" : "")} onClick={() => { if (armed === f.id) { onRemove(f); setArmed(""); } else { setArmed(f.id); setTimeout(() => setArmed((a) => (a === f.id ? "" : a)), 3500); } }}>{armed === f.id ? "Confirm remove" : "Remove"}</button>}
                 </div>
               </div>
             ))}

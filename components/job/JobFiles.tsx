@@ -62,8 +62,8 @@ export async function addPhoto(job: { kind: "o" | "a"; id: string }, file: File,
   return res.status >= 200 && res.status < 300 ? { ok: true as const } : { ok: false as const, error: j.error || "Couldn't save the photo." };
 }
 
-/** The panel on the shop's job page: notes and photos, add either, archive (nothing is deleted). */
-export default function JobFiles({ job, staff = true, bump = 0, inside = false }: { job: { kind: "o" | "a"; id: string }; staff?: boolean; /** change it to reload (a file was added elsewhere) */ bump?: number; /** inside the Production notes & files panel: no panel of its own */ inside?: boolean }) {
+/** The panel on the shop's job page: notes and photos, add either, remove (archived: nothing is deleted). */
+export default function JobFiles({ job, staff = true, bump = 0, inside = false, onChanged }: { job: { kind: "o" | "a"; id: string }; staff?: boolean; /** change it to reload (a file was added elsewhere) */ bump?: number; /** inside the Production notes & files panel: no panel of its own */ inside?: boolean; /** a photo was added or removed (the production files show them too) */ onChanged?: () => void }) {
   const { items, err, load } = useJobFiles(job);
   useEffect(() => { if (bump) load(); }, [bump]); // eslint-disable-line react-hooks/exhaustive-deps
   const [note, setNote] = useState(""), [tag, setTag] = useState("General"), [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
@@ -85,7 +85,7 @@ export default function JobFiles({ job, staff = true, bump = 0, inside = false }
             const fs = [...(e.target.files || [])]; e.target.value = ""; if (!fs.length) return;
             setBusy("photo"); setMsg("");
             for (const f of fs.slice(0, 10)) { const r = await addPhoto(job, f, "", tag === "General" ? "" : tag); if (!r.ok) { setMsg(r.error); break; } }
-            setBusy(""); load();
+            setBusy(""); load(); onChanged?.();
           }} />
         </div>
         {(err || msg) && <div className="pv-err">{err || msg}</div>}
@@ -95,12 +95,12 @@ export default function JobFiles({ job, staff = true, bump = 0, inside = false }
               <figure key={p.id} className="jf-ph">
                 {p.kind === "photo" && p.url ? <button type="button" onClick={() => setBig(p)}><img src={p.url} alt={p.body || p.file_name} loading="lazy" /></button> : <a href={p.url} target="_blank" rel="noreferrer" className="jf-fileic">{p.file_name}</a>}
                 <figcaption>{p.tag && <b>{p.tag}</b>}{p.body && <span>{p.body}</span>}<small>{p.by_name} · {when(p.created_at)}</small></figcaption>
-                {staff && <button type="button" className="jf-arch" title="Archive" onClick={async () => { await fetch("/api/jobs/files", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, archived: true }) }); load(); }}>Archive</button>}
+                {staff && <button type="button" className="jf-rm linkish" title="Remove (kept in the archive)" onClick={async () => { await fetch("/api/jobs/files", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, archived: true }) }); load(); onChanged?.(); }}>Remove</button>}
               </figure>
             ))}</div>}
             {notes.length > 0 && <ul className="jf-notes">{notes.map((n) => (
               <li key={n.id}>{n.tag && <span className="jf-tag">{n.tag}</span>}<span className="jf-body">{n.body}</span><small>{n.by_name} · {when(n.created_at)}</small>
-                {staff && <button type="button" className="linkbtn" onClick={async () => { await fetch("/api/jobs/files", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: n.id, archived: true }) }); load(); }}>Archive</button>}</li>
+                {staff && <button type="button" className="linkbtn" onClick={async () => { await fetch("/api/jobs/files", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: n.id, archived: true }) }); load(); }}>Remove</button>}</li>
             ))}</ul>}
           </>
         )}

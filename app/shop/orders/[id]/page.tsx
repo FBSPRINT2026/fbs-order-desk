@@ -2386,12 +2386,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
             <OrderSeparations o={o} stamp={`${sepN}|${proofs.map((p) => `${p.id}:${p.status}`).join(",")}`} />
           <ProductionPanel note={prodNotes} onNote={onProdNotes} noteState={noteState} uploading={artUploading}
-            files={[...art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note, ...(plain[a.id] ? { plain: plain[a.id] } : {}) })), ...jobPics.map((x) => ({ id: x.id, name: x.name, url: x.url, mime: x.mime, fileName: x.name, category: "photo", note: x.note, readOnly: true }))]}
+            files={[...art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note, ...(plain[a.id] ? { plain: plain[a.id] } : {}) })), ...jobPics.map((x) => ({ id: x.id, name: x.name, url: x.url, mime: x.mime, fileName: x.name, category: "photo", note: x.note, readOnly: true, removable: x.note === "Photo of this run" }))]}
             onFileNote={(f, t) => { if (f.id.startsWith("jf-")) return; setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, note: t || null } : x))); void sb.from("art_files").update({ note: t || null }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the note: " + error.message); }); }}
             onCategory={(f, c) => { if (f.id.startsWith("jf-")) return; setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, category: c } : x))); void sb.from("art_files").update({ category: c }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the label: " + error.message); }); }}
-            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => { const a = art.find((x) => x.id === f.id); if (a) delArt(a); }}>
+            onUpload={(fl) => uploadArt(fl)} onRemove={(f) => {
+              // a job photo of this order is archived (kept, out of sight), like Remove under Notes & photos
+              if (f.id.startsWith("jf-")) { void fetch("/api/jobs/files", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id.slice(3), archived: true }) }).then((r) => { if (!r.ok) say("Couldn't remove the photo"); setFilesBump((k) => k + 1); }); return; }
+              const a = art.find((x) => x.id === f.id); if (a) delArt(a);
+            }}>
             {/* the job's notes & photos (one panel, Oct 15: there were two "Production files & notes") */}
-            <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} inside />
+            <JobFiles job={{ kind: "o", id: o.id }} bump={filesBump} inside onChanged={() => setFilesBump((k) => k + 1)} />
           </ProductionPanel>
           </div>
           <aside className="ed-aside">
