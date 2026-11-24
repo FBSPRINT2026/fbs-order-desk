@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   // the brewer's newest brew set to this Tilt color
   const { data: brew } = await admin.from("dp_brews").select("id").eq("owner_id", brewer.user_id).eq("measured->>tiltColor", color).order("brewed_on", { ascending: false }).limit(1).maybeSingle();
   // Timepoint is an Excel date (days since 1899-12-30) in the phone's local time; the arrival time is close enough
-  const { error } = await admin.from("dp_readings").insert({ owner_id: brewer.user_id, brew_id: brew?.id || null, color, sg, temp_f: Number.isFinite(temp) ? temp : null });
+  const { error } = await admin.from("dp_readings").insert({ owner_id: brewer.user_id, brew_id: brew?.id || null, source: "tilt", color, sg, temp_f: Number.isFinite(temp) ? temp : null });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, brew: brew?.id || null, result: "Data received" });
 }

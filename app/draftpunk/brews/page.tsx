@@ -14,12 +14,12 @@ export default async function Brews() {
   const rows = (data || []) as unknown as { id: string; brewed_on: string; name: string; measured: { og?: number; fg?: number }; tasting: { rating?: number } }[];
   return (
     <Shell name={brewer.name}>
-      <h1 className="dp-h1">C:\DRAFTPUNK\BREWLOG&gt;<span className="dp-blink">_</span></h1>
+      <h1 className="dp-h1">Brew log</h1>
       <div className="dp-win">
-        <span className="dp-wt">BREW SESSIONS ({rows.length})</span>
-        {!rows.length ? <p>NO BREWS LOGGED YET. OPEN A RECIPE, GO TO BREW DAY, AND PRESS START A BREW LOG.</p> : (
-          <table className="dp-tbl">
-            <thead><tr><th>DATE</th><th>RECIPE</th><th className="dp-num">OG</th><th className="dp-num">FG</th><th className="dp-num">ABV</th><th>RATING</th></tr></thead>
+        <span className="dp-wt">Brew sessions ({rows.length})</span>
+        {!rows.length ? <p>No brews logged yet. Open a recipe, go to brew day, and press start a brew log.</p> : (
+          <table className="dp-tbl" data-nofit>
+            <thead><tr><th>Date</th><th>Recipe</th><th className="dp-num">OG</th><th className="dp-num">FG</th><th className="dp-num">ABV</th><th>Rating</th></tr></thead>
             <tbody>
               {rows.map((b) => (
                 <tr key={b.id}>

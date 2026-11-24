@@ -1,10 +1,11 @@
 "use client";
 import { useMemo, useState } from "react";
-import { cellsNeeded, clSo4, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
+import { cellsNeeded, clSo4, co2Harvest, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
 import { asFerm, asHop, asMisc, asYeast } from "@/lib/draftpunk/defaults";
 import { FERMENTABLES, HOPS, MASH_PROFILES, MISCS, WATERS, YEASTS } from "@/lib/draftpunk/library";
 import type { Calc, Carb, Fermentable, FermType, Hop, HopForm, HopUse, Misc, MashStep, Recipe, Salts, WaterProfile, Yeast } from "@/lib/draftpunk/types";
 import { F, Num, Picker, Win } from "./ui";
+import { FERMENT_PRESETS } from "@/lib/draftpunk/autopilot";
 
 type Set = (fn: (x: Recipe) => Recipe) => void;
 export type MineItem = { id: string; kind: "fermentable" | "hop" | "yeast" | "misc" | "water"; name: string; data: Record<string, unknown>; in_stock: number | null };
@@ -24,10 +25,10 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
   const totalHop = r.hops.reduce((a, h) => a + h.oz, 0);
 
   const pickers = {
-    ferm: { title: "ADD FERMENTABLE", head: ["PPG", "°L", "MAX%"], items: [...my("fermentable").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "MINE", cols: [r1(((m.data as Fermentable).potential - 1) * 1000, 0) + "", (m.data as Fermentable).color + "", ""] })), ...FERMENTABLES.map((f) => ({ key: f.id, name: f.name, sub: f.origin, cols: [r1((f.potential - 1) * 1000, 0) + "", f.color + "", f.maxPct + ""] }))] },
-    hop: { title: "ADD HOPS", head: ["AA%", "USE"], items: [...my("hop").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "MINE", cols: [(m.data as Hop).alpha + "", ""] })), ...HOPS.map((h) => ({ key: h.id, name: h.name, sub: h.origin, cols: [h.alpha + "", h.use || ""] }))] },
-    yeast: { title: "ADD YEAST", head: ["ATTEN", "TEMP °F"], items: [...my("yeast").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "MINE", cols: [(m.data as Yeast).attenuation + "%", ""] })), ...YEASTS.map((y) => ({ key: y.id, name: `${y.lab} ${y.code} ${y.name}`, sub: y.form, cols: [y.attenuation + "%", `${y.tempLow}–${y.tempHigh}`] }))] },
-    misc: { title: "ADD MISC", head: ["USE"], items: [...my("misc").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "MINE", cols: [""] })), ...MISCS.map((m) => ({ key: m.id, name: m.name, sub: m.type, cols: [m.use] }))] },
+    ferm: { title: "Add fermentable", head: ["PPG", "°L", "Max%"], items: [...my("fermentable").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "Mine", cols: [r1(((m.data as Fermentable).potential - 1) * 1000, 0) + "", (m.data as Fermentable).color + "", ""] })), ...FERMENTABLES.map((f) => ({ key: f.id, name: f.name, sub: f.origin, cols: [r1((f.potential - 1) * 1000, 0) + "", f.color + "", f.maxPct + ""] }))] },
+    hop: { title: "Add hops", head: ["AA%", "Use"], items: [...my("hop").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "Mine", cols: [(m.data as Hop).alpha + "", ""] })), ...HOPS.map((h) => ({ key: h.id, name: h.name, sub: h.origin, cols: [h.alpha + "", h.use || ""] }))] },
+    yeast: { title: "Add yeast", head: ["Atten", "Temp °F"], items: [...my("yeast").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "Mine", cols: [(m.data as Yeast).attenuation + "%", ""] })), ...YEASTS.map((y) => ({ key: y.id, name: `${y.lab} ${y.code} ${y.name}`, sub: y.form, cols: [y.attenuation + "%", `${y.tempLow}–${y.tempHigh}`] }))] },
+    misc: { title: "Add misc", head: ["Use"], items: [...my("misc").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "Mine", cols: [""] })), ...MISCS.map((m) => ({ key: m.id, name: m.name, sub: m.type, cols: [m.use] }))] },
   };
   const onPick = (key: string) => {
     const m = key.startsWith("m:") ? mine.find((x) => x.id === key.slice(2)) : null;
@@ -52,9 +53,9 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
 
   return (
     <>
-      <Win title={`FERMENTABLES · ${r1(totalLb, 2)} LB`}>
-        <table className="dp-tbl">
-          <thead><tr><th className="dp-num">LB</th><th>NAME</th><th>TYPE</th><th className="dp-num">PPG</th><th className="dp-num">°L</th><th className="dp-num">%</th><th>LATE</th><th className="dp-num">STOCK</th><th /></tr></thead>
+      <Win title={`Fermentables · ${r1(totalLb, 2)} lb`}>
+        <table className="dp-tbl" data-nofit>
+          <thead><tr><th className="dp-num">LB</th><th>Name</th><th>Type</th><th className="dp-num">PPG</th><th className="dp-num">°L</th><th className="dp-num">%</th><th>Late</th><th className="dp-num">Stock</th><th /></tr></thead>
           <tbody>
             {r.ferms.map((f, i) => (
               <tr key={f.lid}>
@@ -71,12 +72,12 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
             ))}
           </tbody>
         </table>
-        <p><button className="dp-btn" onClick={() => setPick("ferm")}>ADD FERMENTABLE</button></p>
+        <p><button className="dp-btn" onClick={() => setPick("ferm")}>Add fermentable</button></p>
       </Win>
 
-      <Win title={`HOPS · ${r1(totalHop, 2)} OZ · ${r1(c.ibu, 1)} IBU`}>
-        <table className="dp-tbl">
-          <thead><tr><th className="dp-num">OZ</th><th>NAME</th><th className="dp-num">AA%</th><th>FORM</th><th>USE</th><th className="dp-num">TIME</th><th className="dp-num">IBU</th><th /></tr></thead>
+      <Win title={`Hops · ${r1(totalHop, 2)} oz · ${r1(c.ibu, 1)} IBU`}>
+        <table className="dp-tbl" data-nofit>
+          <thead><tr><th className="dp-num">OZ</th><th>Name</th><th className="dp-num">AA%</th><th>Form</th><th>Use</th><th className="dp-num">Time</th><th className="dp-num">IBU</th><th /></tr></thead>
           <tbody>
             {r.hops.map((h, i) => (
               <tr key={h.lid}>
@@ -96,13 +97,13 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
             ))}
           </tbody>
         </table>
-        <p className="dp-row"><button className="dp-btn" onClick={() => setPick("hop")}>ADD HOPS</button><button className="dp-btn" onClick={sortHops}>SORT BY TIME</button></p>
+        <p className="dp-row"><button className="dp-btn" onClick={() => setPick("hop")}>Add hops</button><button className="dp-btn" onClick={sortHops}>Sort by time</button></p>
       </Win>
 
       <div className="dp-grid">
-        <Win title={`YEAST · ${r1(c.attenuation, 0)}% ATTENUATION`}>
-          <table className="dp-tbl">
-            <thead><tr><th className="dp-num">QTY</th><th>NAME</th><th className="dp-num">ATTEN%</th><th>STARTER</th><th /></tr></thead>
+        <Win title={`Yeast · ${r1(c.attenuation, 0)}% attenuation`}>
+          <table className="dp-tbl" data-nofit>
+            <thead><tr><th className="dp-num">Qty</th><th>Name</th><th className="dp-num">Atten%</th><th>Starter</th><th /></tr></thead>
             <tbody>
               {r.yeasts.map((y, i) => (
                 <tr key={y.lid}>
@@ -115,11 +116,11 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
               ))}
             </tbody>
           </table>
-          <p><button className="dp-btn" onClick={() => setPick("yeast")}>ADD YEAST</button></p>
+          <p><button className="dp-btn" onClick={() => setPick("yeast")}>Add yeast</button></p>
         </Win>
-        <Win title="MISC">
-          <table className="dp-tbl">
-            <thead><tr><th className="dp-num">AMT</th><th>UNIT</th><th>NAME</th><th>USE</th><th className="dp-num">MIN</th><th /></tr></thead>
+        <Win title="Misc">
+          <table className="dp-tbl" data-nofit>
+            <thead><tr><th className="dp-num">Amt</th><th>Unit</th><th>Name</th><th>Use</th><th className="dp-num">Min</th><th /></tr></thead>
             <tbody>
               {r.miscs.map((m, i) => (
                 <tr key={m.lid}>
@@ -133,7 +134,7 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
               ))}
             </tbody>
           </table>
-          <p><button className="dp-btn" onClick={() => setPick("misc")}>ADD MISC</button></p>
+          <p><button className="dp-btn" onClick={() => setPick("misc")}>Add misc</button></p>
         </Win>
       </div>
       {pick && <Picker {...pickers[pick]} onPick={onPick} onCustom={onCustom} onClose={() => setPick("")} />}
@@ -147,25 +148,25 @@ export function MashTab({ r, c, set }: Props) {
   const upStep = (i: number, patch: Partial<MashStep>) => set((x) => { x.mash.steps[i] = { ...x.mash.steps[i], ...patch }; return x; });
   return (
     <>
-      <Win title="MASH PROFILE">
+      <Win title="Mash profile">
         <div className="dp-row">
-          <F label="LOAD A PROFILE" grow="2 1 280px">
+          <F label="Load a profile" grow="2 1 280px">
             <select value="" onChange={(e) => { const m = MASH_PROFILES.find((p) => p.name === e.target.value); if (m) set((x) => ({ ...x, mash: structuredClone(m) })); }}>
               <option value="">{r.mash.name} (pick to replace)</option>
               {MASH_PROFILES.map((m) => <option key={m.name}>{m.name}</option>)}
             </select>
           </F>
-          <F label="SPARGE">
+          <F label="Sparge">
             <select value={r.mash.sparge} onChange={(e) => set((x) => ({ ...x, mash: { ...x.mash, sparge: e.target.value as Recipe["mash"]["sparge"] } }))}>
               <option value="none">None (full volume)</option><option value="batch">Batch</option><option value="fly">Fly</option>
             </select>
           </F>
-          <F label="GRAIN °F"><Num value={r.mash.grainTempF} onChange={(n) => set((x) => ({ ...x, mash: { ...x.mash, grainTempF: n } }))} /></F>
+          <F label="Grain °F"><Num value={r.mash.grainTempF} onChange={(n) => set((x) => ({ ...x, mash: { ...x.mash, grainTempF: n } }))} /></F>
           {!noSparge && <F label="QT/LB"><Num value={r.mash.ratio} onChange={(n) => set((x) => ({ ...x, mash: { ...x.mash, ratio: n } }))} /></F>}
-          {!noSparge && <F label="SPARGE °F"><Num value={r.mash.spargeTempF} onChange={(n) => set((x) => ({ ...x, mash: { ...x.mash, spargeTempF: n } }))} /></F>}
+          {!noSparge && <F label="Sparge °F"><Num value={r.mash.spargeTempF} onChange={(n) => set((x) => ({ ...x, mash: { ...x.mash, spargeTempF: n } }))} /></F>}
         </div>
-        <table className="dp-tbl" style={{ marginTop: 10 }}>
-          <thead><tr><th>STEP</th><th>HOW</th><th className="dp-num">°F</th><th className="dp-num">MIN</th><th /></tr></thead>
+        <table className="dp-tbl" data-nofit style={{ marginTop: 10 }}>
+          <thead><tr><th>Step</th><th>How</th><th className="dp-num">°F</th><th className="dp-num">Min</th><th /></tr></thead>
           <tbody>
             {r.mash.steps.map((s, i) => (
               <tr key={i}>
@@ -178,9 +179,9 @@ export function MashTab({ r, c, set }: Props) {
             ))}
           </tbody>
         </table>
-        <p><button className="dp-btn" onClick={() => set((x) => { x.mash.steps.push({ name: "Rest", kind: noSparge ? "temperature" : "infusion", tempF: 168, min: 10 }); return x; })}>ADD STEP</button></p>
+        <p><button className="dp-btn" onClick={() => set((x) => { x.mash.steps.push({ name: "Rest", kind: noSparge ? "temperature" : "infusion", tempF: 168, min: 10 }); return x; })}>Add step</button></p>
       </Win>
-      <Win title="WATER AND VOLUMES">
+      <Win title="Water and volumes">
         <table className="dp-tbl" data-nofit>
           <tbody>
             <tr><td>Grain</td><td className="dp-num">{r1(c.totalGrainLb, 2)} lb</td></tr>
@@ -196,7 +197,7 @@ export function MashTab({ r, c, set }: Props) {
             <tr><td>Into the fermenter</td><td className="dp-num">{r1(c.intoFermGal, 2)} gal</td></tr>
           </tbody>
         </table>
-        {noSparge && <p className="dp-dim">FULL-VOLUME MASH: ALL THE WATER GOES IN AT THE START; THE RIMS/HERMS HEATS EACH REST.</p>}
+        {noSparge && <p className="dp-dim">Full-volume mash: all the water goes in at the start, and the RIMS or HERMS heats each rest.</p>}
       </Win>
     </>
   );
@@ -229,38 +230,38 @@ export function WaterTab({ r, c, set }: Props) {
   const ratio = clSo4(c.water);
   return (
     <>
-      <Win title="WATER">
+      <Win title="Water">
         <div className="dp-row">
-          <F label="START WITH" grow="1 1 220px">
+          <F label="Start with" grow="1 1 220px">
             <select value={r.water.source.name} onChange={(e) => { const w = WATERS.find((x) => x.name === e.target.value); if (w) setW({ source: { ...w } }); }}>
               {!WATERS.some((w) => w.name === r.water.source.name) && <option>{r.water.source.name}</option>}
               {WATERS.map((w) => <option key={w.id} value={w.name}>{w.name === "Distilled / RO Water" ? "RO Water (100%)" : w.name}</option>)}
             </select>
           </F>
-          <F label="AIM FOR" grow="1 1 220px">
+          <F label="Aim for" grow="1 1 220px">
             <select value={target?.name || ""} onChange={(e) => { const w = WATERS.find((x) => x.name === e.target.value); setW({ target: w ? { ...w } : undefined }); }}>
               <option value="">(no target)</option>
               {target && !WATERS.some((w) => w.name === target.name) && <option>{target.name}</option>}
               {WATERS.filter((w) => !/RO|tap|Chicago/i.test(w.name)).map((w) => <option key={w.id} value={w.name}>{w.name}</option>)}
             </select>
           </F>
-          <button className="dp-btn dp-go" disabled={!target} onClick={autoSalts}>WORK OUT SALTS</button>
+          <button className="dp-btn dp-go" disabled={!target} onClick={autoSalts}>Work out salts</button>
         </div>
         <div className="dp-row" style={{ marginTop: 8 }}>
-          <label className="dp-row"><input type="checkbox" checked={!!lodo?.on} onChange={(e) => setW({ lodo: { on: e.target.checked, smbMgL: lodo?.smbMgL || 50 } })} /> LODO (LOW OXYGEN)</label>
+          <label className="dp-row"><input type="checkbox" checked={!!lodo?.on} onChange={(e) => setW({ lodo: { on: e.target.checked, smbMgL: lodo?.smbMgL || 50 } })} /> LODO (low oxygen)</label>
           {lodo?.on && <F label="SMB mg/L"><Num value={lodo.smbMgL} onChange={(n) => setW({ lodo: { on: true, smbMgL: n } })} /></F>}
-          {lodo?.on && <span className="dp-dim">{r1(smbG, 2)} g SODIUM METABISULFITE IN {r1(saltGal, 2)} GAL</span>}
+          {lodo?.on && <span className="dp-dim">{r1(smbG, 2)} g sodium metabisulfite in {r1(saltGal, 2)} gal</span>}
         </div>
         {target && (
           <div className="dp-row" style={{ marginTop: 8 }}>
-            {IONS.map(([k, l]) => <F key={k} label={`${l} TARGET`}><Num value={target[k] as number} onChange={(n) => setW({ target: { ...target, name: target.name.endsWith("*") ? target.name : `${target.name}*`, [k]: n } })} /></F>)}
+            {IONS.map(([k, l]) => <F key={k} label={`${l} target`}><Num value={target[k] as number} onChange={(n) => setW({ target: { ...target, name: target.name.endsWith("*") ? target.name : `${target.name}*`, [k]: n } })} /></F>)}
           </div>
         )}
       </Win>
       <div className="dp-grid">
-        <Win title={`SALTS · ${r1(totalGal, 2)} GAL`}>
-          <table className="dp-tbl">
-            <thead><tr><th>ADD</th><th className="dp-num">TOTAL g</th><th className="dp-num">MASH</th>{c.spargeWaterGal > 0 && <th className="dp-num">SPARGE</th>}</tr></thead>
+        <Win title={`Salts · ${r1(totalGal, 2)} gal`}>
+          <table className="dp-tbl" data-nofit>
+            <thead><tr><th>Add</th><th className="dp-num">Total g</th><th className="dp-num">Mash</th>{c.spargeWaterGal > 0 && <th className="dp-num">Sparge</th>}</tr></thead>
             <tbody>
               {SALTS.map((k) => (
                 <tr key={k}>
@@ -277,21 +278,21 @@ export function WaterTab({ r, c, set }: Props) {
             </tbody>
           </table>
           {c.spargeWaterGal > 0 && (
-            <label className="dp-row" style={{ marginTop: 8 }}><input type="checkbox" checked={r.water.spargeSalts !== false} onChange={(e) => setW({ spargeSalts: e.target.checked })} /> TREAT THE SPARGE WATER TOO (SAME PPM)</label>
+            <label className="dp-row" style={{ marginTop: 8 }}><input type="checkbox" checked={r.water.spargeSalts !== false} onChange={(e) => setW({ spargeSalts: e.target.checked })} /> Treat the sparge water too (same ppm)</label>
           )}
         </Win>
         <Win title="MASH pH">
           <div className="dp-clock" style={{ fontSize: 30 }}>{c.mashPh ? r1(c.mashPh, 2).toFixed(2) : "-.--"}</div>
-          <p className={c.mashPh && (c.mashPh < 5.2 || c.mashPh > 5.6) ? "dp-red" : "dp-dim"}>AIM: 5.2–5.6 (5.3–5.4 FOR PALE AND HOPPY, 5.4–5.5 FOR DARK)</p>
+          <p className={c.mashPh && (c.mashPh < 5.2 || c.mashPh > 5.6) ? "dp-red" : "dp-dim"}>Aim: 5.2–5.6 (5.3–5.4 for pale and hoppy, 5.4–5.5 for dark)</p>
           <div className="dp-row">
-            <F label="TARGET pH"><Num value={targetPh} onChange={setTargetPh} /></F>
-            <button className="dp-btn" onClick={autoAcid}>SET LACTIC</button>
+            <F label="Target pH"><Num value={targetPh} onChange={setTargetPh} /></F>
+            <button className="dp-btn" onClick={autoAcid}>Set lactic</button>
           </div>
-          <p className="dp-dim">FROM THE GRAIN BILL (EACH MALT&apos;S OWN pH), THE WATER&apos;S CALCIUM AND ALKALINITY, AND ANY ACID OR ACID MALT.</p>
+          <p className="dp-dim">From the grain bill (each malt&apos;s own pH), the water&apos;s calcium and alkalinity, and any acid or acid malt.</p>
         </Win>
       </div>
-      <Win title="THE WATER YOU'LL BREW WITH (ppm)">
-        <table className="dp-tbl">
+      <Win title="The water you'll brew with (ppm)">
+        <table className="dp-tbl" data-nofit>
           <thead><tr><th /> {IONS.map(([, l]) => <th key={l} className="dp-num">{l}</th>)}</tr></thead>
           <tbody>
             <tr><td>Start ({r.water.source.name})</td>{IONS.map(([k]) => <td key={k} className="dp-num">{r1(r.water.source[k] as number, 0)}</td>)}</tr>
@@ -301,8 +302,8 @@ export function WaterTab({ r, c, set }: Props) {
           </tbody>
         </table>
         <div className="dp-row" style={{ marginTop: 8 }}>
-          <span>Cl:SO4 {r1(ratio, 2)} · {!c.water.so4 && !c.water.cl ? "-" : ratio < 0.77 ? "HOPPY / DRY" : ratio > 1.3 ? "MALTY / FULL" : "BALANCED"}</span>
-          <span>RESIDUAL ALKALINITY {r1(residualAlk(c.water), 0)} ppm</span>
+          <span>Cl:SO4 {r1(ratio, 2)} · {!c.water.so4 && !c.water.cl ? "-" : ratio < 0.77 ? "Hoppy / dry" : ratio > 1.3 ? "Malty / full" : "Balanced"}</span>
+          <span>Residual alkalinity {r1(residualAlk(c.water), 0)} ppm</span>
         </div>
       </Win>
     </>
@@ -321,47 +322,67 @@ export function FermentTab({ r, c, set }: Props) {
   const setCarb = (patch: Partial<Carb>) => set((x) => ({ ...x, carb: { ...x.carb, ...patch } }));
   return (
     <>
-      <Win title="FERMENTATION">
-        <table className="dp-tbl">
-          <thead><tr><th>STEP</th><th className="dp-num">DAYS</th><th className="dp-num">°F</th><th /></tr></thead>
+      <Win title="Fermentation">
+        <table className="dp-tbl" data-nofit>
+          <thead><tr><th>Step</th><th className="dp-num">°F</th><th className="dp-num">PSI</th><th>Moves on</th><th className="dp-num">Days / value</th><th /></tr></thead>
           <tbody>
             {r.ferment.map((s, i) => (
               <tr key={i}>
                 <td><input value={s.name} onChange={(e) => set((x) => { x.ferment[i].name = e.target.value; return x; })} /></td>
-                <td className="dp-num"><Num value={s.days} onChange={(n) => set((x) => { x.ferment[i].days = n; return x; })} /></td>
                 <td className="dp-num"><Num value={s.tempF} onChange={(n) => set((x) => { x.ferment[i].tempF = n; return x; })} /></td>
-                <td className="dp-num"><button className="dp-btn dp-x" onClick={() => set((x) => { x.ferment.splice(i, 1); return x; })}>X</button></td>
+                <td className="dp-num"><Num value={s.psi} title="Spunding valve pressure during this step (pressure fermentation); blank for none" onChange={(n) => set((x) => { x.ferment[i].psi = n || undefined; return x; })} /></td>
+                <td>
+                  <select value={s.until || "days"} onChange={(e) => set((x) => { const u = e.target.value as NonNullable<typeof s.until>; x.ferment[i].until = u; x.ferment[i].untilVal = u === "progress" ? 75 : u === "near_fg" ? 3 : u === "stable" ? 48 : undefined; return x; })}>
+                    <option value="days">After a number of days</option>
+                    <option value="progress">When it&apos;s % of the way to FG (Tilt)</option>
+                    <option value="near_fg">Within points of FG (Tilt)</option>
+                    <option value="stable">When gravity holds for hours (Tilt)</option>
+                  </select>
+                </td>
+                <td className="dp-num">
+                  {!s.until || s.until === "days"
+                    ? <><Num value={s.days} onChange={(n) => set((x) => { x.ferment[i].days = n; return x; })} /> d</>
+                    : <><Num value={s.untilVal} onChange={(n) => set((x) => { x.ferment[i].untilVal = n; return x; })} /> {s.until === "progress" ? "%" : s.until === "near_fg" ? "pts" : "h"}</>}
+                </td>
+                <td className="dp-num"><button className="dp-btn dp-x" aria-label="Remove step" onClick={() => set((x) => { x.ferment.splice(i, 1); return x; })}>✕</button></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="dp-row">
-          <button className="dp-btn" onClick={() => set((x) => { x.ferment.push({ name: "Rest", days: 3, tempF: 68 }); return x; })}>ADD STEP</button>
-          <button className="dp-btn" onClick={() => set((x) => { x.ferment.push({ name: "Cold Crash", days: 2, tempF: 34 }); return x; })}>+ COLD CRASH</button>
+        <p className="dp-row" style={{ marginTop: 12 }}>
+          <button className="dp-btn" onClick={() => set((x) => { x.ferment.push({ name: "Rest", days: 3, tempF: 68, until: "days" }); return x; })}>Add step</button>
+          <select style={{ width: "auto" }} value="" onChange={(e) => { const p = FERMENT_PRESETS.find((q) => q.name === e.target.value); if (p) set((x) => ({ ...x, ferment: structuredClone(p.steps) })); }}>
+            <option value="">Load a schedule…</option>
+            {FERMENT_PRESETS.map((p) => <option key={p.name}>{p.name}</option>)}
+          </select>
           {y0 && <span className="dp-dim">{y0.name}: {y0.tempLow ?? "?"}–{y0.tempHigh ?? "?"}°F</span>}
         </p>
       </Win>
       <div className="dp-grid">
-        <Win title="CARBONATION">
+        <Win title="Carbonation">
           <div className="dp-row">
-            <F label="CO2 VOLUMES"><Num value={r.carb.vols} onChange={(n) => setCarb({ vols: n })} /></F>
-            <F label="HOW">
+            <F label="CO2 volumes"><Num value={r.carb.vols} onChange={(n) => setCarb({ vols: n })} /></F>
+            <F label="How">
               <select value={r.carb.method} onChange={(e) => setCarb({ method: e.target.value as Carb["method"] })}>
                 <option value="spund">Spunding, force carb if needed</option><option value="keg">Keg (force carb)</option><option value="corn_sugar">Corn sugar</option><option value="table_sugar">Table sugar</option><option value="dme">Dry malt extract</option><option value="honey">Honey</option>
               </select>
             </F>
-            {(r.carb.method === "keg" || r.carb.method === "spund") && <F label="SERVE °F"><Num value={r.carb.tempF} onChange={(n) => setCarb({ tempF: n })} /></F>}
-            {r.carb.method === "spund" && <F label="CAP AT +PTS"><Num value={r.carb.spundPts ?? spundPlan(c.fg, r.carb.vols, warm).pts} onChange={(n) => setCarb({ spundPts: n })} /></F>}
+            {(r.carb.method === "keg" || r.carb.method === "spund") && <F label="Serve °F"><Num value={r.carb.tempF} onChange={(n) => setCarb({ tempF: n })} /></F>}
+            {r.carb.method === "spund" && <F label="Cap at +pts"><Num value={r.carb.spundPts ?? spundPlan(c.fg, r.carb.vols, warm).pts} onChange={(n) => setCarb({ spundPts: n })} /></F>}
           </div>
           {r.carb.method === "spund" && (() => { const sp = spundPlan(c.fg, r.carb.vols, warm, r.carb.spundPts); return (
-            <p className="dp-v" style={{ fontSize: 24 }}>SPUND AT {sgFmt(sp.capSg)} · VALVE {r1(sp.psi, 1)} PSI @ {warm}°F · TOP UP {r1(kegPsi(r.carb.vols, r.carb.tempF), 1)} PSI @ {r.carb.tempF}°F</p>
+            <p className="dp-v" style={{ fontSize: 24 }}>Spund at {sgFmt(sp.capSg)} · valve {r1(sp.psi, 1)} PSI @ {warm}°F · top up {r1(kegPsi(r.carb.vols, r.carb.tempF), 1)} PSI @ {r.carb.tempF}°F</p>
           ); })()}
           <p className="dp-v" style={{ fontSize: 26 }} hidden={r.carb.method === "spund"}>
-            {r.carb.method === "keg" ? `${r1(kegPsi(r.carb.vols, r.carb.tempF), 1)} PSI AT ${r.carb.tempF}°F` : `${r1(primingOz(c.packagedGal, r.carb.vols, warm, r.carb.method as "corn_sugar"), 2)} OZ ${r.carb.method.replace("_", " ").toUpperCase()}`}
+            {r.carb.method === "keg" ? `${r1(kegPsi(r.carb.vols, r.carb.tempF), 1)} PSI at ${r.carb.tempF}°F` : `${r1(primingOz(c.packagedGal, r.carb.vols, warm, r.carb.method as "corn_sugar"), 2)} oz ${r.carb.method.replace("_", " ")}`}
           </p>
-          <p className="dp-dim">FOR {r1(c.packagedGal, 2)} GAL · AMERICAN ALE 2.2–2.7 · STOUT 1.8–2.3 · WEIZEN 3.3–4.5 · BELGIAN 2.5–3.2</p>
+          <label className="dp-row" style={{ marginTop: 10 }}><input type="checkbox" checked={!!r.carb.harvest} onChange={(e) => setCarb({ harvest: e.target.checked })} /> Harvest fermentation CO2 to purge kegs</label>
+          {r.carb.harvest && (() => { const h = co2Harvest(c.og, c.fg, c.intoFermGal, r.carb.method === "spund" ? spundPlan(c.fg, r.carb.vols, warm, r.carb.spundPts).capSg : undefined); return (
+            <p>About <b>{r1(h.usableL, 0)} L</b> of CO2 to harvest: enough to push out <b>{h.kegs}</b> sanitizer-filled 5 gal kegs.</p>
+          ); })()}
+          <p className="dp-dim">For {r1(c.packagedGal, 2)} gal · American ale 2.2–2.7 · Stout 1.8–2.3 · Weizen 3.3–4.5 · Belgian 2.5–3.2</p>
         </Win>
-        <Win title="YEAST STARTER">
+        <Win title="Yeast starter">
           <table className="dp-tbl" data-nofit>
             <tbody>
               <tr><td>Cells needed ({lager ? "lager" : "ale"})</td><td className="dp-num">{r1(need, 0)} B</td></tr>
@@ -370,12 +391,12 @@ export function FermentTab({ r, c, set }: Props) {
             </tbody>
           </table>
           <div className="dp-row" style={{ marginTop: 8 }}>
-            <F label="STARTER L"><Num value={st.liters} onChange={(n) => set((x) => ({ ...x, starter: { ...st, liters: n } }))} /></F>
-            <label className="dp-row"><input type="checkbox" checked={st.stir} onChange={(e) => set((x) => ({ ...x, starter: { ...st, stir: e.target.checked } }))} /> STIR PLATE</label>
-            <F label="PACK DATE"><input type="date" value={st.packDate || ""} onChange={(e) => set((x) => ({ ...x, starter: { ...st, packDate: e.target.value } }))} /></F>
+            <F label="Starter L"><Num value={st.liters} onChange={(n) => set((x) => ({ ...x, starter: { ...st, liters: n } }))} /></F>
+            <label className="dp-row"><input type="checkbox" checked={st.stir} onChange={(e) => set((x) => ({ ...x, starter: { ...st, stir: e.target.checked } }))} /> Stir plate</label>
+            <F label="Pack date"><input type="date" value={st.packDate || ""} onChange={(e) => set((x) => ({ ...x, starter: { ...st, packDate: e.target.value } }))} /></F>
           </div>
           <p className={haveB >= need ? "dp-grn" : grow.endB >= need ? "" : "dp-red"}>
-            {haveB >= need ? "ENOUGH YEAST, NO STARTER NEEDED." : grow.endB >= need ? `MAKE THE ${st.liters} L STARTER.` : `NOT ENOUGH: ADD A PACK OR MAKE A BIGGER STARTER.`}
+            {haveB >= need ? "Enough yeast, no starter needed." : grow.endB >= need ? `Make the ${st.liters} L starter.` : `Not enough: Add a pack or make a bigger starter.`}
           </p>
         </Win>
       </div>
@@ -387,16 +408,16 @@ export function FermentTab({ r, c, set }: Props) {
 export function NotesTab({ r, set, visibility, onVisibility, onExport }: { r: Recipe; set: Set; visibility: "private" | "club"; onVisibility: (v: "private" | "club") => void; onExport: () => void }) {
   return (
     <>
-      <Win title="NOTES">
-        <F label="RECIPE NOTES"><textarea value={r.notes || ""} onChange={(e) => set((x) => ({ ...x, notes: e.target.value }))} /></F>
+      <Win title="Notes">
+        <F label="Recipe notes"><textarea value={r.notes || ""} onChange={(e) => set((x) => ({ ...x, notes: e.target.value }))} /></F>
         <div style={{ height: 10 }} />
-        <F label="TASTING NOTES"><textarea value={r.tasteNotes || ""} onChange={(e) => set((x) => ({ ...x, tasteNotes: e.target.value }))} /></F>
+        <F label="Tasting notes"><textarea value={r.tasteNotes || ""} onChange={(e) => set((x) => ({ ...x, tasteNotes: e.target.value }))} /></F>
       </Win>
-      <Win title="SHARE AND EXPORT">
-        <label className="dp-row"><input type="checkbox" checked={visibility === "club"} onChange={(e) => onVisibility(e.target.checked ? "club" : "private")} /> SHARE WITH THE CLUB (THEY CAN VIEW AND COPY IT)</label>
+      <Win title="Share and export">
+        <label className="dp-row"><input type="checkbox" checked={visibility === "club"} onChange={(e) => onVisibility(e.target.checked ? "club" : "private")} /> Share with the club (they can view and copy it)</label>
         <p className="dp-row" style={{ marginTop: 10 }}>
-          <button className="dp-btn" type="button" onClick={onExport}>EXPORT BEERXML</button>
-          <button className="dp-btn" type="button" onClick={() => window.print()}>PRINT</button>
+          <button className="dp-btn" type="button" onClick={onExport}>Export BeerXML</button>
+          <button className="dp-btn" type="button" onClick={() => window.print()}>Print</button>
         </p>
       </Win>
     </>

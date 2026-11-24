@@ -8,12 +8,16 @@ import type { Equipment, Recipe, Weather } from "@/lib/draftpunk/types";
 import { useToast } from "./Shell";
 import { F, Num, Win } from "./ui";
 import TiltPanel from "./TiltPanel";
+import Autopilot from "./Autopilot";
+import type { Alarm, AutoState } from "@/lib/draftpunk/autopilot";
 
 type Measured = {
   weather?: Weather; mashPh?: number; preBoilSg?: number; preBoilGal?: number; boilMin?: number; postBoilGal?: number;
   og?: number; intoFermGal?: number; fg?: number; packagedGal?: number; pitchedF?: number;
   /** the Tilt hydrometer in this batch (readings with this color go to the newest brew set to it) */
   tiltColor?: string;
+  /** the fermentation chamber it's in, and the autopilot (run by the cron; app/api/cron/draftpunk) */
+  chamberId?: string; autopilot?: AutoState; alarms?: Alarm[]; lastCheck?: string; beerTolF?: number;
 };
 type Tasting = { rating?: number; appearance?: string; aroma?: string; flavor?: string; mouthfeel?: string; overall?: string };
 
@@ -44,15 +48,22 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
     });
   }, [id]);
   const c = useMemo(() => (r ? calcRecipe(r) : null), [r]);
+  const [autoTouched, setAutoTouched] = useState(false);
   const save = useCallback(async () => {
     if (!row) return;
-    const { error } = await createClient().from("dp_brews").update({ brewed_on: row.brewed_on, notes: row.notes, measured: m, tasting: t }).eq("id", id);
-    if (error) toast(`NOT SAVED: ${error.message}`); else setDirty(false);
-  }, [row, m, t, id, toast]);
+    const sb = createClient();
+    // the autopilot (every 15 min) writes measured.autopilot, alarms and lastCheck: keep its latest unless changed here
+    const { data: cur } = await sb.from("dp_brews").select("measured").eq("id", id).maybeSingle();
+    const server = (cur?.measured || {}) as Measured;
+    const merged: Measured = { ...m, alarms: server.alarms, lastCheck: server.lastCheck, autopilot: autoTouched ? m.autopilot : server.autopilot ?? m.autopilot };
+    const { error } = await sb.from("dp_brews").update({ brewed_on: row.brewed_on, notes: row.notes, measured: merged, tasting: t }).eq("id", id);
+    if (!error) { setAutoTouched(false); setM((x) => ({ ...x, alarms: server.alarms, lastCheck: server.lastCheck, autopilot: merged.autopilot })); }
+    if (error) toast(`Not saved: ${error.message}`); else setDirty(false);
+  }, [row, m, t, id, toast, autoTouched]);
   useEffect(() => { if (!dirty) return; const k = setTimeout(save, 1200); return () => clearTimeout(k); }, [dirty, save]);
-  useEffect(() => { const on = () => { save().then(() => toast("SAVED")); }; window.addEventListener("dp-save", on); return () => window.removeEventListener("dp-save", on); }, [save, toast]);
+  useEffect(() => { const on = () => { save().then(() => toast("Saved")); }; window.addEventListener("dp-save", on); return () => window.removeEventListener("dp-save", on); }, [save, toast]);
 
-  if (!r || !c || !row) return <p>LOADING...<span className="dp-blink">█</span></p>;
+  if (!r || !c || !row) return <p className="dp-dim">Loading…</p>;
   const e = r.equipment;
   const setMv = (patch: Partial<Measured>) => { setM((x) => ({ ...x, ...patch })); setDirty(true); };
   const shrink = 1 - (e.shrinkPct || 0) / 100;
@@ -78,43 +89,43 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
     const { error } = found
       ? await sb.from("dp_equipment").update({ data: next, updated_at: new Date().toISOString() }).eq("id", found.id)
       : await sb.from("dp_equipment").insert({ owner_id: userId, name: e.name, data: next });
-    toast(error ? `NOT SAVED: ${error.message}` : `${e.name.toUpperCase()} UPDATED: MASH EFF ${next.mashEff}% · BOIL-OFF ${next.boilOffGal} GAL/HR (CALM DAY)`);
+    toast(error ? `Not saved: ${error.message}` : `${e.name} updated: mash eff ${next.mashEff}% · boil-off ${next.boilOffGal} gal/hr (calm day)`);
   };
 
   const cmp = (label: string, planned: string, actual: string) => <tr><td>{label}</td><td className="dp-num dp-dim">{planned}</td><td className="dp-num" style={{ color: "var(--dp-hi)" }}>{actual || "-"}</td></tr>;
   return (
     <>
-      <h1 className="dp-h1">BREW LOG: {r.name.toUpperCase()}</h1>
+      <h1 className="dp-h1">Brew log: {r.name}</h1>
       <div className="dp-row">
-        <F label="BREWED ON"><input type="date" value={row.brewed_on} onChange={(ev) => { setRow({ ...row, brewed_on: ev.target.value }); setDirty(true); }} /></F>
-        {row.recipe_id && <Link className="dp-btn" href={`/draftpunk/r/${row.recipe_id}`}>OPEN RECIPE</Link>}
-        <span className="dp-dim">{dirty ? "UNSAVED..." : "SAVED"}</span>
+        <F label="Brewed on"><input type="date" value={row.brewed_on} onChange={(ev) => { setRow({ ...row, brewed_on: ev.target.value }); setDirty(true); }} /></F>
+        {row.recipe_id && <Link className="dp-btn" href={`/draftpunk/r/${row.recipe_id}`}>Open recipe</Link>}
+        <span className="dp-dim">{dirty ? "Unsaved..." : "Saved"}</span>
       </div>
       <div className="dp-grid">
-        <Win title="MEASURED">
+        <Win title="Measured">
           <div className="dp-row">
-            <F label="AIR °F"><Num value={m.weather?.tempF} onChange={(n) => setMv({ weather: { tempF: n, rh: m.weather?.rh ?? 50, windMph: m.weather?.windMph ?? 0 } })} /></F>
-            <F label="HUMID %"><Num value={m.weather?.rh} onChange={(n) => setMv({ weather: { tempF: m.weather?.tempF ?? 70, rh: n, windMph: m.weather?.windMph ?? 0 } })} /></F>
-            <F label="WIND MPH"><Num value={m.weather?.windMph} onChange={(n) => setMv({ weather: { tempF: m.weather?.tempF ?? 70, rh: m.weather?.rh ?? 50, windMph: n } })} /></F>
+            <F label="Air °F"><Num value={m.weather?.tempF} onChange={(n) => setMv({ weather: { tempF: n, rh: m.weather?.rh ?? 50, windMph: m.weather?.windMph ?? 0 } })} /></F>
+            <F label="Humid %"><Num value={m.weather?.rh} onChange={(n) => setMv({ weather: { tempF: m.weather?.tempF ?? 70, rh: n, windMph: m.weather?.windMph ?? 0 } })} /></F>
+            <F label="Wind mph"><Num value={m.weather?.windMph} onChange={(n) => setMv({ weather: { tempF: m.weather?.tempF ?? 70, rh: m.weather?.rh ?? 50, windMph: n } })} /></F>
           </div>
           <div className="dp-row" style={{ marginTop: 8 }}>
             <F label="MASH pH"><Num value={m.mashPh} onChange={(n) => setMv({ mashPh: n })} /></F>
-            <F label="PRE-BOIL SG"><Num className="dp-nw" value={m.preBoilSg} onChange={(n) => setMv({ preBoilSg: n })} /></F>
-            <F label="PRE-BOIL GAL (HOT)"><Num value={m.preBoilGal} onChange={(n) => setMv({ preBoilGal: n })} /></F>
-            <F label="BOIL MIN"><Num value={m.boilMin} onChange={(n) => setMv({ boilMin: n })} /></F>
-            <F label="END OF BOIL GAL (HOT)"><Num value={m.postBoilGal} onChange={(n) => setMv({ postBoilGal: n })} /></F>
+            <F label="Pre-boil sg"><Num className="dp-nw" value={m.preBoilSg} onChange={(n) => setMv({ preBoilSg: n })} /></F>
+            <F label="Pre-boil gal (hot)"><Num value={m.preBoilGal} onChange={(n) => setMv({ preBoilGal: n })} /></F>
+            <F label="Boil min"><Num value={m.boilMin} onChange={(n) => setMv({ boilMin: n })} /></F>
+            <F label="End of boil gal (hot)"><Num value={m.postBoilGal} onChange={(n) => setMv({ postBoilGal: n })} /></F>
           </div>
           <div className="dp-row" style={{ marginTop: 8 }}>
             <F label="OG"><Num className="dp-nw" value={m.og} onChange={(n) => setMv({ og: n })} /></F>
-            <F label="INTO FERMENTER GAL"><Num value={m.intoFermGal} onChange={(n) => setMv({ intoFermGal: n })} /></F>
-            <F label="PITCHED °F"><Num value={m.pitchedF} onChange={(n) => setMv({ pitchedF: n })} /></F>
+            <F label="Into fermenter gal"><Num value={m.intoFermGal} onChange={(n) => setMv({ intoFermGal: n })} /></F>
+            <F label="Pitched °F"><Num value={m.pitchedF} onChange={(n) => setMv({ pitchedF: n })} /></F>
             <F label="FG"><Num className="dp-nw" value={m.fg} onChange={(n) => setMv({ fg: n })} /></F>
-            <F label="PACKAGED GAL"><Num value={m.packagedGal} onChange={(n) => setMv({ packagedGal: n })} /></F>
+            <F label="Packaged gal"><Num value={m.packagedGal} onChange={(n) => setMv({ packagedGal: n })} /></F>
           </div>
         </Win>
-        <Win title="PLANNED vs ACTUAL">
+        <Win title="Planned vs actual">
           <table className="dp-tbl" data-nofit>
-            <thead><tr><th /><th className="dp-num">PLAN</th><th className="dp-num">ACTUAL</th></tr></thead>
+            <thead><tr><th /><th className="dp-num">Plan</th><th className="dp-num">Actual</th></tr></thead>
             <tbody>
               {cmp("Mash pH", r1(c.mashPh, 2).toFixed(2), m.mashPh ? m.mashPh.toFixed(2) : "")}
               {cmp("Pre-boil", `${r1(c.preBoilGal, 2)} gal @ ${sgFmt(c.preBoilGravity)}`, m.preBoilGal ? `${m.preBoilGal} gal @ ${sgFmt(m.preBoilSg || 0)}` : "")}
@@ -130,27 +141,29 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
             </tbody>
           </table>
           <p style={{ marginTop: 10 }}>
-            <button className="dp-btn dp-go" disabled={!mashEff && !boilOff} onClick={teach}>SAVE TO MY EQUIPMENT</button>
+            <button className="dp-btn dp-go" disabled={!mashEff && !boilOff} onClick={teach}>Save to my equipment</button>
           </p>
-          <p className="dp-dim">UPDATES {e.name.toUpperCase()} WITH THIS BREW&apos;S MASH EFFICIENCY, KETTLE LOSS, AND BOIL-OFF (TURNED BACK TO A CALM 70°F DAY FROM THE WEATHER, AVERAGED WITH YOUR LAST BREWS).</p>
+          <p className="dp-dim">Updates {e.name} with this brew&apos;s mash efficiency, kettle loss and boil-off (turned back to a calm 70°F day from the weather, averaged with your last brews).</p>
         </Win>
       </div>
-      <TiltPanel brewId={id} r={r} og={m.og || c.og} color={m.tiltColor} onColor={(tc) => setMv({ tiltColor: tc || undefined })} />
+      <Autopilot r={r} userId={userId} chamberId={m.chamberId} auto={m.autopilot} alarms={m.alarms} lastCheck={m.lastCheck} beerTolF={m.beerTolF}
+        onChange={(p) => { if (p.autopilot) setAutoTouched(true); setMv(p); }} />
+      <TiltPanel brewId={id} r={r} og={m.og || c.og} color={m.tiltColor} chamberId={m.chamberId} onColor={(tc) => setMv({ tiltColor: tc || undefined })} />
       <div className="dp-grid">
-        <Win title="NOTES">
+        <Win title="Notes">
           <textarea value={row.notes} onChange={(ev) => { setRow({ ...row, notes: ev.target.value }); setDirty(true); }} placeholder="what happened today" />
         </Win>
-        <Win title="TASTING">
+        <Win title="Tasting">
           <div className="dp-row">
-            <F label="RATING (1-5)"><Num value={t.rating} onChange={(n) => { setT({ ...t, rating: Math.max(0, Math.min(5, n)) }); setDirty(true); }} /></F>
+            <F label="Rating (1-5)"><Num value={t.rating} onChange={(n) => { setT({ ...t, rating: Math.max(0, Math.min(5, n)) }); setDirty(true); }} /></F>
             <span className="dp-clock" style={{ fontSize: 20 }}>{"★".repeat(Math.round(t.rating || 0))}{"☆".repeat(5 - Math.round(t.rating || 0))}</span>
           </div>
           {(["appearance", "aroma", "flavor", "mouthfeel", "overall"] as const).map((k) => (
-            <F key={k} label={k.toUpperCase()}><input value={t[k] || ""} onChange={(ev) => { setT({ ...t, [k]: ev.target.value }); setDirty(true); }} /></F>
+            <F key={k} label={k[0].toUpperCase() + k.slice(1)}><input value={t[k] || ""} onChange={(ev) => { setT({ ...t, [k]: ev.target.value }); setDirty(true); }} /></F>
           ))}
         </Win>
       </div>
-      <p className="dp-dim"><Link href="/draftpunk/brews">&lt;&lt; ALL BREWS</Link> · STARTED FROM THE RECIPE AS IT WAS ON {fmtDate(row.brewed_on)}</p>
+      <p className="dp-dim"><Link href="/draftpunk/brews">&lt;&lt; ALL BREWS</Link> · Started from the recipe as it was on {fmtDate(row.brewed_on)}</p>
       {node}
     </>
   );

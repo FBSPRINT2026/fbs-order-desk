@@ -266,6 +266,21 @@ export function spundPlan(fg: number, vols: number, fermF: number, pts?: number)
   return { capSg: fg + needPts / 1000, psi: kegPsi(vols, fermF), pts: needPts, residual };
 }
 
+/**
+ * Fermentation CO2 for purging kegs (Nick, Nov 24 2026: "I harvest CO2 for transfers"). Fermentation makes about as much
+ * CO2 by weight as alcohol (0.96 g per g of ethanol); a liter of CO2 weighs about 1.84 g at room temperature. Only what
+ * comes off before the spunding valve goes on can be harvested, and the first ~10% pushes the headspace air out, so it's
+ * left out. A 5 gal (19 L) corny filled with sanitizer and pushed empty takes about 19 L to fill with pure CO2.
+ */
+export function co2Harvest(og: number, fg: number, gal: number, capSg?: number) {
+  const liters = gal * 3.785;
+  const ethanolG = (sg1: number, sg2: number) => (abvOf(sg1, sg2) / 100) * liters * 1000 * 0.789;
+  const total = (ethanolG(og, fg) * 0.96) / 1.84;
+  const before = capSg && capSg > fg ? (ethanolG(og, capSg) * 0.96) / 1.84 : total;
+  const usable = before * 0.9;
+  return { totalL: total, usableL: usable, kegs: Math.floor(usable / 19) };
+}
+
 // ---------- tools ----------
 /** a hydrometer reading taken warm, corrected to its calibration temperature */
 export function hydroCorrect(sg: number, tempF: number, calF = 60) {
@@ -354,6 +369,10 @@ export function calcRecipe(r: Recipe): Calc {
   const ph = mashPh(r.ferms, treated, mw.mashGal, r.water.salts);
 
   if (e.kettleGal && v.preBoil > e.kettleGal) notes.push(`The pre-boil volume (${r1(v.preBoil, 2)} gal) is more than the kettle holds (${e.kettleGal} gal).`);
+  const maxPsi = e.fermenterMaxPsi;
+  const spundPsi = r.carb.method === "spund" ? kegPsi(r.carb.vols, Math.max(...r.ferment.map((s) => s.tempF), 60)) : 0;
+  const stepPsi = Math.max(0, ...r.ferment.map((s) => s.psi || 0));
+  if (maxPsi && Math.max(spundPsi, stepPsi) > maxPsi * 0.85) notes.push(`${r1(Math.max(spundPsi, stepPsi), 0)} PSI is close to or over the ${e.fermenterName || "fermenter"}'s ${maxPsi} PSI rating; carbonate the rest in the keg.`);
   if (e.fermenterGal && e.batchGal > e.fermenterGal * 0.85) notes.push(`The batch leaves little headspace in a ${e.fermenterGal} gal fermenter.`);
   if (ph && (ph < 5.2 || ph > 5.6) && r.type !== "extract") notes.push(`Mash pH ${r1(ph, 2)} is outside 5.2–5.6; adjust salts or acid on the Water tab.`);
   if (r.type === "biab" || r.mash.sparge === "none") { /* full-volume mash: no sparge */ }

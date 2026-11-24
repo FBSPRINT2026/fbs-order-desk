@@ -3,13 +3,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-const ART = String.raw`
- ___  ___    _   ___ _____ ___ _   _ _  _ _  __
-|   \| _ \  /_\ | __|_   _| _ \ | | | \| | |/ /
-| |) |   / / _ \| _|  | | |  _/ |_| | .  | ' <
-|___/|_|_\/_/ \_\_|   |_| |_|  \___/|_|\_|_|\_\
-`;
-
 /**
  * DraftPunk's own sign-in: a club member's email gets a code (and a link) from the same sign-in system as the portal.
  * Only people a club admin has added can get one (shouldCreateUser off), and signing in lands back here, never in the
@@ -26,45 +19,45 @@ export default function Login({ signedInAs }: { signedInAs?: string }) {
     e.preventDefault(); setBusy(true); setErr("");
     const { error } = await createClient().auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false, emailRedirectTo: `${location.origin}/draftpunk` } });
     setBusy(false);
-    if (error) setErr(/signups? not allowed|not found/i.test(error.message) ? "THAT EMAIL ISN'T IN THE CLUB. ASK A CLUB ADMIN TO ADD YOU." : error.message.toUpperCase());
+    if (error) setErr(/signups? not allowed|not found/i.test(error.message) ? "That email isn't in the club yet. Ask a club admin to add you." : error.message);
     else setSent(true);
   };
   const verify = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setErr("");
     const { error } = await createClient().auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "email" });
     setBusy(false);
-    if (error) setErr("THAT CODE DIDN'T WORK. TRY AGAIN OR SEND A NEW ONE.");
+    if (error) setErr("That code didn't work. Try again, or send a new one.");
     else router.refresh();
   };
   return (
     <div className="dp-door">
       <div className="dp-win">
-        <span className="dp-wt">SYSTEM LOGIN</span>
-        <pre aria-label="DraftPunk">{ART}</pre>
-        <p>HOMEBREW RECIPE SYSTEM v1.0 · TEAM DRAFT PUNK</p>
-        <p className="dp-dim">HOME OF THE 2017 NINKASI AWARD WINNERS</p>
-        <p className="dp-dim">BUILD RECIPES · BREW THEM · LOG EVERY BATCH · SHARE THE GOOD ONES</p>
+        <span className="dp-badge">Home of the 2017 Ninkasi Award winners</span>
+        <h1 className="dp-big">DraftPunk</h1>
+        <p className="dp-dim" style={{ margin: "0 0 20px" }}>Build recipes, brew them, log every batch, and share the good ones with the club.</p>
         {signedInAs ? (
-          <p className="dp-red">{signedInAs.toUpperCase()} IS SIGNED IN BUT ISN&apos;T IN THE CLUB YET. ASK A CLUB ADMIN TO ADD YOU.</p>
+          <>
+            <p className="dp-red">{signedInAs} is signed in but isn&apos;t in the club yet. Ask a club admin to add you.</p>
+            <button className="dp-btn" onClick={async () => { await createClient().auth.signOut(); router.refresh(); }}>Sign in with another email</button>
+          </>
         ) : !sent ? (
-          <form onSubmit={send} className="dp-row" style={{ marginTop: 14 }}>
-            <label className="dp-f" style={{ flex: "1 1 260px" }}><span>EMAIL&gt;</span>
-              <input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+          <form onSubmit={send} className="dp-row">
+            <label className="dp-f" style={{ flex: "1 1 240px" }}><span>Email</span>
+              <input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" />
             </label>
-            <button className="dp-btn dp-go" disabled={busy}>{busy ? "SENDING" : "SEND CODE"}</button>
+            <button className="dp-btn dp-go" disabled={busy}>{busy ? "Sending…" : "Send my code"}</button>
           </form>
         ) : (
-          <form onSubmit={verify} className="dp-row" style={{ marginTop: 14 }}>
-            <p style={{ flexBasis: "100%", margin: 0 }}>CODE SENT TO {email.toUpperCase()}. TYPE IT IN, OR TAP THE LINK IN THE EMAIL.</p>
-            <label className="dp-f" style={{ flex: "1 1 160px" }}><span>CODE&gt;</span>
+          <form onSubmit={verify} className="dp-row">
+            <p style={{ flexBasis: "100%", margin: 0 }}>We sent a code to <b>{email}</b>. Type it in, or tap the link in the email.</p>
+            <label className="dp-f" style={{ flex: "1 1 160px" }}><span>Code</span>
               <input inputMode="numeric" required autoFocus value={code} onChange={(e) => setCode(e.target.value)} autoComplete="one-time-code" />
             </label>
-            <button className="dp-btn dp-go" disabled={busy}>LOGIN</button>
-            <button type="button" className="dp-btn" onClick={() => { setSent(false); setCode(""); }}>BACK</button>
+            <button className="dp-btn dp-go" disabled={busy}>Sign in</button>
+            <button type="button" className="dp-btn" onClick={() => { setSent(false); setCode(""); }}>Back</button>
           </form>
         )}
         {err && <p className="dp-red">{err}</p>}
-        <p className="dp-dim" style={{ marginTop: 14 }}>READY.<span className="dp-blink">█</span></p>
       </div>
     </div>
   );

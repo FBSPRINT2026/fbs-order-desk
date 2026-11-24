@@ -2,7 +2,7 @@
  * The brew day sheet: a recipe turned into step-by-step instructions with the numbers filled in (water, temperatures,
  * hop times), the way BeerSmith prints them. The brew day page runs a timer on the steps that have minutes.
  */
-import { calcRecipe, infusionQt, isMashed, kegPsi, primingOz, r1, sgFmt, SALT_LABEL, spundPlan, waterSplit } from "./calc";
+import { calcRecipe, co2Harvest, infusionQt, isMashed, kegPsi, primingOz, r1, sgFmt, SALT_LABEL, spundPlan, waterSplit } from "./calc";
 import type { Recipe } from "./types";
 
 export type BrewStep = { id: string; phase: "prep" | "mash" | "boil" | "chill" | "ferment" | "package"; title: string; detail?: string; min?: number; /** boil timer: minutes left in the boil when this happens */ at?: number };
@@ -19,7 +19,10 @@ export function brewSteps(r: Recipe): BrewStep[] {
   const saltList = (g: Record<string, number>) => Object.entries(g).filter(([, v]) => v >= 0.05).map(([k, v]) => `${r1(v, 1)} g ${SALT_LABEL[k as keyof typeof SALT_LABEL] || k}`);
 
   add({ phase: "prep", title: "Gather and weigh ingredients", detail: [...r.ferms.map((f) => `${amt(f.lb, "lb")} ${f.name}`), ...r.hops.map((h) => `${amt(h.oz, "oz")} ${h.name}`), ...r.yeasts.map((y) => `${y.packs} × ${y.name}`)].join(" · ") });
-  if (r.yeasts.some((y) => y.starter)) add({ phase: "prep", title: "Make the yeast starter (1–2 days ahead)", detail: r.starter ? `${r.starter.liters} L starter${r.starter.stir ? " on a stir plate" : ""}` : undefined });
+  if (r.yeasts.some((y) => y.starter)) {
+    const L = r.starter?.liters || 2;
+    add({ phase: "prep", title: `Make a ${L} L yeast starter (24–48 hours ahead)`, detail: `${Math.round(L * 100)} g dry malt extract in ${L} L water (about 1.036), boil 10 min, chill, pitch${r.starter?.stir !== false ? ", on the stir plate" : ""}; cold-crash and decant the night before if you like` });
+  }
 
   const lodo = r.water.lodo?.on;
   if (mashed.length && r.type !== "extract") {
@@ -60,10 +63,16 @@ export function brewSteps(r: Recipe): BrewStep[] {
   const ft = r.ferment[0]?.tempF || r.yeasts[0]?.tempLow || 66;
   add({ phase: "chill", title: `Chill to ${ft}°F and transfer ${amt(e.batchGal, "gal")} to the fermenter`, detail: `OG should be ${sgFmt(c.og)}${lodo ? " · closed transfer, no splashing" : ""}` });
   add({ phase: "chill", title: "Aerate and pitch the yeast", detail: r.yeasts.map((y) => `${y.packs} × ${y.lab ? y.lab + " " : ""}${y.name}`).join(" · ") });
-  for (const s of r.ferment) add({ phase: "ferment", title: `${s.name}: ${s.days} days at ${s.tempF}°F` });
-  for (const h of r.hops.filter((h) => h.use === "dry_hop")) add({ phase: "ferment", title: `Dry hop ${amt(h.oz, "oz")} ${h.name}`, detail: `${h.days || 3} days` });
+  for (const s of r.ferment) add({ phase: "ferment", title: `${s.name}: ${s.tempF}°F${s.psi ? ` at ${s.psi} PSI on the spunding valve` : ""}`, detail: !s.until || s.until === "days" ? `${s.days} days` : undefined });
+  const closed = !!(lodo || e.fermenterMaxPsi);
+  for (const h of r.hops.filter((h) => h.use === "dry_hop")) add({ phase: "ferment", title: `Dry hop ${amt(h.oz, "oz")} ${h.name}${closed ? " (oxygen-free)" : ""}`, detail: closed ? `${h.days || 3} days · load the hop jar, purge it with CO2 3 times, then open the valve into the fermenter under pressure` : `${h.days || 3} days` });
   for (const m of r.miscs.filter((m) => m.use === "primary" || m.use === "secondary")) add({ phase: "ferment", title: `Add ${r1(m.amount, 2)} ${m.unit} ${m.name} (${m.use})` });
   const warm = Math.max(...r.ferment.map((s) => s.tempF), ft);
+  if (r.carb.harvest) {
+    const cap = r.carb.method === "spund" ? spundPlan(c.fg, r.carb.vols, warm, r.carb.spundPts).capSg : undefined;
+    const h = co2Harvest(c.og, c.fg, e.batchGal, cap);
+    add({ phase: "ferment", title: `Harvest CO2: run the blow-off into sanitizer-filled kegs to push them out (about ${h.kegs} kegs)`, detail: `About ${r1(h.usableL, 0)} L of CO2 comes off before ${cap ? "the spunding valve goes on" : "fermentation ends"}; most of it in the first 2–3 days` });
+  }
   if (r.carb.method === "spund") {
     const sp = spundPlan(c.fg, r.carb.vols, warm, r.carb.spundPts);
     add({ phase: "ferment", title: `At ${sgFmt(sp.capSg)} (${sp.pts} points above FG), put the spunding valve on at ${r1(sp.psi, 1)} PSI`, detail: `Holds ${r.carb.vols} volumes at ${warm}°F; the Tilt log warns you when it's time` });

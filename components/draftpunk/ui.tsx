@@ -50,12 +50,12 @@ export function Picker({ title, items, head, onPick, onCustom, onClose }: { titl
       <div className="dp-win" onClick={(e) => e.stopPropagation()}>
         <span className="dp-wt">{title}</span>
         <div className="dp-row">
-          <F label="SEARCH" grow="1 1 240px"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && shown[0]) onPick(shown[0].key); }} /></F>
-          {onCustom && <button className="dp-btn" onClick={() => onCustom(q.trim() || "Custom")}>ADD &quot;{(q.trim() || "CUSTOM").toUpperCase()}&quot;</button>}
-          <button className="dp-btn" onClick={onClose}>ESC</button>
+          <F label="Search" grow="1 1 240px"><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && shown[0]) onPick(shown[0].key); }} /></F>
+          {onCustom && <button className="dp-btn" onClick={() => onCustom(q.trim() || "Custom")}>Add &quot;{q.trim() || "custom"}&quot;</button>}
+          <button className="dp-btn" onClick={onClose}>Esc</button>
         </div>
-        <table className="dp-tbl" style={{ marginTop: 10 }}>
-          {head && <thead><tr><th>NAME</th>{head.map((h) => <th key={h} className="dp-num">{h}</th>)}</tr></thead>}
+        <table className="dp-tbl" data-nofit style={{ marginTop: 10 }}>
+          {head && <thead><tr><th>Name</th>{head.map((h) => <th key={h} className="dp-num">{h}</th>)}</tr></thead>}
           <tbody>
             {shown.map((i) => (
               <tr key={i.key} className="dp-pick" onClick={() => onPick(i.key)}>
@@ -65,7 +65,7 @@ export function Picker({ title, items, head, onPick, onCustom, onClose }: { titl
             ))}
           </tbody>
         </table>
-        {!shown.length && <p className="dp-dim">NOTHING MATCHES.{onCustom ? " ADD IT AS A CUSTOM INGREDIENT." : ""}</p>}
+        {!shown.length && <p className="dp-dim">Nothing matches.{onCustom ? " Add it as a custom ingredient." : ""}</p>}
       </div>
     </div>
   );

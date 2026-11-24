@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-/** the F-keys work like an old DOS program; F2 saves whatever screen is open (it listens for "dp-save") */
+/** keyboard shortcuts: F1–F9 jump around, F2 saves whatever screen is open (it listens for "dp-save") */
 const KEYS: { k: string; label: string; href?: string; event?: string }[] = [
   { k: "F1", label: "Recipes", href: "/draftpunk" },
   { k: "F2", label: "Save", event: "dp-save" },
@@ -17,24 +17,17 @@ const KEYS: { k: string; label: string; href?: string; event?: string }[] = [
   { k: "F9", label: "Import", href: "/draftpunk/import" },
 ];
 const MENU = [
-  { href: "/draftpunk", label: "Recipes", hot: 0 },
-  { href: "/draftpunk/brews", label: "Brew Log", hot: 0 },
-  { href: "/draftpunk/tools", label: "Tools", hot: 0 },
-  { href: "/draftpunk/equipment", label: "Equipment", hot: 0 },
-  { href: "/draftpunk/inventory", label: "Stock", hot: 0 },
-  { href: "/draftpunk/club", label: "Club", hot: 1 },
+  { href: "/draftpunk", label: "Recipes" },
+  { href: "/draftpunk/brews", label: "Brew log" },
+  { href: "/draftpunk/tools", label: "Tools" },
+  { href: "/draftpunk/equipment", label: "Equipment" },
+  { href: "/draftpunk/inventory", label: "Stock" },
+  { href: "/draftpunk/club", label: "Club" },
 ];
 
 export default function Shell({ name, children }: { name: string; children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
-  const [clock, setClock] = useState("");
-  useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }));
-    tick();
-    const t = setInterval(tick, 15000);
-    return () => clearInterval(t);
-  }, []);
   const press = (key: (typeof KEYS)[number]) => {
     if (key.event) window.dispatchEvent(new Event(key.event));
     else if (key.href) router.push(key.href);
@@ -55,16 +48,15 @@ export default function Shell({ name, children }: { name: string; children: Reac
   return (
     <>
       <nav className="dp-menu dp-noprint">
-        <span className="dp-logo">DRAFTPUNK</span>
+        <Link href="/draftpunk" className="dp-logo">DraftPunk</Link>
         {MENU.map((m) => (
           <Link key={m.href} href={m.href} className={on(m.href) ? "on" : ""}>
-            {m.label.slice(0, m.hot)}<b>{m.label[m.hot]}</b>{m.label.slice(m.hot + 1)}
+            {m.label}
           </Link>
         ))}
         <span className="dp-who">
-          <span>{name.toUpperCase()}</span>
-          <span>{clock}</span>
-          <button type="button" onClick={signOut}>Exit</button>
+          <span>{name}</span>
+          <button type="button" onClick={signOut}>Sign out</button>
         </span>
       </nav>
       <main className="dp-main">{children}</main>
@@ -77,9 +69,9 @@ export default function Shell({ name, children }: { name: string; children: Reac
   );
 }
 
-/** a short "SAVED" note in the corner */
+/** a short "Saved" note in the corner */
 export function useToast() {
   const [msg, setMsg] = useState("");
   useEffect(() => { if (!msg) return; const t = setTimeout(() => setMsg(""), 2200); return () => clearTimeout(t); }, [msg]);
-  return { toast: setMsg, node: msg ? <div className="dp-toast">{msg}</div> : null };
+  return { toast: setMsg, node: msg ? <div className="dp-toast" role="status">{msg}</div> : null };
 }

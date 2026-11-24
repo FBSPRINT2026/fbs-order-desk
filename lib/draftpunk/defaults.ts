@@ -15,7 +15,7 @@ export function newRecipe(equipment?: Equipment, brewer?: string): Recipe {
     mash: structuredClone(noSparge ? MASH_PROFILES[0] : MASH_PROFILES.find((m) => m.name.startsWith("Single Infusion, Medium"))!),
     water: { source: { ...RO_WATER }, target: { ...WATERS.find((w) => w.name.startsWith("Balanced"))! }, salts: { gypsum: 0, cacl2: 0, epsom: 0, nacl: 0, bakingSoda: 0, chalk: 0, lacticMl: 0 }, spargeSalts: true, lodo: e.lodo ? { on: true, smbMgL: 50 } : undefined },
     ferment: [{ name: "Primary", days: 14, tempF: 66 }],
-    carb: { vols: 2.4, method: e.lodo ? "spund" : "keg", tempF: 38 },
+    carb: { vols: 2.4, method: e.lodo ? "spund" : "keg", tempF: 38, harvest: !!e.lodo },
     starter: { liters: 2, stir: true },
   };
 }

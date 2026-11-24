@@ -18,31 +18,31 @@ export default function Importer({ userId }: { userId: string }) {
     const all: (Recipe & { take: boolean; from: string })[] = [];
     for (const f of Array.from(files)) {
       try { all.push(...parseRecipes(await f.text(), f.name).map((r) => ({ ...r, take: true, from: f.name }))); }
-      catch { setMsg(`COULDN'T READ ${f.name.toUpperCase()}`); }
+      catch { setMsg(`Couldn't read ${f.name}`); }
     }
     setFound(all);
-    setMsg(all.length ? `${all.length} RECIPE${all.length === 1 ? "" : "S"} FOUND. TICK THE ONES TO KEEP.` : "NO RECIPES FOUND IN THAT FILE.");
+    setMsg(all.length ? `${all.length} recipe${all.length === 1 ? "" : "s"} found. Tick the ones to keep.` : "No recipes found in that file.");
   };
   const save = async () => {
     setBusy(true);
     const rows = found.filter((r) => r.take).map(({ take: _t, from: _f, ...r }) => ({ owner_id: userId, name: r.name, style_id: r.styleId || null, data: r, calc: calcSummary(calcRecipe(r)) }));
     const { error } = await createClient().from("dp_recipes").insert(rows);
     setBusy(false);
-    setMsg(error ? `NOT SAVED: ${error.message}` : `${rows.length} RECIPE${rows.length === 1 ? "" : "S"} SAVED. SEE THEM UNDER RECIPES.`);
+    setMsg(error ? `Not saved: ${error.message}` : `${rows.length} recipe${rows.length === 1 ? "" : "s"} saved. See them under Recipes.`);
     if (!error) setFound([]);
   };
   return (
     <>
-      <h1 className="dp-h1">C:\DRAFTPUNK\IMPORT&gt;<span className="dp-blink">_</span></h1>
-      <Win title="IMPORT RECIPES">
-        <p>PICK A BEERSMITH FILE (<b>Recipe.bsmx</b> FROM DOCUMENTS/BEERSMITH3) OR A <b>BEERXML</b> EXPORT (.xml). YOU CAN PICK SEVERAL.</p>
+      <h1 className="dp-h1">Import recipes</h1>
+      <Win title="Import recipes">
+        <p>Pick a BeerSmith file (<b>Recipe.bsmx</b> from Documents/BeerSmith3) or a <b>BeerXML</b> export (.xml). You can pick several.</p>
         <input type="file" accept=".bsmx,.xml,.beerxml" multiple onChange={(e) => read(e.target.files)} />
         {msg && <p>{msg}</p>}
       </Win>
       {!!found.length && (
-        <Win title="FOUND">
-          <table className="dp-tbl">
-            <thead><tr><th /><th>RECIPE</th><th>STYLE</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">GAL</th><th>FROM</th></tr></thead>
+        <Win title="Found">
+          <table className="dp-tbl" data-nofit>
+            <thead><tr><th /><th>Recipe</th><th>Style</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">Gal</th><th>From</th></tr></thead>
             <tbody>
               {found.map((r, i) => { const c = calcRecipe(r); return (
                 <tr key={i}>
@@ -54,8 +54,8 @@ export default function Importer({ userId }: { userId: string }) {
               ); })}
             </tbody>
           </table>
-          <p className="dp-row"><button className="dp-btn dp-go" disabled={busy} onClick={save}>SAVE {found.filter((r) => r.take).length} RECIPES</button><Link className="dp-btn" href="/draftpunk">CANCEL</Link></p>
-          <p className="dp-dim">THEIR EFFICIENCY COMES IN AS MASH EFFICIENCY; PICK YOUR OWN EQUIPMENT IN EACH RECIPE (OR SCALE TO IT) AND YOUR BREW LOGS WILL DIAL IT IN.</p>
+          <p className="dp-row"><button className="dp-btn dp-go" disabled={busy} onClick={save}>Save {found.filter((r) => r.take).length} recipes</button><Link className="dp-btn" href="/draftpunk">Cancel</Link></p>
+          <p className="dp-dim">Their efficiency comes in as mash efficiency; pick your own equipment in each recipe (or scale to it) and your brew logs will dial it in.</p>
         </Win>
       )}
     </>

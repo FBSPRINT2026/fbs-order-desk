@@ -30,15 +30,15 @@ export default function Club({ userId, isAdmin }: { userId: string; isAdmin: boo
   const who = (id: string) => members.find((m) => m.user_id === id)?.name || "?";
   return (
     <>
-      <h1 className="dp-h1">C:\DRAFTPUNK\CLUB&gt;<span className="dp-blink">_</span></h1>
-      <Win title={`SHARED RECIPES (${shared.length})`}>
-        {!shared.length ? <p className="dp-dim">NOBODY HAS SHARED A RECIPE YET. OPEN ONE OF YOURS, GO TO NOTES, AND TICK SHARE WITH THE CLUB.</p> : (
-          <table className="dp-tbl">
-            <thead><tr><th>RECIPE</th><th>BREWER</th><th>STYLE</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">ABV</th><th>SAVED</th></tr></thead>
+      <h1 className="dp-h1">The club</h1>
+      <Win title={`Shared recipes (${shared.length})`}>
+        {!shared.length ? <p className="dp-dim">Nobody has shared a recipe yet. Open one of yours, go to notes, and tick share with the club.</p> : (
+          <table className="dp-tbl" data-nofit>
+            <thead><tr><th>Recipe</th><th>Brewer</th><th>Style</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">ABV</th><th>Saved</th></tr></thead>
             <tbody>
               {shared.map((r) => (
                 <tr key={r.id}>
-                  <td><Link href={`/draftpunk/r/${r.id}`}>{r.name}</Link>{r.owner_id === userId && <span className="dp-dim"> (MINE)</span>}</td>
+                  <td><Link href={`/draftpunk/r/${r.id}`}>{r.name}</Link>{r.owner_id === userId && <span className="dp-dim"> (Mine)</span>}</td>
                   <td>{who(r.owner_id)}</td>
                   <td>{styleById(r.style_id || "")?.name || "-"}</td>
                   <td className="dp-num">{r.calc?.og?.toFixed(3) || "-"}</td>
@@ -52,12 +52,12 @@ export default function Club({ userId, isAdmin }: { userId: string; isAdmin: boo
         )}
       </Win>
       <div className="dp-grid">
-        <Win title={`MEMBERS (${members.length})`}>
-          <table className="dp-tbl">
+        <Win title={`Members (${members.length})`}>
+          <table className="dp-tbl" data-nofit>
             <tbody>
               {members.map((m) => (
                 <tr key={m.user_id}>
-                  <td>{m.name}</td><td className="dp-dim">{m.club_role.toUpperCase()}</td>
+                  <td>{m.name}</td><td className="dp-dim">{m.club_role}</td>
                   <td className="dp-num">{isAdmin && m.user_id !== userId && <button className="dp-btn dp-x" onClick={async () => { if (confirm(`Remove ${m.name} from the club?`)) { const r = await removeMember(m.user_id); setMsg(r.msg); load(); } }}>X</button>}</td>
                 </tr>
               ))}
@@ -65,14 +65,14 @@ export default function Club({ userId, isAdmin }: { userId: string; isAdmin: boo
           </table>
         </Win>
         {isAdmin && (
-          <Win title="ADD A MEMBER">
-            <form className="dp-row" onSubmit={async (e) => { e.preventDefault(); setMsg("ADDING..."); const r = await addMember(email, name); setMsg(r.msg); if (r.ok) { setEmail(""); setName(""); load(); } }}>
-              <F label="NAME" grow="1 1 160px"><input value={name} onChange={(e) => setName(e.target.value)} /></F>
-              <F label="EMAIL" grow="2 1 220px"><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></F>
-              <button className="dp-btn dp-go">ADD</button>
+          <Win title="Add a member">
+            <form className="dp-row" onSubmit={async (e) => { e.preventDefault(); setMsg("Adding..."); const r = await addMember(email, name); setMsg(r.msg); if (r.ok) { setEmail(""); setName(""); load(); } }}>
+              <F label="Name" grow="1 1 160px"><input value={name} onChange={(e) => setName(e.target.value)} /></F>
+              <F label="Email" grow="2 1 220px"><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></F>
+              <button className="dp-btn dp-go">Add</button>
             </form>
             {msg && <p>{msg}</p>}
-            <p className="dp-dim">NO EMAIL GOES OUT FROM HERE: TELL THEM TO SIGN IN AT PORTAL.FBSPRINT.COM/DRAFTPUNK WITH THAT EMAIL.</p>
+            <p className="dp-dim">No email goes out from here: Tell them to sign in at portal.fbsprint.com/draftpunk with that email.</p>
           </Win>
         )}
       </div>

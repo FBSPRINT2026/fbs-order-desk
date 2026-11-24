@@ -27,29 +27,29 @@ export default function RecipeList({ userId }: { userId: string }) {
     if (made) router.push(`/draftpunk/r/${made.id}`);
   };
   const remove = async (r: Row) => {
-    if (!confirm(`DELETE "${r.name}"? Its brew logs stay.`)) return;
+    if (!confirm(`Delete "${r.name}"? Its brew logs stay.`)) return;
     await createClient().from("dp_recipes").delete().eq("id", r.id);
     load();
   };
   return (
     <>
-      <h1 className="dp-h1">C:\DRAFTPUNK\RECIPES&gt;<span className="dp-blink">_</span></h1>
+      <h1 className="dp-h1">My recipes</h1>
       <div className="dp-row">
-        <label className="dp-f" style={{ flex: "1 1 260px" }}><span>SEARCH</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name or style" /></label>
-        <Link href="/draftpunk/r/new" className="dp-btn dp-go">NEW RECIPE</Link>
-        <Link href="/draftpunk/import" className="dp-btn">IMPORT</Link>
+        <label className="dp-f" style={{ flex: "1 1 260px" }}><span>Search</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="name or style" /></label>
+        <Link href="/draftpunk/r/new" className="dp-btn dp-go">New recipe</Link>
+        <Link href="/draftpunk/import" className="dp-btn">Import</Link>
       </div>
       <div className="dp-win">
-        <span className="dp-wt">MY RECIPES {rows ? `(${rows.length})` : ""}</span>
-        {!rows ? <p>LOADING...</p> : !rows.length ? (
-          <p>NO RECIPES YET. PRESS <b>F3</b> TO START ONE, OR <Link href="/draftpunk/import">IMPORT FROM BEERSMITH</Link>.</p>
+        <span className="dp-wt">My recipes {rows ? `(${rows.length})` : ""}</span>
+        {!rows ? <p>Loading...</p> : !rows.length ? (
+          <p>No recipes yet. Press <b>F3</b> To start one, or <Link href="/draftpunk/import">Import from BeerSmith</Link>.</p>
         ) : (
-          <table className="dp-tbl">
-            <thead><tr><th>NAME</th><th>STYLE</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">ABV</th><th className="dp-num">SRM</th><th>SAVED</th><th /></tr></thead>
+          <table className="dp-tbl" data-nofit>
+            <thead><tr><th>Name</th><th>Style</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">ABV</th><th className="dp-num">SRM</th><th>Saved</th><th /></tr></thead>
             <tbody>
               {shown.map((r) => (
                 <tr key={r.id} className="dp-pick" onClick={() => router.push(`/draftpunk/r/${r.id}`)}>
-                  <td>{r.name}{r.visibility === "club" && <span className="dp-dim"> [CLUB]</span>}</td>
+                  <td>{r.name}{r.visibility === "club" && <span className="dp-dim"> [Club]</span>}</td>
                   <td>{styleById(r.style_id || "")?.name || <span className="dp-dim">-</span>}</td>
                   <td className="dp-num">{r.calc?.og?.toFixed(3) || "-"}</td>
                   <td className="dp-num">{r.calc?.ibu ?? "-"}</td>
@@ -57,8 +57,8 @@ export default function RecipeList({ userId }: { userId: string }) {
                   <td className="dp-num">{r.calc?.srm ?? "-"}<span className="dp-swatch" style={{ background: r.calc?.color || "transparent" }} /></td>
                   <td>{fmtDate(r.updated_at)}</td>
                   <td className="dp-num" onClick={(e) => e.stopPropagation()}>
-                    <button className="dp-btn dp-sm" onClick={() => copy(r.id)}>COPY</button>{" "}
-                    <button className="dp-btn dp-sm dp-x" title="Delete" onClick={() => remove(r)}>DEL</button>
+                    <button className="dp-btn dp-sm" onClick={() => copy(r.id)}>Copy</button>{" "}
+                    <button className="dp-btn dp-sm dp-x" title="Delete" onClick={() => remove(r)}>Del</button>
                   </td>
                 </tr>
               ))}

@@ -55,34 +55,34 @@ export default function BrewDay({ r, onStartLog, onWeather }: { r: Recipe; onSta
 
   return (
     <>
-      <Win title="BREW DAY WEATHER" className="dp-noprint">
+      <Win title="Brew day weather" className="dp-noprint">
         <div className="dp-row">
-          <F label="AIR °F"><Num value={w?.tempF} onChange={(n) => onWeather?.({ tempF: n, rh: w?.rh ?? 50, windMph: w?.windMph ?? 0 })} /></F>
-          <F label="HUMIDITY %"><Num value={w?.rh} onChange={(n) => onWeather?.({ tempF: w?.tempF ?? 70, rh: n, windMph: w?.windMph ?? 0 })} /></F>
-          <F label="WIND MPH"><Num value={w?.windMph} onChange={(n) => onWeather?.({ tempF: w?.tempF ?? 70, rh: w?.rh ?? 50, windMph: n })} /></F>
-          {onWeather && <button className="dp-btn" onClick={() => { setWErr(""); fetchWeather(r.equipment.place).then(onWeather).catch(() => setWErr("COULDN'T GET THE WEATHER: ALLOW LOCATION, OR TYPE IT IN")); }}>{r.equipment.place ? `WEATHER IN ${r.equipment.place.name.toUpperCase()}` : "GET MY WEATHER"}</button>}
-          {onWeather && w && <button className="dp-btn dp-x" onClick={() => onWeather(undefined)}>CLEAR</button>}
+          <F label="Air °F"><Num value={w?.tempF} onChange={(n) => onWeather?.({ tempF: n, rh: w?.rh ?? 50, windMph: w?.windMph ?? 0 })} /></F>
+          <F label="Humidity %"><Num value={w?.rh} onChange={(n) => onWeather?.({ tempF: w?.tempF ?? 70, rh: n, windMph: w?.windMph ?? 0 })} /></F>
+          <F label="Wind mph"><Num value={w?.windMph} onChange={(n) => onWeather?.({ tempF: w?.tempF ?? 70, rh: w?.rh ?? 50, windMph: n })} /></F>
+          {onWeather && <button className="dp-btn" onClick={() => { setWErr(""); fetchWeather(r.equipment.place).then(onWeather).catch(() => setWErr("Couldn't get the weather. Allow location, or type it in.")); }}>{r.equipment.place ? `Weather in ${r.equipment.place.name}` : "Get my weather"}</button>}
+          {onWeather && w && <button className="dp-btn dp-x" onClick={() => onWeather(undefined)}>Clear</button>}
         </div>
-        <p className="dp-dim">BOIL-OFF {r1(c.boilOffGal, 2)} GAL/HR {w ? `(${weatherFactor(w) >= 1 ? "+" : ""}${r1((weatherFactor(w) - 1) * 100, 0)}% FOR THE WEATHER; CALM 70°F DAY = ${r1(r.equipment.boilOffGal, 2)})` : "(CALM 70°F DAY; ENTER THE WEATHER TO ADJUST)"}</p>
+        <p className="dp-dim">Boil-off {r1(c.boilOffGal, 2)} gal/hr {w ? `(${weatherFactor(w) >= 1 ? "+" : ""}${r1((weatherFactor(w) - 1) * 100, 0)}% for the weather; calm 70°F day = ${r1(r.equipment.boilOffGal, 2)})` : "(Calm 70°F day; enter the weather to adjust)"}</p>
         {wErr && <p className="dp-red">{wErr}</p>}
       </Win>
 
       {timer && (
-        <Win title={timer.boil ? "BOIL TIMER" : "TIMER"} className="dp-noprint">
+        <Win title={timer.boil ? "Boil timer" : "Timer"} className="dp-noprint">
           <div className="dp-row" style={{ justifyContent: "space-between" }}>
             <div>
               <div className="dp-clock">{mmss(left)}</div>
               <div>{timer.title}</div>
-              {nextAdd && <div className="dp-hi">NEXT: {nextAdd.title.replace(/^With /, "").toUpperCase()} → {nextAdd.detail} (IN {mmss(left - nextAdd.at! * 60)})</div>}
+              {nextAdd && <div className="dp-hi">Next: {nextAdd.detail} (in {mmss(left - nextAdd.at! * 60)})</div>}
             </div>
-            <button className="dp-btn" onClick={() => setTimer(null)}>STOP</button>
+            <button className="dp-btn" onClick={() => setTimer(null)}>Stop</button>
           </div>
         </Win>
       )}
 
-      <Win title={`BREW SHEET: ${r.name.toUpperCase()}`}>
+      <Win title={`Brew sheet: ${r.name}`}>
         <div className="dp-row dp-dim" style={{ marginBottom: 8 }}>
-          <span>{r.equipment.name}</span><span>OG {c.og.toFixed(3)}</span><span>FG {c.fg.toFixed(3)}</span><span>{r1(c.ibu, 0)} IBU</span><span>{r1(c.abv, 1)}% ABV</span><span>{r1(c.intoFermGal, 2)} GAL</span>
+          <span>{r.equipment.name}</span><span>OG {c.og.toFixed(3)}</span><span>FG {c.fg.toFixed(3)}</span><span>{r1(c.ibu, 0)} IBU</span><span>{r1(c.abv, 1)}% ABV</span><span>{r1(c.intoFermGal, 2)} gal</span>
         </div>
         <ol className="dp-steps">
           {steps.map((s) => (
@@ -95,8 +95,8 @@ export default function BrewDay({ r, onStartLog, onWeather }: { r: Recipe; onSta
         </ol>
       </Win>
       <p className="dp-row dp-noprint">
-        <button className="dp-btn dp-go" onClick={onStartLog}>START A BREW LOG</button>
-        <button className="dp-btn" onClick={() => window.print()}>PRINT SHEET</button>
+        <button className="dp-btn dp-go" onClick={onStartLog}>Start a brew log</button>
+        <button className="dp-btn" onClick={() => window.print()}>Print sheet</button>
       </p>
     </>
   );

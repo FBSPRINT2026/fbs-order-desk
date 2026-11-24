@@ -13,3 +13,23 @@ create table if not exists dp_readings (
 create index if not exists dp_readings_brew on dp_readings (brew_id, read_at);
 alter table dp_readings enable row level security;
 create policy dp_readings_own on dp_readings for select using (owner_id = auth.uid());
+
+-- Fermentation chambers and autopilot (Nick, Nov 24 2026: "inkbird temp controllers you can log… every fermentation
+-- has its own controlled space… implement diacetyl tests or step fermentation automatically… alarms"). A reading is a
+-- Tilt's (source 'tilt', with sg) or a chamber controller's (source 'inkbird', temp_f and set_f). A brew log's
+-- autopilot state lives in dp_brews.measured.autopilot; the cron in app/api/cron/draftpunk runs it every 15 minutes.
+alter table dp_readings add column if not exists source text not null default 'tilt';
+alter table dp_readings add column if not exists set_f numeric;
+alter table dp_readings add column if not exists chamber_id uuid;
+create table if not exists dp_chambers (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  -- the Inkbird's Tuya device id (Tuya cloud control), blank when it's logged some other way
+  device_id text not null default '',
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+alter table dp_chambers enable row level security;
+create policy dp_chambers_own on dp_chambers for all using (owner_id = auth.uid()) with check (owner_id = auth.uid() and dp_is_brewer());
+create index if not exists dp_readings_chamber on dp_readings (chamber_id, read_at);

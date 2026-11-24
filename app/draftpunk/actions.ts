@@ -9,9 +9,9 @@ import { getBrewer } from "@/lib/draftpunk/server";
  */
 export async function addMember(rawEmail: string, rawName: string, role: "member" | "admin" = "member"): Promise<{ ok: boolean; msg: string }> {
   const me = await getBrewer();
-  if (me.brewer?.club_role !== "admin") return { ok: false, msg: "ONLY A CLUB ADMIN CAN ADD MEMBERS" };
+  if (me.brewer?.club_role !== "admin") return { ok: false, msg: "Only a club admin can add members" };
   const email = rawEmail.trim().toLowerCase(), name = rawName.trim() || email.split("@")[0];
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, msg: "THAT EMAIL DOESN'T LOOK RIGHT" };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, msg: "That email doesn't look right" };
   const admin = createAdminClient();
   let userId = "";
   const made = await admin.auth.admin.createUser({ email, email_confirm: true });
@@ -25,18 +25,18 @@ export async function addMember(rawEmail: string, rawName: string, role: "member
       if (!data || data.users.length < 1000) break;
     }
   }
-  if (!userId) return { ok: false, msg: made.error?.message?.toUpperCase() || "COULDN'T ADD THEM" };
+  if (!userId) return { ok: false, msg: made.error?.message || "Couldn't add them" };
   const { error } = await admin.from("dp_brewers").upsert({ user_id: userId, name, club_role: role });
-  return error ? { ok: false, msg: error.message } : { ok: true, msg: `${name.toUpperCase()} IS IN. THEY SIGN IN AT PORTAL.FBSPRINT.COM/DRAFTPUNK WITH ${email.toUpperCase()}.` };
+  return error ? { ok: false, msg: error.message } : { ok: true, msg: `${name} is in. They sign in at portal.fbsprint.com/draftpunk with ${email}.` };
 }
 
 /** a club admin takes someone out of the club (their recipes stay with their sign-in) */
 export async function removeMember(userId: string): Promise<{ ok: boolean; msg: string }> {
   const me = await getBrewer();
-  if (me.brewer?.club_role !== "admin") return { ok: false, msg: "ONLY A CLUB ADMIN CAN DO THAT" };
-  if (userId === me.userId) return { ok: false, msg: "YOU CAN'T REMOVE YOURSELF" };
+  if (me.brewer?.club_role !== "admin") return { ok: false, msg: "Only a club admin can do that" };
+  if (userId === me.userId) return { ok: false, msg: "You can't remove yourself" };
   const { error } = await createAdminClient().from("dp_brewers").delete().eq("user_id", userId);
-  return error ? { ok: false, msg: error.message } : { ok: true, msg: "REMOVED FROM THE CLUB" };
+  return error ? { ok: false, msg: error.message } : { ok: true, msg: "Removed from the club" };
 }
 
 /** the signed-in brewer's private Tilt logging address (made the first time it's asked for) */

@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/sep-coach",
       "schedule": "23 7 * * *"
+    },
+    {
+      "path": "/api/cron/draftpunk",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

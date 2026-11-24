@@ -50,7 +50,14 @@ export type Salts = { gypsum: number; cacl2: number; epsom: number; nacl: number
 export type MashStep = { name: string; kind: "infusion" | "temperature" | "decoction"; tempF: number; min: number; /** infusion: water added, qt (worked out when blank) */ addQt?: number; };
 export type Mash = { name: string; grainTempF: number; /** qt water per lb for the first step */ ratio: number; steps: MashStep[]; spargeTempF: number; sparge: "batch" | "fly" | "none" };
 
-export type FermStep = { name: string; days: number; tempF: number };
+/**
+ * A fermentation step. It moves on after `days`, or (Nick, Nov 24 2026: "monitor the tilts and implement diacetyl tests
+ * or step fermentation automatically") when the Tilt shows: progress = % of the way from OG to the expected FG;
+ * near_fg = within untilVal points of FG; stable = no change for untilVal hours. `days` is then only an estimate.
+ */
+export type FermStep = { name: string; days: number; tempF: number; until?: "days" | "progress" | "near_fg" | "stable"; untilVal?: number;
+  /** pressure fermentation: the spunding valve's PSI during this step (Fermzilla; Nick, Nov 24 2026) */
+  psi?: number };
 
 export type Equipment = {
   name: string;
@@ -81,6 +88,8 @@ export type Equipment = {
   /** feet above sea level (lowers the boiling point and hop utilization) */
   elevationFt: number;
   kettleGal?: number; fermenterGal?: number; notes?: string;
+  /** the fermenter's pressure rating, PSI (a Fermzilla All Rounder is rated 35); spunding above it is flagged */
+  fermenterMaxPsi?: number; fermenterName?: string;
   /** where this system brews (its brew-day weather comes from here, no phone location needed) */
   place?: { name: string; lat: number; lon: number };
   /** this brewer brews low oxygen: new recipes on this equipment start with LODO on */
@@ -99,7 +108,8 @@ export type Weather = { tempF: number; rh: number; windMph: number };
  * keg: force carbonate; spund: cap the fermenter with a spunding valve near the end of fermentation (Nick and Jeff,
  * Nov 24 2026: closed transfers, spunding, force carb as needed); the rest prime bottles. tempF is the serving temp.
  */
-export type Carb = { vols: number; method: "corn_sugar" | "table_sugar" | "dme" | "honey" | "keg" | "spund"; tempF: number; /** spund: cap this many gravity points above FG */ spundPts?: number };
+export type Carb = { vols: number; method: "corn_sugar" | "table_sugar" | "dme" | "honey" | "keg" | "spund"; tempF: number; /** spund: cap this many gravity points above FG */ spundPts?: number;
+  /** harvest fermentation CO2 to purge kegs for closed transfers (Nick, Nov 24 2026) */ harvest?: boolean };
 
 export type RecipeType = "all_grain" | "extract" | "partial_mash" | "biab" | "mead" | "cider" | "wine";
 

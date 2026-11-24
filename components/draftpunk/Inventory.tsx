@@ -38,7 +38,7 @@ export default function Inventory({ userId }: { userId: string }) {
   const add = async (kind: Item["kind"], key: string, custom?: string) => {
     const lib = (LIB[kind] as unknown as { id: string; name: string }[]).find((x) => x.id === key);
     const name = custom || lib?.name || "Item";
-    if (items.some((i) => i.kind === kind && i.name.toLowerCase() === name.toLowerCase())) { toast("ALREADY ON THE SHELF"); setPick(""); return; }
+    if (items.some((i) => i.kind === kind && i.name.toLowerCase() === name.toLowerCase())) { toast("Already on the shelf"); setPick(""); return; }
     const { id: _id, ...data } = (lib || { name }) as { id?: string; name: string };
     await createClient().from("dp_ingredients").insert({ owner_id: userId, kind, name, data: { ...data, ref: lib?.id }, in_stock: 0 });
     setPick(""); load();
@@ -64,17 +64,17 @@ export default function Inventory({ userId }: { userId: string }) {
       const it = items.find((i) => i.kind === l.kind && i.name.toLowerCase() === l.name.toLowerCase());
       if (it) await sb.from("dp_ingredients").update({ in_stock: Math.max(0, r1((it.in_stock || 0) - l.want, 3)) }).eq("id", it.id);
     }
-    toast("TAKEN OUT OF STOCK"); load();
+    toast("Taken out of stock"); load();
   };
   const pickItems = pick ? (LIB[pick] as unknown as { id: string; name: string; origin?: string; lab?: string }[]).map((x) => ({ key: x.id, name: x.name, sub: x.origin || x.lab })) : [];
 
   return (
     <>
-      <h1 className="dp-h1">C:\DRAFTPUNK\STOCK&gt;<span className="dp-blink">_</span></h1>
+      <h1 className="dp-h1">Stock</h1>
       <div className="dp-grid">
-        <Win title="ON THE SHELF">
-          <table className="dp-tbl">
-            <thead><tr><th>ITEM</th><th>KIND</th><th className="dp-num">HAVE</th><th /></tr></thead>
+        <Win title="On the shelf">
+          <table className="dp-tbl" data-nofit>
+            <thead><tr><th>Item</th><th>Kind</th><th className="dp-num">Have</th><th /></tr></thead>
             <tbody>
               {items.map((i) => (
                 <tr key={i.id}>
@@ -85,16 +85,16 @@ export default function Inventory({ userId }: { userId: string }) {
               ))}
             </tbody>
           </table>
-          {!items.length && <p className="dp-dim">NOTHING ON THE SHELF YET.</p>}
+          {!items.length && <p className="dp-dim">Nothing on the shelf yet.</p>}
           <p className="dp-row">
-            <button className="dp-btn" onClick={() => setPick("fermentable")}>+ GRAIN</button>
-            <button className="dp-btn" onClick={() => setPick("hop")}>+ HOPS</button>
-            <button className="dp-btn" onClick={() => setPick("yeast")}>+ YEAST</button>
-            <button className="dp-btn" onClick={() => setPick("misc")}>+ MISC</button>
+            <button className="dp-btn" onClick={() => setPick("fermentable")}>+ Grain</button>
+            <button className="dp-btn" onClick={() => setPick("hop")}>+ Hops</button>
+            <button className="dp-btn" onClick={() => setPick("yeast")}>+ Yeast</button>
+            <button className="dp-btn" onClick={() => setPick("misc")}>+ Misc</button>
           </p>
         </Win>
-        <Win title="SHOPPING LIST">
-          <F label="FOR RECIPE">
+        <Win title="Shopping list">
+          <F label="For recipe">
             <select value={rid} onChange={(e) => setRid(e.target.value)}>
               <option value="">(pick a recipe)</option>
               {recipes.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
@@ -102,8 +102,8 @@ export default function Inventory({ userId }: { userId: string }) {
           </F>
           {recipe && (
             <>
-              <table className="dp-tbl" style={{ marginTop: 8 }}>
-                <thead><tr><th>ITEM</th><th className="dp-num">NEED</th><th className="dp-num">HAVE</th><th className="dp-num">BUY</th></tr></thead>
+              <table className="dp-tbl" data-nofit style={{ marginTop: 8 }}>
+                <thead><tr><th>Item</th><th className="dp-num">Need</th><th className="dp-num">Have</th><th className="dp-num">Buy</th></tr></thead>
                 <tbody>
                   {need.map((l) => (
                     <tr key={l.kind + l.name}>
@@ -115,12 +115,12 @@ export default function Inventory({ userId }: { userId: string }) {
                   ))}
                 </tbody>
               </table>
-              <p className="dp-row"><button className="dp-btn" onClick={useUp}>I BREWED IT: TAKE IT OUT OF STOCK</button></p>
+              <p className="dp-row"><button className="dp-btn" onClick={useUp}>I brewed it: Take it out of stock</button></p>
             </>
           )}
         </Win>
       </div>
-      {pick && <Picker title={`ADD ${pick.toUpperCase()} TO THE SHELF`} items={pickItems} onPick={(k) => add(pick, k)} onCustom={(n) => add(pick, "", n)} onClose={() => setPick("")} />}
+      {pick && <Picker title={`Add ${pick} to the shelf`} items={pickItems} onPick={(k) => add(pick, k)} onCustom={(n) => add(pick, "", n)} onClose={() => setPick("")} />}
       {node}
     </>
   );
