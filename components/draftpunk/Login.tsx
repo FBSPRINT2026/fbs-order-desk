@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Emblem from "./Emblem";
 
 /**
  * DraftPunk's own sign-in: a club member's email gets a code (and a link) from the same sign-in system as the portal.
@@ -33,8 +34,10 @@ export default function Login({ signedInAs }: { signedInAs?: string }) {
     <div className="dp-door">
       <div className="dp-door-art">
         <div>
+          <div style={{ color: "#fff7ea", marginBottom: 18, position: "relative" }}><Emblem size={96} /></div>
           <span className="dp-award">★ Home of the 2017 Ninkasi Award winners</span>
           <h1>Draft<br />Punk</h1>
+          <div className="dp-door-sub">Homebrew Club · Est. 2013</div>
           <p>Build recipes, brew them, log every batch, and share the good ones with the club.</p>
         </div>
       </div>

@@ -10,6 +10,7 @@ export default async function More() {
   const { brewer } = await requireBrewer();
   const items: [string, string, string, string][] = [
     ["/draftpunk/competitions", "Competitions", "medal", "Entries, scoresheets and medals"],
+    ["/draftpunk/inventory", "Ingredients", "stock", "What's on the shelf, and shopping lists"],
     ["/draftpunk/equipment", "Equipment", "equip", "Your systems, chambers and Inkbirds"],
     ["/draftpunk/club", "Club", "club", "Shared recipes and members"],
     ["/draftpunk/import", "Import", "import", "BeerSmith and BeerXML files"],

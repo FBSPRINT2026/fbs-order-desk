@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Icon from "./icons";
+import Emblem from "./Emblem";
 
 /**
  * DraftPunk's frame, laid out like BeerSmith: the "folders" down the left (a bottom tab bar on a phone), the work on the
@@ -11,6 +12,7 @@ import Icon from "./icons";
  */
 const NAV = [
   { href: "/draftpunk", label: "Recipes", icon: "recipes" },
+  { href: "/draftpunk/brewery", label: "Brewery", icon: "brewery" },
   { href: "/draftpunk/brews", label: "Brew log", icon: "brews" },
   { href: "/draftpunk/equipment", label: "Equipment", icon: "equip" },
   { href: "/draftpunk/inventory", label: "Ingredients", icon: "stock" },
@@ -38,7 +40,7 @@ export default function Shell({ name, children }: { name: string; children: Reac
   return (
     <div className="dp-shell">
       <nav className="dp-side dp-noprint" aria-label="DraftPunk">
-        <Link href="/draftpunk" className="dp-brand"><span className="dp-mark" aria-hidden="true" />DraftPunk</Link>
+        <Link href="/draftpunk" className="dp-brand"><Emblem size={34} /><span>Draft Punk<small>Homebrew Club · Est. 2013</small></span></Link>
         {NAV.map((n) => (
           <Link key={n.href} href={n.href} className={`dp-nav ${on(n.href) ? "on" : ""}`}><Icon name={n.icon} />{n.label}</Link>
         ))}
@@ -55,10 +57,10 @@ export default function Shell({ name, children }: { name: string; children: Reac
       <main className="dp-main">{children}</main>
       <nav className="dp-bottom dp-noprint" aria-label="DraftPunk">
         {/* a phone's bottom bar: the four used most, and More for the rest */}
-        {NAV.filter((n) => ["Recipes", "Brew log", "Ingredients", "Tools"].includes(n.label)).map((n) => (
+        {NAV.filter((n) => ["Recipes", "Brewery", "Brew log", "Tools"].includes(n.label)).map((n) => (
           <Link key={n.href} href={n.href} className={on(n.href) ? "on" : ""}><Icon name={n.icon} />{n.label === "Ingredients" ? "Stock" : n.label}</Link>
         ))}
-        <Link href="/draftpunk/more" className={path.startsWith("/draftpunk/more") || ["/draftpunk/equipment", "/draftpunk/competitions", "/draftpunk/club"].some((h) => path.startsWith(h)) ? "on" : ""}><Icon name="more" />More</Link>
+        <Link href="/draftpunk/more" className={path.startsWith("/draftpunk/more") || ["/draftpunk/equipment", "/draftpunk/competitions", "/draftpunk/club", "/draftpunk/inventory"].some((h) => path.startsWith(h)) ? "on" : ""}><Icon name="more" />More</Link>
       </nav>
     </div>
   );

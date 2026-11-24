@@ -55,6 +55,8 @@
 .dp-side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 4px; padding: 22px 14px; border-right: 1px solid var(--dp-line); background: var(--dp-card); }
 .dp-brand { display: flex; align-items: center; gap: 10px; font: 800 22px/1 var(--dp-head); letter-spacing: -.04em; color: var(--dp-text); padding: 0 10px 18px; }
 .dp-brand:hover { text-decoration: none; }
+.dp-brand > span { display: flex; flex-direction: column; gap: 3px; }
+.dp-brand small { font: 600 10.5px/1 var(--dp-font); letter-spacing: .08em; text-transform: uppercase; color: var(--dp-mute); }
 .dp-mark { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: var(--dp-text); }
 .dp-mark::before { content: ""; width: 11px; height: 15px; border-radius: 2px 2px 4px 4px; background: linear-gradient(#fff 0 26%, var(--dp-beer) 26%); }
 .dp-nav { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 10px; color: var(--dp-mute); font-weight: 500; }
@@ -243,6 +245,20 @@
 .dp-app a.dp-bcard:hover { text-decoration: none; border-color: var(--dp-acc); }
 .dp-bcard h3 { font: 700 18px/1.2 var(--dp-head); letter-spacing: -.02em; margin: 0 0 2px; }
 
+/* the brewery, drawn */
+.dp-art-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 16px; }
+.dp-art-card { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: center; margin: 0; }
+.dp-art { width: 100%; height: auto; display: block; }
+.dp-keezer { max-width: 600px; margin: 0 auto; }
+.dp-keg { cursor: pointer; }
+.dp-keg:hover circle:first-child, .dp-keg:focus circle:first-child { stroke: var(--dp-acc); stroke-width: 3; }
+.dp-keg:focus { outline: none; }
+.dp-art-name { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dp-mute); }
+.dp-app a.dp-art-beer { display: block; font: 800 22px/1.15 var(--dp-head); letter-spacing: -.02em; color: var(--dp-text); margin: 2px 0 8px; }
+.dp-art-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.dp-art-facts span { display: flex; flex-direction: column; font-size: 11px; font-weight: 600; color: var(--dp-mute); }
+.dp-art-facts b { font: 700 17px/1.15 var(--dp-head); color: var(--dp-text); }
+
 /* the phone's More page */
 .dp-app a.dp-more { display: flex; align-items: center; gap: 14px; color: var(--dp-text); padding: 16px 18px; margin-bottom: 10px; }
 .dp-app a.dp-more:hover { text-decoration: none; border-color: var(--dp-acc); }
@@ -268,6 +284,8 @@
 .dp-door-art { position: relative; overflow: hidden; background: linear-gradient(160deg, #2a1604, #6b3502 45%, #c96d06 80%, #f2a13a); display: flex; align-items: flex-end; padding: 48px; color: #fff7ea; }
 .dp-door-art::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,.35) 1.4px, transparent 2px); background-size: 26px 34px; animation: dp-fizz 9s linear infinite; opacity: .35; }
 .dp-door-art h1 { position: relative; font: 800 clamp(48px, 7vw, 96px)/.9 var(--dp-head); letter-spacing: -.06em; margin: 0; }
+.dp-door-sub { position: relative; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .85; margin-top: 10px; }
+.dp-door-art { --dp-card: #6b3502; }
 .dp-door-art p { position: relative; max-width: 30ch; font-size: 17px; opacity: .9; margin: 14px 0 0; }
 .dp-door-form { display: grid; place-items: center; padding: 32px 22px; }
 .dp-door-form > div { width: min(400px, 100%); }

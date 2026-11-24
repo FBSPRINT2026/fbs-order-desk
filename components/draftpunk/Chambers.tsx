@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { tiltUrl } from "@/app/draftpunk/actions";
 import { F, Win } from "./ui";
 
-type Row = { id: string; name: string; device_id: string; notes: string };
+type Row = { id: string; name: string; device_id: string; notes: string; kind: "upright" | "chest" };
 
 /**
  * Fermentation chambers: each controlled space with its Inkbird. With the Inkbird's Tuya device id, autopilot reads it
@@ -15,7 +15,7 @@ export default function Chambers({ userId }: { userId: string }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
-  const load = () => createClient().from("dp_chambers").select("id, name, device_id, notes").eq("owner_id", userId).order("name").then(({ data }) => setRows((data || []) as Row[]));
+  const load = () => createClient().from("dp_chambers").select("id, name, device_id, notes, kind").eq("owner_id", userId).order("name").then(({ data }) => setRows((data || []) as Row[]));
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   const up = async (r: Row, patch: Partial<Row>) => { setRows((xs) => xs.map((x) => (x.id === r.id ? { ...x, ...patch } : x))); await createClient().from("dp_chambers").update(patch).eq("id", r.id); };
   const add = async () => { if (!name.trim()) return; await createClient().from("dp_chambers").insert({ owner_id: userId, name: name.trim() }); setName(""); load(); };
@@ -23,11 +23,12 @@ export default function Chambers({ userId }: { userId: string }) {
   return (
     <Win title="Fermentation chambers">
       <table className="dp-tbl" data-nofit>
-        <thead><tr><th>Chamber</th><th>Inkbird device id (Tuya)</th><th /></tr></thead>
+        <thead><tr><th>Chamber</th><th>Kind</th><th>Inkbird device id (Tuya)</th><th /></tr></thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
               <td><input value={r.name} onChange={(e) => setRows((xs) => xs.map((x) => (x.id === r.id ? { ...x, name: e.target.value } : x)))} onBlur={(e) => up(r, { name: e.target.value })} /></td>
+              <td><select value={r.kind || "upright"} onChange={(e) => up(r, { kind: e.target.value as Row["kind"] })}><option value="upright">Upright fridge</option><option value="chest">Chest freezer</option></select></td>
               <td><input value={r.device_id} placeholder="from the Tuya IoT console" onChange={(e) => setRows((xs) => xs.map((x) => (x.id === r.id ? { ...x, device_id: e.target.value } : x)))} onBlur={(e) => up(r, { device_id: e.target.value.trim() })} /></td>
               <td className="dp-num"><button className="dp-btn dp-x" aria-label={`Remove ${r.name}`} onClick={() => del(r)}>✕</button></td>
             </tr>
