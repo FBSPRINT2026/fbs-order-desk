@@ -27,12 +27,12 @@ export default function TrophyCase({ admin, onAwards }: { admin: boolean; onAwar
           <figure key={a.id} className="dp-trophy">
             {a.image ? <img src={a.image} alt={a.title} /> : <div className="dp-trophy-blank" aria-hidden="true" />}
             <figcaption><b>{a.title}</b>{a.year ? <span>{a.year}</span> : null}{a.notes && <small>{a.notes}</small>}</figcaption>
-            {admin && <button className="dp-linkbtn dp-dim" onClick={async () => { if (!confirm(`Take "${a.title}" out of the trophy case?`)) return; const r = await removeAward(a.id); if (r.ok) load(); else setMsg(r.msg || ""); }}>Remove</button>}
+            {admin && <button className="dp-linkbtn dp-dim" onClick={async () => { if (!confirm(`Take "${a.title}" out of the trophy case?`)) return; const r = await removeAward(a.id); if (r.ok) { try { sessionStorage.removeItem("dp:award"); } catch { /* fine */ } window.location.reload(); } else setMsg(r.msg || ""); }}>Remove</button>}
           </figure>
         ))}
       </div>
       {adding && admin && (
-        <form className="dp-row" style={{ marginTop: 12 }} onSubmit={async (e) => { e.preventDefault(); setMsg(""); const r = await addAward(new FormData(e.currentTarget)); if (r.ok) { setAdding(false); load(); } else setMsg(r.msg || "Not saved"); }}>
+        <form className="dp-row" style={{ marginTop: 12 }} onSubmit={async (e) => { e.preventDefault(); setMsg(""); const r = await addAward(new FormData(e.currentTarget)); if (r.ok) { setAdding(false); try { sessionStorage.removeItem("dp:award"); } catch { /* fine */ } window.location.reload(); } else setMsg(r.msg || "Not saved"); }}>
           <F label="Award" grow="2 1 220px"><input name="title" required defaultValue="Ninkasi Award" /></F>
           <F label="Year"><input name="year" type="number" defaultValue={2017} style={{ width: 90 }} /></F>
           <F label="Shown on entries that won"><select name="place" defaultValue="ninkasi">{PLACES.map(([v, l]) => <option key={v} value={v}>{v ? l : "(none)"}</option>)}</select></F>

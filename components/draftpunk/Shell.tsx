@@ -40,7 +40,7 @@ export default function Shell({ name, children }: { name: string; children: Reac
   // the club's top award (its picture as the club was given it, from the trophy case) under the name on every page
   const [award, setAward] = useState<{ title: string; year: number | null; image: string } | null>(null);
   useEffect(() => {
-    try { const c = sessionStorage.getItem("dp:award"); if (c) { setAward(JSON.parse(c)); return; } } catch { /* fine */ }
+    try { const c = sessionStorage.getItem("dp:award"); if (c && c !== "null") { setAward(JSON.parse(c)); return; } } catch { /* fine */ }
     createClient().from("dp_awards").select("title, year, image, place").neq("image", "").order("year").then(({ data }) => {
       const a = (data || []).sort((x, y) => Number(y.place === "ninkasi") - Number(x.place === "ninkasi"))[0];
       const v = a ? { title: a.title as string, year: a.year as number | null, image: a.image as string } : null;
