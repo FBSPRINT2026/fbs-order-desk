@@ -82,3 +82,35 @@ export async function addToLibrary(kind: "fermentable" | "hop" | "yeast" | "misc
   if (fresh.length) { const { error } = await admin.from("dp_ingredients").insert(fresh); if (error) return { ok: false, added: 0, updated, msg: error.message }; }
   return { ok: true, added: fresh.length, updated };
 }
+
+/**
+ * The trophy case: an award the club won, with the picture it was given to use (the AHA's Ninkasi Award artwork; Nick,
+ * Nov 24 2026). Club admins only. The picture is kept in the database as the file it was (PNG, JPEG or WebP, up to
+ * 2 MB), never in the site's code.
+ */
+export async function addAward(form: FormData): Promise<{ ok: boolean; msg?: string }> {
+  const me = await getBrewer();
+  if (me.brewer?.club_role !== "admin") return { ok: false, msg: "Only a club admin can add to the trophy case" };
+  const title = String(form.get("title") || "").trim().slice(0, 120);
+  const year = Number(form.get("year")) || null;
+  const place = String(form.get("place") || "");
+  const f = form.get("image");
+  if (!title) return { ok: false, msg: "Give the award a name" };
+  let image = "";
+  if (f && typeof f !== "string" && f.size) {
+    if (f.size > 2_000_000) return { ok: false, msg: "The picture must be under 2 MB" };
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    const type = bytes[0] === 0x89 && bytes[1] === 0x50 ? "image/png" : bytes[0] === 0xff && bytes[1] === 0xd8 ? "image/jpeg" : bytes[8] === 0x57 && bytes[9] === 0x45 ? "image/webp" : "";
+    if (!type) return { ok: false, msg: "Use a PNG, JPEG or WebP picture" };
+    image = `data:${type};base64,${Buffer.from(bytes).toString("base64")}`;
+  }
+  const { error } = await createAdminClient().from("dp_awards").insert({ title, year, place: ["", "gold", "silver", "bronze", "hm", "bos", "ninkasi"].includes(place) ? place : "", image, notes: String(form.get("notes") || "").slice(0, 500), created_by: me.userId });
+  return error ? { ok: false, msg: error.message } : { ok: true };
+}
+
+export async function removeAward(id: string): Promise<{ ok: boolean; msg?: string }> {
+  const me = await getBrewer();
+  if (me.brewer?.club_role !== "admin") return { ok: false, msg: "Only a club admin can change the trophy case" };
+  const { error } = await createAdminClient().from("dp_awards").delete().eq("id", id);
+  return error ? { ok: false, msg: error.message } : { ok: true };
+}

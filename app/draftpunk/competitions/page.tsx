@@ -6,5 +6,5 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const { brewer, userId } = await requireBrewer();
-  return <Shell name={brewer.name}><Competitions userId={userId} /></Shell>;
+  return <Shell name={brewer.name}><Competitions userId={userId} admin={brewer.club_role === "admin"} /></Shell>;
 }

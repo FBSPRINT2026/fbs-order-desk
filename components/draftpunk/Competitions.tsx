@@ -8,6 +8,7 @@ import { descriptor, entryScore, MEDAL_LABEL, PLACES, SECTIONS, sheetTotal, type
 import { STYLE_GROUPS, styleById, styleLabel } from "@/lib/draftpunk/styles";
 import { useToast } from "./Shell";
 import { F, Num, Win } from "./ui";
+import TrophyCase, { type Award } from "./TrophyCase";
 
 type Entry = { id: string; owner_id: string; competition: string; held_on: string | null; style_id: string | null; entry_name: string; recipe_id: string | null; brew_id: string | null; version_id?: string | null; scores: Sheet[]; place: string; mini_bos: boolean; notes: string };
 type Opt = { id: string; name: string };
@@ -16,7 +17,9 @@ type Opt = { id: string; name: string };
  * Competitions (Nick, Nov 24 2026): every entry with its category, the recipe and batch it came from, each judge's
  * scoresheet and the result; the medal count and how each style scores; and the club's medal wall.
  */
-export default function Competitions({ userId }: { userId: string }) {
+export default function Competitions({ userId, admin = false }: { userId: string; admin?: boolean }) {
+  const [awards, setAwards] = useState<Award[]>([]);
+  const awardFor = (place: string) => awards.find((a) => a.place && a.place === place && a.image);
   const { toast, node } = useToast();
   const [rows, setRows] = useState<Entry[] | null>(null);
   const [recipes, setRecipes] = useState<Opt[]>([]);
@@ -74,6 +77,7 @@ export default function Competitions({ userId }: { userId: string }) {
         <h1 className="dp-h1" style={{ margin: 0 }}>Competitions</h1>
         <button className="dp-btn dp-go" onClick={add}>+ New entry</button>
       </div>
+      <TrophyCase admin={admin} onAwards={setAwards} />
       <div className="dp-kpi-row">
         <div className="dp-card dp-stat-tile"><span>Entries</span><b>{mine.length}</b></div>
         <div className="dp-card dp-stat-tile"><span>Medals</span><b>{medals(mine)}</b></div>
@@ -96,7 +100,7 @@ export default function Competitions({ userId }: { userId: string }) {
             <section key={e.id} className="dp-card">
               <div className="dp-row" style={{ alignItems: "center", justifyContent: "space-between", cursor: e.owner_id === userId ? "pointer" : "default" }} onClick={() => e.owner_id === userId && setOpen(isOpen ? null : e.id)}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 17 }}>{e.entry_name || recipes.find((r) => r.id === e.recipe_id)?.name || "Entry"} {e.place && <span className={`dp-medal dp-medal-${e.place}`}>{MEDAL_LABEL[e.place]}</span>}{e.mini_bos && <span className="dp-chip" style={{ marginLeft: 6 }}>Mini-BOS</span>}</div>
+                  <div style={{ fontWeight: 700, fontSize: 17 }}>{e.entry_name || recipes.find((r) => r.id === e.recipe_id)?.name || "Entry"} {e.place && <span className={`dp-medal dp-medal-${e.place}`}>{MEDAL_LABEL[e.place]}</span>}{e.place && awardFor(e.place) && <img className="dp-award-mark" src={awardFor(e.place)!.image} alt={awardFor(e.place)!.title} />}{e.mini_bos && <span className="dp-chip" style={{ marginLeft: 6 }}>Mini-BOS</span>}</div>
                   <div className="dp-dim" style={{ fontSize: 13 }}>{e.competition}{e.held_on ? ` · ${fmtDate(e.held_on)}` : ""}{st ? ` · ${styleLabel(st)}` : ""}{view === "club" ? ` · ${members[e.owner_id] || ""}` : ""}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>

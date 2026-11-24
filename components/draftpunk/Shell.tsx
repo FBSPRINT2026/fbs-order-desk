@@ -37,12 +37,23 @@ export default function Shell({ name, children }: { name: string; children: Reac
   const [theme, setTheme] = useState("lab");
   useEffect(() => { try { const t = localStorage.getItem("dp:theme"); if (t) setTheme(t); } catch { /* default */ } }, []);
   useEffect(() => { const el = document.querySelector<HTMLElement>(".dp-app"); if (el) el.dataset.theme = theme; try { localStorage.setItem("dp:theme", theme); } catch { /* fine */ } }, [theme]);
+  // the club's top award (its picture as the club was given it, from the trophy case) under the name on every page
+  const [award, setAward] = useState<{ title: string; year: number | null; image: string } | null>(null);
+  useEffect(() => {
+    try { const c = sessionStorage.getItem("dp:award"); if (c) { setAward(JSON.parse(c)); return; } } catch { /* fine */ }
+    createClient().from("dp_awards").select("title, year, image, place").neq("image", "").order("year").then(({ data }) => {
+      const a = (data || []).sort((x, y) => Number(y.place === "ninkasi") - Number(x.place === "ninkasi"))[0];
+      const v = a ? { title: a.title as string, year: a.year as number | null, image: a.image as string } : null;
+      setAward(v); try { sessionStorage.setItem("dp:award", JSON.stringify(v)); } catch { /* fine */ }
+    });
+  }, []);
   const signOut = async () => { await createClient().auth.signOut(); router.push("/draftpunk"); router.refresh(); };
   const on = (href: string) => (href === "/draftpunk" ? path === "/draftpunk" || path.startsWith("/draftpunk/r/") || path.startsWith("/draftpunk/import") : path.startsWith(href));
   return (
     <div className="dp-shell">
       <nav className="dp-side dp-noprint" aria-label="DraftPunk">
         <Link href="/draftpunk" className="dp-brand"><Emblem size={34} /><span>Draft Punk<small>Homebrew Club · Est. 2013</small></span></Link>
+        {award && <Link href="/draftpunk/competitions" className="dp-side-award"><img src={award.image} alt="" /><span>{award.year ? `${award.year} ` : ""}{award.title} winners</span></Link>}
         {NAV.map((n) => (
           <Link key={n.href} href={n.href} className={`dp-nav ${on(n.href) ? "on" : ""}`}><Icon name={n.icon} />{n.label}</Link>
         ))}
