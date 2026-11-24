@@ -37,13 +37,13 @@ export default function BringIn({ archiveId, r, folder, date, userId, onDone }: 
     setBusy(true); setErr("");
     let id = into;
     if (how === "new") {
-      const res = await createRecipe(userId, [{ data: { ...r, name: name.trim() || r.name }, date: date || undefined, note: note || `From BeerSmith: ${label}` }]);
+      const res = await createRecipe(userId, [{ data: { ...r, name: name.trim() || r.name, imported: r.imported || r.equipment }, date: date || undefined, note: note || `From BeerSmith: ${label}` }]);
       if (!res.id) { setErr(res.error || "Not saved"); setBusy(false); return; }
       id = res.id;
     } else {
       if (!into) { setErr("Pick the recipe it's a version of"); setBusy(false); return; }
       const target = mine.find((m) => m.id === into);
-      const res = await saveVersion(into, userId, { ...r, name: target?.name || r.name }, note || `From BeerSmith: ${label}`);
+      const res = await saveVersion(into, userId, { ...r, name: target?.name || r.name, imported: r.imported || r.equipment }, note || `From BeerSmith: ${label}`);
       if (!res.version) { setErr(res.error || "Not saved"); setBusy(false); return; }
     }
     await createClient().from("dp_archive").update({ brought_to: id }).eq("id", archiveId);

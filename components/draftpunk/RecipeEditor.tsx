@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { calcRecipe, calcSummary, fromPercents, r1, scaleRecipe, sgFmt } from "@/lib/draftpunk/calc";
+import { atSize, calcRecipe, calcSummary, fromPercents, r1, scaleRecipe, sgFmt } from "@/lib/draftpunk/calc";
 import { normalize, newRecipe } from "@/lib/draftpunk/defaults";
 import { DEFAULT_EQUIPMENT } from "@/lib/draftpunk/library";
 import { STYLE_GROUPS, styleById, styleLabel } from "@/lib/draftpunk/styles";
@@ -63,7 +63,8 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
         sb.from("dp_ingredients").select("id, kind, name, data, in_stock").eq("owner_id", userId),
       ]);
       const myEq = (eq || []).map((x) => ({ id: x.id as string, e: { ...(x.data as Equipment), name: x.name as string } }));
-      setEquip([...myEq, ...DEFAULT_EQUIPMENT.filter((d) => !myEq.some((m) => m.e.name === d.name)).map((e) => ({ id: null, e }))]);
+      // the brewer's own systems; the starter profiles only until they have one of their own
+      setEquip(myEq.length ? myEq : DEFAULT_EQUIPMENT.map((e) => ({ id: null, e })));
       setMine((ing || []) as MineItem[]);
       if (id === "new") {
         const fresh = newRecipe(myEq[0]?.e || DEFAULT_EQUIPMENT[0], brewerName);
@@ -77,7 +78,8 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
         if (!a) { toast("Recipe not found"); return; }
         setOwner(false);
         setArch({ folder: a.folder as string, brewed_on: a.brewed_on as string | null, brought_to: a.brought_to as string | null });
-        setR(normalize({ ...(a.data as Recipe), name: a.name as string }));
+        const ar = a.data as Recipe;
+        setR(normalize({ ...ar, name: a.name as string, imported: ar.imported || ar.equipment }));
         return;
       }
       const { data } = await sb.from("dp_recipes").select("owner_id, name, style_id, visibility, data, status, goal").eq("id", id).maybeSingle();
@@ -251,10 +253,7 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
                   <select value={r.type} onChange={(e) => set((x) => ({ ...x, type: e.target.value as RecipeType }))}>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
                 </F>
                 <F label="Equipment" grow="2 1 260px">
-                  <select value={r.equipment.name} onChange={(e) => { const p = equip.find((q) => q.e.name === e.target.value); if (p) set((x) => ({ ...x, equipment: { ...p.e } })); }}>
-                    {!equip.some((q) => q.e.name === r.equipment.name) && <option>{r.equipment.name}</option>}
-                    {equip.map((q) => <option key={q.e.name} value={q.e.name}>{q.e.name}{q.id ? "" : " (starter)"}</option>)}
-                  </select>
+                  <EquipPick r={r} equip={equip} onPick={(to) => set((x) => ({ ...scaleRecipe(x, to), imported: x.imported || (equip.some((q) => q.e.name === x.equipment.name) ? undefined : x.equipment) }))} />
                 </F>
               </div>
               <div className="dp-row" style={{ marginTop: 10 }}>
@@ -339,5 +338,29 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
       <p className="dp-dim dp-noprint" style={{ marginTop: 18 }}><Link href={archive ? "/draftpunk?tab=beersmith" : "/draftpunk"}>← {archive ? "From BeerSmith" : "All recipes"}</Link></p>
       {toastNode}
     </>
+  );
+}
+
+/**
+ * Which system it's brewed on (Nick, Nov 24 2026): the equipment it came with ("As imported"), then each of the
+ * brewer's own systems at each of its batch sizes (BrewBuilt RIMS · 3, 5, 10 gal). Picking one scales the recipe to it
+ * (grain for the volume and efficiency, hops to keep the IBU), so it stays the same beer.
+ */
+function EquipPick({ r, equip, onPick }: { r: Recipe; equip: { id: string | null; e: Equipment }[]; onPick: (e: Equipment) => void }) {
+  const same = (a: Equipment, b: Equipment) => a.name === b.name && Math.abs(a.batchGal - b.batchGal) < 0.05;
+  const opts: { key: string; label: string; e: Equipment; group?: string }[] = [];
+  if (r.imported) opts.push({ key: "imp", label: `As imported · ${r.imported.name} · ${r1(r.imported.batchGal, 2)} gal`, e: r.imported });
+  for (const [i, q] of equip.entries()) {
+    if (q.e.sizes?.length) for (const [j, s] of q.e.sizes.entries()) opts.push({ key: `${i}:${j}`, label: s.label, e: atSize(q.e, s.batchGal), group: q.e.name });
+    else opts.push({ key: `${i}`, label: `${q.e.name} · ${r1(q.e.batchGal, 2)} gal`, e: q.e });
+  }
+  const cur = opts.find((o) => same(o.e, r.equipment));
+  const groups = [...new Set(opts.filter((o) => o.group).map((o) => o.group!))];
+  return (
+    <select value={cur?.key || "cur"} onChange={(ev) => { const o = opts.find((x) => x.key === ev.target.value); if (o && !same(o.e, r.equipment)) onPick(o.e); }}>
+      {!cur && <option value="cur">{equip.some((q) => q.e.name === r.equipment.name) ? "" : "As imported · "}{r.equipment.name} · {r1(r.equipment.batchGal, 2)} gal</option>}
+      {opts.filter((o) => !o.group).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+      {groups.map((g) => <optgroup key={g} label={g}>{opts.filter((o) => o.group === g).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</optgroup>)}
+    </select>
   );
 }

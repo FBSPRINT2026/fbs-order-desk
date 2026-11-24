@@ -419,6 +419,12 @@ export function toPercents(r: Recipe): Recipe {
  * The recipe on other equipment or at another size: grain is scaled by volume and by the difference in efficiency,
  * extracts and sugars by volume, hops so the beer keeps the same bitterness, misc by volume.
  */
+/** a system at one of its batch sizes: the batch is the size's, what's left in the kettle grows with it */
+export function atSize(e: Equipment, batchGal: number): Equipment {
+  const k = batchGal / Math.max(e.batchGal, 0.01);
+  return { ...e, batchGal, trubGal: Math.round(e.trubGal * k * 100) / 100 };
+}
+
 export function scaleRecipe(r: Recipe, to: Equipment): Recipe {
   const from = r.equipment;
   const vol = to.batchGal / Math.max(from.batchGal, 0.01);

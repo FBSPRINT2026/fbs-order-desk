@@ -63,6 +63,7 @@ export default function EquipmentEditor({ userId }: { userId: string }) {
           <div className="dp-row" style={{ marginTop: 8 }}>
             {FIELDS.map(([k, l]) => <F key={k} label={l}><Num value={draft[k] as number} onChange={(n) => setDraft({ ...draft, [k]: n })} /></F>)}
           </div>
+          <SizesField sizes={draft.sizes} batchGal={draft.batchGal} onChange={(sizes) => setDraft({ ...draft, sizes })} />
           <div className="dp-row" style={{ marginTop: 8 }}>
             <label className="dp-row"><input type="checkbox" checked={!!draft.lodo} onChange={(e) => setDraft({ ...draft, lodo: e.target.checked })} /> I brew LODO (new recipes start with it on)</label>
           </div>
@@ -98,5 +99,21 @@ export default function EquipmentEditor({ userId }: { userId: string }) {
       <Chambers userId={userId} />
       {node}
     </>
+  );
+}
+
+/** the batch sizes this system brews (3, 5, 10 gal): each one a choice under the system in a recipe's Equipment */
+function SizesField({ sizes, onChange }: { sizes?: { label: string; batchGal: number }[]; batchGal?: number; onChange: (s: { label: string; batchGal: number }[] | undefined) => void }) {
+  const [text, setText] = useState((sizes || []).map((s) => s.label.replace(/\s*gal$/, "")).join(", "));
+  const commit = () => {
+    // "3, 5, 10" are packaged gallons; into the fermenter is 10% more (5 gal → 5.5)
+    const list = text.split(/[,\s]+/).map(Number).filter((n) => n > 0).map((n) => ({ label: `${n} gal`, batchGal: Math.round(n * 1.1 * 100) / 100 }));
+    onChange(list.length ? list : undefined);
+  };
+  return (
+    <div className="dp-row" style={{ marginTop: 8 }}>
+      <F label="Batch sizes I brew (gal)" grow="1 1 220px"><input value={text} onChange={(e) => setText(e.target.value)} onBlur={commit} placeholder="e.g. 3, 5, 10" /></F>
+      <span className="dp-dim" style={{ alignSelf: "flex-end", paddingBottom: 8 }}>{(sizes || []).map((s) => `${s.label} → ${s.batchGal} gal into the fermenter`).join(" · ")}</span>
+    </div>
   );
 }

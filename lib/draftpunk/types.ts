@@ -68,6 +68,11 @@ export type FermStep = { name: string; days: number; tempF: number; until?: "day
 
 export type Equipment = {
   name: string;
+  /**
+   * the batch sizes this system brews (Nick, Nov 24 2026: "BrewBuilt No-Sparge RIMS, and then 3 gallon, 5 gallon,
+   * 10 gallon"): each a label and its volume into the fermenter; losses left in the kettle scale with it
+   */
+  sizes?: { label: string; batchGal: number }[];
   /** volume into the fermenter, gal */
   batchGal: number;
   boilMin: number;
@@ -130,6 +135,8 @@ export type Recipe = {
    * of the bill and a target OG; the pounds are worked out (fromPercents) for this equipment and mash efficiency.
    */
   byPercent?: { on: boolean; targetOg: number };
+  /** the equipment it came with from BeerSmith (or another app): offered as "As imported" beside the brewer's own */
+  imported?: Equipment;
   ibuMethod: IbuMethod;
   mash: Mash;
   water: { source: WaterProfile; target?: WaterProfile; salts: Salts; spargeSalts?: boolean; spargeAcidMl?: number;
