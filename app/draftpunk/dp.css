@@ -380,7 +380,7 @@
 .dp-app .dp-trophy figcaption { display: grid; gap: 2px; font-size: 13px; }
 .dp-app .dp-trophy figcaption span, .dp-app .dp-trophy figcaption small { color: var(--dp-mute); }
 .dp-app .dp-award-mark { width: 26px; height: 26px; object-fit: contain; vertical-align: middle; margin-left: 6px; }
-/* the club's top award right beside the name (on white so a black mark reads in every look) */
-.dp-app .dp-brand-name { display: inline-flex; align-items: center; gap: 6px; }
-.dp-app .dp-brand-award, .dp-app .dp-award-mark, .dp-app .dp-trophy img { background: #fff; border-radius: 50%; padding: 2px; }
-.dp-app .dp-brand-award { width: 26px; height: 26px; object-fit: contain; flex: none; }
+/* the club's top award in place of the emblem beside the name (on white so a black mark reads in every look) */
+.dp-app .dp-award-mark, .dp-app .dp-trophy img { background: #fff; border-radius: 50%; padding: 2px; }
+/* beside the name the award's artwork is drawn in the club's teal, like the emblem it replaces (its picture is the shape) */
+.dp-app .dp-brand-award { display: block; width: 38px; height: 38px; flex: none; background: var(--dp-acc); -webkit-mask: center / contain no-repeat; mask: center / contain no-repeat; }

@@ -637,3 +637,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 24 12:32pm · 1.3.880 · Nick · DraftPunk: trophy case on Competitions (club admins add an award with the picture the club was given, kept in the database, not the code; migration 343), the award's mark beside entries that won it and under the club name on every page
 - Nov 24 12:33pm · 1.3.881 · Nick · DraftPunk: the award mark sits right beside the Draft Punk name; Est. 2013 taken off the header and sign-in page
 - Nov 24 12:37pm · 1.3.882 · Nick · DraftPunk: the award beside the name shows right after it's added to the trophy case
+- Nov 24 1:27pm · 1.3.883 · Nick · DraftPunk: the Ninkasi Award mark takes the emblem's place beside the name, full size, in the club's teal
