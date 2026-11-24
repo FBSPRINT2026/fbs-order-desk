@@ -389,3 +389,4 @@
 .dp-app .dp-sortbtn { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
 .dp-app .dp-sortbtn:hover { color: var(--dp-acc); }
 .dp-app .dp-ver-eq { display: block; color: var(--dp-mute); font-size: 12px; margin-top: 2px; }
+.dp-app .dp-bring { background: var(--dp-sunk); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }

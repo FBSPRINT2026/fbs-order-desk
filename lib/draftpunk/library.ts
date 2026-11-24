@@ -229,7 +229,7 @@ export const WATERS = withIds("water", [
 ]);
 
 /** Nick and Jeff's batch sizes: into the fermenter a little over the packaged size (5.5 gal for 5) */
-const SYSTEM_SIZES = [{ label: "3 gal", batchGal: 3.3 }, { label: "5 gal", batchGal: 5.5 }, { label: "10 gal", batchGal: 11 }];
+const SYSTEM_SIZES = [{ label: "3.5 gal", batchGal: 3.85 }, { label: "5 gal", batchGal: 5.5 }, { label: "10 gal", batchGal: 11 }];
 export const DEFAULT_EQUIPMENT: Equipment[] = [
   // Nick's and Jeff's systems (Nick, Nov 23 2026): BrewBuilt 20 gal stainless mash tun and 15 gal kettle, no-sparge
   // (full-volume mash), immersion chiller, propane burner; Nick recirculates through a RIMS tube, Jeff through a HERMS

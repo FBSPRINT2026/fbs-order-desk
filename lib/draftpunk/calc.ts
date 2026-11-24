@@ -21,6 +21,12 @@ export const brix = plato;
 // ---------- fermentables ----------
 /** fermentables that go through the mash (their sugar is limited by efficiency); the rest give all of theirs */
 export const isMashed = (f: Pick<Fermentable, "type">) => f.type === "grain" || f.type === "adjunct";
+/**
+ * A process aid in the grain bill: rice or oat hulls, anything that gives no sugar (Nick, Nov 24 2026: "it's a tool to
+ * make sure the mash doesn't get stuck… I shouldn't see it as part of the percentage"). Added by weight; never part of
+ * the grist's percents, so the recipe's percents stay the same with or without it.
+ */
+export const isAid = (f: Pick<Fermentable, "name" | "potential">) => f.potential <= 1.001 || /\bhulls?\b/i.test(f.name);
 /** the pH a malt gives on its own in distilled water, from what it is when the library doesn't say */
 export function diPh(f: Fermentable): number {
   if (f.diPh) return f.diPh;
@@ -323,7 +329,8 @@ export function calcRecipe(r: Recipe): Calc {
   // Sugar is followed through the brewery: the mash puts grain sugar in the kettle at the mash efficiency; extracts and
   // sugars add all of theirs; the boil only takes water away; losses (trub, dead space) take wort at the same gravity.
   let kettlePts = 0, latePts = 0, simplePts = 0, unfermPts = 0, maxGrainPts = 0, mcu = 0;
-  const totalLb = r.ferms.reduce((a, f) => a + (f.lb || 0), 0);
+  // the grist the percents are of: process aids (rice hulls) aren't part of it
+  const totalLb = r.ferms.filter((f) => !isAid(f)).reduce((a, f) => a + (f.lb || 0), 0);
   const fermPct: Record<string, number> = {};
   for (const f of r.ferms) {
     const ppg = (f.potential - 1) * 1000 * (f.lb || 0);
@@ -334,7 +341,7 @@ export function calcRecipe(r: Recipe): Calc {
     // sugars, honey and juice ferment out all the way
     else if (["sugar", "honey", "juice", "fruit"].includes(f.type)) simplePts += pts;
     mcu += (f.color * (f.lb || 0)) / Math.max(e.batchGal, 0.1);
-    fermPct[f.lid] = totalLb ? (f.lb / totalLb) * 100 : 0;
+    fermPct[f.lid] = totalLb && !isAid(f) ? (f.lb / totalLb) * 100 : 0;
     if (f.maxPct && fermPct[f.lid] > f.maxPct + 0.5) notes.push(`${f.name} is ${r1(fermPct[f.lid])}% of the grain bill; most recipes keep it under ${f.maxPct}%.`);
   }
   const allPts = kettlePts + latePts;
@@ -402,16 +409,17 @@ export function fromPercents(r: Recipe): Recipe {
   const v = volumes(r.equipment, r.weather);
   const need = (r.byPercent.targetOg - 1) * 1000 * v.postBoilCold;
   const eff = (r.equipment.mashEff || 75) / 100;
-  const total = r.ferms.reduce((a, f) => a + (f.pct || 0), 0);
+  const total = r.ferms.filter((f) => !isAid(f)).reduce((a, f) => a + (f.pct || 0), 0);
   if (!total || need <= 0) return r;
-  const perLbOfBill = r.ferms.reduce((a, f) => a + ((f.pct || 0) / total) * (f.potential - 1) * 1000 * (isMashed(f) ? eff : 1), 0);
+  const perLbOfBill = r.ferms.filter((f) => !isAid(f)).reduce((a, f) => a + ((f.pct || 0) / total) * (f.potential - 1) * 1000 * (isMashed(f) ? eff : 1), 0);
   const billLb = perLbOfBill > 0 ? need / perLbOfBill : 0;
-  return { ...r, ferms: r.ferms.map((f) => ({ ...f, lb: Math.round(((f.pct || 0) / total) * billLb * 100) / 100 })) };
+  // process aids keep the weight they were given
+  return { ...r, ferms: r.ferms.map((f) => (isAid(f) ? { ...f, pct: undefined } : { ...f, lb: Math.round(((f.pct || 0) / total) * billLb * 100) / 100 })) };
 }
 /** the percentages of a bill given in pounds (to switch a recipe to designing by percentages) */
 export function toPercents(r: Recipe): Recipe {
-  const lb = r.ferms.reduce((a, f) => a + f.lb, 0);
-  return { ...r, ferms: r.ferms.map((f) => ({ ...f, pct: lb ? Math.round((f.lb / lb) * 1000) / 10 : 0 })) };
+  const lb = r.ferms.filter((f) => !isAid(f)).reduce((a, f) => a + f.lb, 0);
+  return { ...r, ferms: r.ferms.map((f) => (isAid(f) ? { ...f, pct: undefined } : { ...f, pct: lb ? Math.round((f.lb / lb) * 1000) / 10 : 0 })) };
 }
 
 // ---------- scaling ----------
@@ -438,12 +446,17 @@ export function scaleRecipe(r: Recipe, to: Equipment): Recipe {
     yeasts: r.yeasts.map((y) => ({ ...y, packs: Math.max(1, Math.round(y.packs * vol)) })),
     water: { ...r.water, salts: Object.fromEntries(Object.entries(r.water.salts).map(([k, g]) => [k, (g || 0) * vol])) as Salts },
   };
-  // bitterness: the new kettle size and boil time change utilization, so match the old IBU
-  const after = calcRecipe(out);
+  // a recipe designed by percent works its pounds out again for the new system (its target OG) before the hops
+  if (out.byPercent?.on) Object.assign(out, fromPercents(out));
+  // bitterness: the new kettle size, boil time and gravity change utilization, so match the old IBU
+  let after = calcRecipe(out);
   const boilIbu = (c: Calc) => Object.entries(c.hopIbus).reduce((a, [, v]) => a + v, 0);
-  if (boilIbu(after) > 0) {
+  // (a couple of passes: more hops in the boil barely changes the gravity, but Garetz feeds back on itself)
+  for (let pass = 0; pass < 3 && boilIbu(after) > 0; pass++) {
     const k = boilIbu(before) / boilIbu(after);
+    if (Math.abs(k - 1) < 0.002) break;
     out.hops = out.hops.map((h) => (h.use === "dry_hop" ? h : { ...h, oz: h.oz * k }));
+    after = calcRecipe(out);
   }
   return out;
 }

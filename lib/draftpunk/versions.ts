@@ -3,7 +3,7 @@
  * brew's own changes stay on the brew. This file says what changed between two states of a recipe in plain words, so
  * nobody has to remember what v3 was, and groups imported copies ("Witstanbul v4", "Cankles (BBO 2025)") into one recipe.
  */
-import { calcRecipe, r1 } from "./calc";
+import { calcRecipe, isAid, r1 } from "./calc";
 import type { Recipe } from "./types";
 
 const lb = (x: number) => (x >= 1 ? `${r1(x, 2)} lb` : `${r1(x * 16, 1)} oz`);
@@ -26,7 +26,7 @@ export function diffRecipes(a: Recipe, b: Recipe): string[] {
   // fermentables by name: by share of the grist when scaled, by weight otherwise
   const fa = new Map(a.ferms.map((f) => [key(f.name), f])), fb = new Map(b.ferms.map((f) => [key(f.name), f]));
   // percents of what gives sugar: rice hulls and the like add nothing, so they don't move every malt's share
-  const grist = (f: Recipe["ferms"][number]) => f.potential > 1.001;
+  const grist = (f: Recipe["ferms"][number]) => !isAid(f);
   const ta = a.ferms.filter(grist).reduce((s, f) => s + f.lb, 0) || 1, tb = b.ferms.filter(grist).reduce((s, f) => s + f.lb, 0) || 1;
   const pct = (x: number, tot: number) => `${r1((x / tot) * 100, 1)}%`;
   // the grist by percent (how it's designed); a whole bill made bigger or smaller at the same percents is one line

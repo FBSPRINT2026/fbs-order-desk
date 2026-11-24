@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { readAll } from "@/lib/readAll";
-import { cellsNeeded, clSo4, co2Harvest, fromPercents, toPercents, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
+import { cellsNeeded, isAid, clSo4, co2Harvest, fromPercents, toPercents, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
 import { asFerm, asHop, asMisc, asYeast } from "@/lib/draftpunk/defaults";
 import { FERMENTABLES, HOPS, MASH_PROFILES, MISCS, WATERS, YEASTS } from "@/lib/draftpunk/library";
 import type { Calc, Carb, Fermentable, FermType, Hop, HopForm, HopUse, Misc, MashStep, Recipe, Salts, WaterProfile, Yeast } from "@/lib/draftpunk/types";
@@ -87,14 +87,13 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
   const move = (k: "ferms" | "hops", i: number, d: -1 | 1) => set((x) => { const a = x[k] as unknown[]; const j = i + d; if (j < 0 || j >= a.length) return x; [a[i], a[j]] = [a[j], a[i]]; return x; });
   const sortHops = () => set((x) => ({ ...x, hops: [...x.hops].sort((a, b) => USES.findIndex((u) => u[0] === a.use) - USES.findIndex((u) => u[0] === b.use) || b.min - a.min) }));
 
-  const totalYeast = r.yeasts.reduce((a, y) => a + y.packs, 0);
   const pctMode = !!r.byPercent?.on;
-  const pctSum = r.ferms.reduce((a, f) => a + (f.pct || 0), 0);
+  const pctSum = r.ferms.filter((f) => !isAid(f)).reduce((a, f) => a + (f.pct || 0), 0);
   const setMode = (on: boolean) => set((x) => (on ? fromPercents({ ...toPercents(x), byPercent: { on: true, targetOg: x.byPercent?.targetOg || r1(c.og, 3) || 1.055 } }) : { ...x, byPercent: x.byPercent ? { ...x.byPercent, on: false } : undefined }));
   const tdl = (l: string) => ({ "data-l": l });
   return (
     <>
-      <Win title="Ingredients" note={`${r1(totalLb, 2)} lb fermentables · ${r1(totalHop, 2)} oz hops · ${r1(c.ibu, 1)} IBU · ${totalYeast} yeast`}>
+      <Win title="Ingredients" note={`${r1(totalLb, 2)} lb fermentables · ${r1(totalHop, 2)} oz hops · ${r1(c.ibu, 1)} IBU`}>
         <div className="dp-addbar">
           <button className="dp-btn dp-sm" onClick={() => setPick("ferm")}>+ Grain</button>
           <button className="dp-btn dp-sm" onClick={() => setPick("hop")}>+ Hops</button>
@@ -119,7 +118,7 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
             {!!r.ferms.length && <tr className="dp-group"><td colSpan={4}>Fermentables</td></tr>}
             {r.ferms.map((f, i) => (
               <tr key={f.lid}>
-                <td className="dp-num">{pctMode
+                <td className="dp-num">{pctMode && !isAid(f)
                   ? <><Num value={f.pct} onChange={(n) => up("ferms", i, { pct: n })} digits={1} /> %</>
                   : <><Num value={f.lb} onChange={(n) => up("ferms", i, { lb: n })} digits={3} /> lb</>}</td>
                 <td className="dp-namecell"><input aria-label="Name" value={f.name} onChange={(e) => up("ferms", i, { name: e.target.value })} /><div className="dp-sub"><select value={f.type} onChange={(e) => up("ferms", i, { type: e.target.value as FermType })}>{FTYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select><span className="dp-row" style={{ gap: 6, alignItems: "center" }}>
@@ -128,7 +127,7 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
                     <label className="dp-dim" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={!!f.late} onChange={(e) => up("ferms", i, { late: e.target.checked })} />late</label>
                     {stockOf(f.name) != null && <span className="dp-chip" title="In stock">{stockOf(f.name)} lb</span>}
                   </span></div></td>
-                <td className="dp-num" {...tdl(pctMode ? "lb" : "%")}>{pctMode ? `${r1(f.lb, 2)} lb` : `${r1(c.fermPct[f.lid] || 0, 1)}%`}</td>
+                <td className="dp-num" {...tdl(pctMode ? "lb" : "%")}>{isAid(f) ? <span className="dp-dim" title="Not part of the grist's percents">process aid</span> : pctMode ? `${r1(f.lb, 2)} lb` : `${r1(c.fermPct[f.lid] || 0, 1)}%`}</td>
                 <td className="dp-num"><button className="dp-btn dp-x" aria-label="Move up" onClick={() => move("ferms", i, -1)}>↑</button><button className="dp-btn dp-x" aria-label={`Remove ${f.name}`} onClick={() => del("ferms", i)}>✕</button></td>
               </tr>
             ))}
@@ -150,7 +149,7 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
             {!!r.yeasts.length && <tr className="dp-group"><td colSpan={4}>Yeast · {r1(c.attenuation, 0)}% attenuation</td></tr>}
             {r.yeasts.map((y, i) => (
               <tr key={y.lid}>
-                <td className="dp-num"><Num value={y.packs} onChange={(n) => up("yeasts", i, { packs: n })} /> pk</td>
+                <td className="dp-num dp-dim" title="How much to pitch is worked out on Fermentation when you brew">pitch: see Fermentation</td>
                 <td className="dp-namecell"><input aria-label="Name" value={y.name} onChange={(e) => up("yeasts", i, { name: e.target.value })} /><div className="dp-sub">{[y.lab, y.code].filter(Boolean).join(" ")}{y.form ? ` · ${y.form}` : ""}<span className="dp-row" style={{ gap: 6, alignItems: "center" }}>
                     <Num value={y.attenuation} title="Attenuation %" onChange={(n) => up("yeasts", i, { attenuation: n })} /><span className="dp-dim">% atten.</span>
                     <label className="dp-dim" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={!!y.starter} onChange={(e) => up("yeasts", i, { starter: e.target.checked })} />starter</label>
@@ -351,7 +350,11 @@ export function FermentTab({ r, c, set }: Props) {
   const need = cellsNeeded(c.og, c.intoFermGal, lager);
   const y0 = r.yeasts[0];
   const st = r.starter || { liters: 2, stir: true };
-  const haveB = r.yeasts.reduce((a, y) => a + (y.form === "dry" ? (y.cells || 200) : (y.cells || 100) * viability(st.packDate)) * y.packs, 0);
+  // the recipe only says which yeast (Nick, Nov 24 2026: "don't think of yeast as a quantity"); how many packs you
+  // have is brew day's question, asked here and not saved with the recipe
+  const [packs, setPacks] = useState(1);
+  const perPack = y0 ? (y0.form === "dry" ? y0.cells || 200 : (y0.cells || 100) * viability(st.packDate)) : 0;
+  const haveB = perPack * packs;
   const grow = starterGrowth(haveB, st.liters, st.stir);
   const warm = Math.max(...r.ferment.map((s) => s.tempF), 60);
   const setCarb = (patch: Partial<Carb>) => set((x) => ({ ...x, carb: { ...x.carb, ...patch } }));
@@ -421,11 +424,13 @@ export function FermentTab({ r, c, set }: Props) {
           <table className="dp-tbl" data-nofit>
             <tbody>
               <tr><td>Cells needed ({lager ? "lager" : "ale"})</td><td className="dp-num">{r1(need, 0)} B</td></tr>
-              <tr><td>Cells you have</td><td className="dp-num">{r1(haveB, 0)} B</td></tr>
+              <tr><td>Cells you have ({packs} pack{packs === 1 ? "" : "s"}{y0?.form === "dry" ? "" : `, ${r1(perPack, 0)} B each by pack date`})</td><td className="dp-num">{r1(haveB, 0)} B</td></tr>
+              <tr><td>Packs to pitch without a starter</td><td className="dp-num">{perPack ? Math.ceil(need / perPack) : "–"}</td></tr>
               <tr><td>After a {st.liters} L starter</td><td className="dp-num">{r1(grow.endB, 0)} B</td></tr>
             </tbody>
           </table>
           <div className="dp-row" style={{ marginTop: 8 }}>
+            <F label="Packs you have"><Num value={packs} onChange={(n) => setPacks(Math.max(0, Math.round(n)))} /></F>
             <F label="Starter L"><Num value={st.liters} onChange={(n) => set((x) => ({ ...x, starter: { ...st, liters: n } }))} /></F>
             <label className="dp-row"><input type="checkbox" checked={st.stir} onChange={(e) => set((x) => ({ ...x, starter: { ...st, stir: e.target.checked } }))} /> Stir plate</label>
             <F label="Pack date"><input type="date" value={st.packDate || ""} onChange={(e) => set((x) => ({ ...x, starter: { ...st, packDate: e.target.value } }))} /></F>

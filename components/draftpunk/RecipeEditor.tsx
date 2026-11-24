@@ -224,7 +224,20 @@ export default function RecipeEditor({ id, userId, brewerName, archive = false }
             <div className="dp-row" style={{ margin: "6px 0 18px", gap: 8 }}>
               <span className="dp-chip dp-beer">{style ? styleLabel(style) : "No style"}</span>
               <span className="dp-chip">{TYPES.find(([v]) => v === r.type)?.[1]}</span>
-              <span className="dp-chip">{r1(r.equipment.batchGal, 2)} gal</span>
+              {(() => {
+                // "Brew it at": the recipe is its percents and targets; each size works out the pounds and ounces
+                const sys = equip.find((q) => q.e.name === r.equipment.name && q.e.sizes?.length) || equip.find((q) => q.e.sizes?.length);
+                if (!sys?.e.sizes) return <span className="dp-chip">{r1(r.equipment.batchGal, 2)} gal</span>;
+                const onSys = r.equipment.name === sys.e.name;
+                return (
+                  <span className="dp-seg dp-noprint" role="group" aria-label="Brew it at">
+                    {sys.e.sizes.map((s) => {
+                      const on = onSys && Math.abs(r.equipment.batchGal - s.batchGal) < 0.05;
+                      return <button key={s.label} type="button" disabled={ro} className={on ? "on" : ""} title={`Brew it at ${s.label} on ${sys.e.name}`} onClick={() => !on && set((x) => ({ ...scaleRecipe(x, atSize(sys.e, s.batchGal)), imported: x.imported || (equip.some((q) => q.e.name === x.equipment.name) ? undefined : x.equipment) }))}>Brew it at {s.label}</button>;
+                    })}
+                  </span>
+                );
+              })()}
               <span className="dp-chip">{r.equipment.name}</span>
             </div>
             {scaleOpen && !ro && (
