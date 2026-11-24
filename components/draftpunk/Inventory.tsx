@@ -6,6 +6,7 @@ import { FERMENTABLES, HOPS, MISCS, YEASTS } from "@/lib/draftpunk/library";
 import type { Recipe } from "@/lib/draftpunk/types";
 import { useToast } from "./Shell";
 import { F, Num, Picker, Win } from "./ui";
+import LibraryBrowser from "./LibraryBrowser";
 
 type Item = { id: string; kind: "fermentable" | "hop" | "yeast" | "misc"; name: string; data: Record<string, unknown>; in_stock: number | null };
 const UNIT = { fermentable: "lb", hop: "oz", yeast: "pk", misc: "" } as const;
@@ -49,6 +50,12 @@ export default function Inventory({ userId }: { userId: string }) {
     await createClient().from("dp_ingredients").insert({ owner_id: userId, kind, name, data: { ...data, ref: lib?.id }, in_stock: 0 });
     setPick(""); load();
   };
+  // from the club's library: the item as its maker lists it
+  const addFrom = async (kind: Item["kind"], name: string, data: Record<string, unknown>) => {
+    if (items.some((i) => i.kind === kind && i.name.toLowerCase() === name.toLowerCase())) { toast("Already on the shelf"); return; }
+    await createClient().from("dp_ingredients").insert({ owner_id: userId, kind, name, data, in_stock: 0 });
+    toast(`${name} is on the shelf`); load();
+  };
   const remove = async (it: Item) => { await createClient().from("dp_ingredients").delete().eq("id", it.id); load(); };
 
   // the shopping list for the chosen recipe
@@ -84,7 +91,7 @@ export default function Inventory({ userId }: { userId: string }) {
             <tbody>
               {items.map((i) => (
                 <tr key={i.id}>
-                  <td>{i.name}</td><td className="dp-dim">{i.kind}</td>
+                  <td><div className="dp-namecell">{i.name}{(i.data.supplier || i.data.lab || i.data.origin) ? <span className="dp-sub">{String(i.data.supplier || i.data.lab || i.data.origin)}</span> : null}</div></td><td className="dp-dim">{i.kind}</td>
                   <td className="dp-num"><Num value={i.in_stock ?? 0} onChange={(n) => setStock(i, n)} /> {UNIT[i.kind]}</td>
                   <td className="dp-num">{i.kind === "hop" ? <Num value={(i.data as { lotAlpha?: number }).lotAlpha} title="Alpha acid % on this package (recipes adjust to it on brew day)" onChange={(n) => setLot(i, n)} /> : null}</td>
                   <td className="dp-num"><button className="dp-btn dp-x" onClick={() => remove(i)}>X</button></td>
@@ -127,6 +134,7 @@ export default function Inventory({ userId }: { userId: string }) {
           )}
         </Win>
       </div>
+      <LibraryBrowser onAdd={addFrom} />
       {pick && <Picker title={`Add ${pick} to the shelf`} items={pickItems} onPick={(k) => add(pick, k)} onCustom={(n) => add(pick, "", n)} onClose={() => setPick("")} />}
       {node}
     </>

@@ -24,6 +24,10 @@ export type Fermentable = {
   /** acid malt: % lactic acid by weight */
   acidPct?: number;
   origin?: string; notes?: string;
+  /** the maltster or maker (Weyermann, Briess, Ireks…): two makers' "Pilsner Malt" are two different malts */
+  supplier?: string;
+  /** diastatic power, °Lintner */
+  diastaticPower?: number;
 };
 export type Hop = { name: string; alpha: number; beta?: number; form?: HopForm; origin?: string; use?: string; notes?: string; substitutes?: string };
 export type Yeast = {

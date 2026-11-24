@@ -132,7 +132,8 @@ export function bsStyle(st: BsNode | null) {
 export const bsFermentable = (g: BsNode): Fermentable => {
   const y = n(g, "F_G_YIELD");
   return { name: g.get("F_G_NAME"), type: FERM_TYPES[n(g, "F_G_TYPE")] || "grain", potential: y > 2 ? 1 + (y / 100) * 0.04621 : y || 1.0, color: n(g, "F_G_COLOR"),
-    maxPct: n(g, "F_G_MAX_IN_BATCH") || undefined, acidPct: n(g, "F_G_ACID_PCT") || undefined, origin: s(g, "F_G_ORIGIN"), notes: s(g, "F_G_NOTES") };
+    maxPct: n(g, "F_G_MAX_IN_BATCH") || undefined, acidPct: n(g, "F_G_ACID_PCT") || undefined, origin: s(g, "F_G_ORIGIN"), notes: s(g, "F_G_NOTES"),
+    supplier: s(g, "F_G_SUPPLIER"), diastaticPower: n(g, "F_G_DIASTATIC_POWER") || undefined };
 };
 export const bsHop = (h: BsNode): Hop => ({ name: h.get("F_H_NAME"), alpha: n(h, "F_H_ALPHA", 5), beta: n(h, "F_H_BETA") || undefined, form: HOP_FORMS[n(h, "F_H_FORM")] || "pellet",
   origin: s(h, "F_H_ORIGIN"), use: HOP_TYPES[n(h, "F_H_TYPE")], notes: s(h, "F_H_NOTES"), substitutes: s(h, "F_H_SUBSTITUTES") });
@@ -294,8 +295,12 @@ export function dedupe<T extends Recipe>(rs: T[]): T[] {
   const seen = new Set<string>();
   return rs.filter((r) => { const k = recipeKey(r); if (seen.has(k)) return false; seen.add(k); return true; });
 }
-/** one entry per name (BeerSmith's local and cloud lists overlap) */
+/** what makes two library items the same item: the name with its maker (lab or maltster), country and product code.
+ *  Two makers' "Pilsner Malt" and a US and a New Zealand "Cascade" are different items (Nick, Nov 24 2026: Ireks). */
+export const libKey = (x: { name: string; lab?: string; supplier?: string; origin?: string; code?: string }) =>
+  [x.lab, x.supplier, x.origin, x.code, x.name].map((v) => String(v || "").toLowerCase().replace(/[®™]/g, "").replace(/\s+/g, " ").trim()).join("|");
+/** one entry per item (BeerSmith's local and cloud lists overlap) */
 export function dedupeLib(lib: BsLibrary): BsLibrary {
-  const one = <T extends { name: string; lab?: string; code?: string }>(xs: T[]) => { const seen = new Set<string>(); return xs.filter((x) => { const k = `${x.lab || ""}|${x.code || ""}|${x.name}`.toLowerCase().trim(); if (!x.name || seen.has(k)) return false; seen.add(k); return true; }); };
+  const one = <T extends { name: string; lab?: string; supplier?: string; origin?: string; code?: string }>(xs: T[]) => { const seen = new Set<string>(); return xs.filter((x) => { const k = libKey(x); if (!x.name || seen.has(k)) return false; seen.add(k); return true; }); };
   return { fermentable: one(lib.fermentable), hop: one(lib.hop), yeast: one(lib.yeast), misc: one(lib.misc), water: one(lib.water) };
 }

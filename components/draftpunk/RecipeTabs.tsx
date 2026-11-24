@@ -21,7 +21,7 @@ const USES: [HopUse, string][] = [["boil", "Boil"], ["first_wort", "First Wort"]
  * The club's ingredient library (dp_ingredients with no owner: BeerSmith's lists brought in from Import, Nov 24 2026),
  * read once per visit and only the columns a picker shows; the whole item is read when one is picked.
  */
-type ClubItem = { id: string; kind: MineItem["kind"]; name: string; origin?: string; lab?: string; code?: string; potential?: number; color?: number; maxPct?: number; alpha?: number; use?: string; attenuation?: number; tempLow?: number; tempHigh?: number; form?: string };
+type ClubItem = { id: string; kind: MineItem["kind"]; name: string; origin?: string; supplier?: string; lab?: string; code?: string; potential?: number; color?: number; maxPct?: number; alpha?: number; use?: string; attenuation?: number; tempLow?: number; tempHigh?: number; form?: string };
 let clubLib: Promise<ClubItem[]> | null = null;
 export const resetClubLib = () => { clubLib = null; };
 function useClubLib(on: boolean) {
@@ -29,7 +29,7 @@ function useClubLib(on: boolean) {
   useEffect(() => {
     if (!on) return;
     clubLib ||= readAll<ClubItem>((a, b) => createClient().from("dp_ingredients")
-      .select("id, kind, name, origin:data->>origin, lab:data->>lab, code:data->>code, potential:data->potential, color:data->color, maxPct:data->maxPct, alpha:data->alpha, use:data->>use, attenuation:data->attenuation, tempLow:data->tempLow, tempHigh:data->tempHigh, form:data->>form")
+      .select("id, kind, name, origin:data->>origin, supplier:data->>supplier, lab:data->>lab, code:data->>code, potential:data->potential, color:data->color, maxPct:data->maxPct, alpha:data->alpha, use:data->>use, attenuation:data->attenuation, tempLow:data->tempLow, tempHigh:data->tempHigh, form:data->>form")
       .is("owner_id", null).order("name").order("id").range(a, b)).catch(() => { clubLib = null; return []; });
     clubLib.then(setRows);
   }, [on]);
@@ -42,7 +42,8 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
   const [hopFix, setHopFix] = useState(false);
   const club = useClubLib(!!pick);
   // the club library's items a built-in one doesn't already cover (same name)
-  const clubOf = (kind: MineItem["kind"], have: { name: string }[]) => { const names = new Set(have.map((h) => h.name.toLowerCase())); return club.filter((x) => x.kind === kind && !names.has(x.name.toLowerCase())); };
+  // (a maker's own malt, "Ireks Pilsner Malt", always shows: it isn't the generic one of the same name)
+  const clubOf = (kind: MineItem["kind"], have: { name: string }[]) => { const names = new Set(have.map((h) => h.name.toLowerCase())); return club.filter((x) => x.kind === kind && (x.supplier || x.lab || !names.has(x.name.toLowerCase()))); };
   // the brewer's own ingredients (not stock entries of library items), with the numbers a recipe needs
   const needs: Record<string, string> = { fermentable: "potential", hop: "alpha", yeast: "attenuation", misc: "use" };
   const my = (kind: MineItem["kind"]) => mine.filter((m) => m.kind === kind && !(m.data as { ref?: string }).ref && (m.data as Record<string, unknown>)[needs[kind]] != null);
@@ -52,7 +53,7 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
 
   const pickers = {
     ferm: { title: "Add fermentable", head: ["PPG", "°L", "Max%"], items: [...my("fermentable").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "Mine", cols: [r1(((m.data as Fermentable).potential - 1) * 1000, 0) + "", (m.data as Fermentable).color + "", ""] })), ...FERMENTABLES.map((f) => ({ key: f.id, name: f.name, sub: f.origin, cols: [r1((f.potential - 1) * 1000, 0) + "", f.color + "", f.maxPct + ""] })),
-      ...clubOf("fermentable", FERMENTABLES).map((f) => ({ key: `c:${f.id}`, name: f.name, sub: f.origin, cols: [r1(((f.potential || 1) - 1) * 1000, 0) + "", r1(f.color || 0, 1) + "", f.maxPct ? f.maxPct + "" : ""] }))] },
+      ...clubOf("fermentable", FERMENTABLES).map((f) => ({ key: `c:${f.id}`, name: f.name, sub: [f.supplier, f.origin].filter(Boolean).join(" · "), cols: [r1(((f.potential || 1) - 1) * 1000, 0) + "", r1(f.color || 0, 1) + "", f.maxPct ? f.maxPct + "" : ""] }))] },
     hop: { title: "Add hops", head: ["AA%", "Use"], items: [...my("hop").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "Mine", cols: [(m.data as Hop).alpha + "", ""] })), ...HOPS.map((h) => ({ key: h.id, name: h.name, sub: h.origin, cols: [h.alpha + "", h.use || ""] })),
       ...clubOf("hop", HOPS).map((h) => ({ key: `c:${h.id}`, name: h.name, sub: h.origin, cols: [(h.alpha ?? "") + "", h.use || ""] }))] },
     yeast: { title: "Add yeast", head: ["Atten", "Temp °F"], items: [...my("yeast").map((m) => ({ key: `m:${m.id}`, name: m.name, sub: "Mine", cols: [(m.data as Yeast).attenuation + "%", ""] })), ...YEASTS.map((y) => ({ key: y.id, name: `${y.lab} ${y.code} ${y.name}`, sub: y.form, cols: [y.attenuation + "%", `${y.tempLow}–${y.tempHigh}`] })),

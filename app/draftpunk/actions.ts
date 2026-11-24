@@ -1,6 +1,7 @@
 "use server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBrewer } from "@/lib/draftpunk/server";
+import { libKey } from "@/lib/draftpunk/beersmith";
 
 /**
  * A club admin adds a member: their sign-in is made (confirmed, no email sent from here) and they're put in the club.
@@ -64,20 +65,27 @@ export async function addToLibrary(kind: "fermentable" | "hop" | "yeast" | "misc
   if (me.brewer?.club_role !== "admin") return { ok: false, added: 0, updated: 0, msg: "Only a club admin can add to the club's library" };
   if (!["fermentable", "hop", "yeast", "misc", "water"].includes(kind) || !Array.isArray(items) || items.length > 500) return { ok: false, added: 0, updated: 0, msg: "Send at most 500 at a time" };
   const admin = createAdminClient();
-  const key = (x: { name: string; lab?: unknown; code?: unknown }) => `${x.lab || ""}|${x.code || ""}|${x.name}`.toLowerCase().trim();
   const names = [...new Set(items.map((i) => String(i.name || "").trim()).filter(Boolean))];
-  const have = new Map<string, string>();
+  // what's there already: by its full key (name, maker, country, code); a row saved before makers were kept (no
+  // supplier) is filled in by the first item of its name, so a re-import upgrades the library instead of doubling it
+  const have = new Map<string, string>(), older = new Map<string, string[]>();
   for (let i = 0; i < names.length; i += 100) {
     const { data } = await admin.from("dp_ingredients").select("id, name, data").is("owner_id", null).eq("kind", kind).in("name", names.slice(i, i + 100));
-    for (const r of data || []) have.set(key({ name: r.name as string, ...(r.data as object) }), r.id as string);
+    for (const r of data || []) {
+      const d: Record<string, string> & { name: string } = { ...(r.data as Record<string, string>), name: r.name as string };
+      have.set(libKey(d), r.id as string);
+      if (kind === "fermentable" && !d.supplier) older.set(d.name.toLowerCase(), [...(older.get(d.name.toLowerCase()) || []), r.id as string]);
+    }
   }
   const clean = (i: { name: string; [k: string]: unknown }) => { const d: { name: string; [k: string]: unknown } = { ...i, name: String(i.name).trim() }; if (typeof d.notes === "string" && d.notes.length > 2000) d.notes = d.notes.slice(0, 2000) + "…"; return d; };
   const fresh: { owner_id: null; kind: string; name: string; data: object }[] = [];
   let updated = 0;
   for (const it of items.filter((i) => String(i.name || "").trim())) {
-    const d = clean(it), id = have.get(key(d));
-    if (id) { await admin.from("dp_ingredients").update({ data: d }).eq("id", id); updated++; }
-    else { have.set(key(d), "new"); fresh.push({ owner_id: null, kind, name: d.name, data: d }); }
+    const d = clean(it), k = libKey(d as { name: string });
+    let id = have.get(k);
+    if (!id) { const old = older.get(d.name.toLowerCase()); if (old?.length) id = old.shift(); }
+    if (id) { if (id !== "new") { await admin.from("dp_ingredients").update({ data: d }).eq("id", id); updated++; } have.set(k, "new"); }
+    else { have.set(k, "new"); fresh.push({ owner_id: null, kind, name: d.name, data: d }); }
   }
   if (fresh.length) { const { error } = await admin.from("dp_ingredients").insert(fresh); if (error) return { ok: false, added: 0, updated, msg: error.message }; }
   return { ok: true, added: fresh.length, updated };
