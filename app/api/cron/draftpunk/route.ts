@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { allRows } from "@/lib/readAll";
 import { decide, type AutoState, type Reading } from "@/lib/draftpunk/autopilot";
 import { inkbirdSet, inkbirdStatus, tuyaReady } from "@/lib/draftpunk/tuya";
 import { normalize } from "@/lib/draftpunk/defaults";
@@ -47,7 +48,7 @@ export async function GET(req: Request) {
     const r = normalize(b.recipe_snapshot as Recipe);
     const since = new Date(Date.now() - 8 * 86400000).toISOString();
     const [{ data: tilt }, { data: cham }] = await Promise.all([
-      admin.from("dp_readings").select("sg, temp_f, source, read_at").eq("brew_id", b.id).eq("source", "tilt").gte("read_at", since).order("read_at").limit(5000),
+      allRows((a, z) => admin.from("dp_readings").select("sg, temp_f, source, read_at").eq("brew_id", b.id).eq("source", "tilt").gte("read_at", since).order("read_at").order("id").range(a, z)),
       m.chamberId ? admin.from("dp_readings").select("sg, temp_f, set_f, source, read_at").eq("chamber_id", m.chamberId).gte("read_at", new Date(Date.now() - 6 * 3600000).toISOString()).order("read_at") : Promise.resolve({ data: [] }),
     ]);
     const st: AutoState = { ...m.autopilot, events: m.autopilot.events || [], lastAlert: m.autopilot.lastAlert || {} };

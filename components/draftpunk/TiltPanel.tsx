@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { readAll } from "@/lib/readAll";
 import { abvOf, r1, sgFmt, spundPlan } from "@/lib/draftpunk/calc";
 import { tiltUrl } from "@/app/draftpunk/actions";
 import type { Recipe } from "@/lib/draftpunk/types";
@@ -44,8 +45,10 @@ export default function TiltPanel({ brewId, r, og, color, chamberId, onColor }: 
   const [cham, setCham] = useState<CReading[]>([]);
   useEffect(() => {
     const load = () => {
-      createClient().from("dp_readings").select("sg, temp_f, read_at").eq("brew_id", brewId).eq("source", "tilt").order("read_at").limit(5000).then(({ data }) => setRows((data || []) as Reading[]));
-      if (chamberId) createClient().from("dp_readings").select("temp_f, set_f, read_at").eq("chamber_id", chamberId).gte("read_at", new Date(Date.now() - 30 * 86400000).toISOString()).order("read_at").limit(5000).then(({ data }) => setCham((data || []) as CReading[]));
+      // a batch logs ~100 readings a day: read in pages (the database answers 1,000 rows at most per request)
+      const sb = createClient();
+      readAll<Reading>((a, b) => sb.from("dp_readings").select("sg, temp_f, read_at").eq("brew_id", brewId).eq("source", "tilt").order("read_at").order("id").range(a, b)).then(setRows).catch(() => {});
+      if (chamberId) readAll<CReading>((a, b) => sb.from("dp_readings").select("temp_f, set_f, read_at").eq("chamber_id", chamberId).gte("read_at", new Date(Date.now() - 30 * 86400000).toISOString()).order("read_at").order("id").range(a, b)).then(setCham).catch(() => {});
     };
     load();
     const t = setInterval(load, 60000);
