@@ -50,7 +50,7 @@ import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, onPage
 import { detectCenter } from "@/lib/visualCenter";
 import { tintBase, tintPhoto } from "@/lib/tintPhoto";
 import { applyDistress } from "@/lib/distress";
-import { PREVIEWABLE_TYPES, KID_SIZES, type GLine } from "@/lib/pricing";
+import { PREVIEWABLE_TYPES, KID_SIZES, type GLine, BLACKLIGHT_INK, hasBlacklight, isBlacklightInk, keepBlacklight, specialInks, inkNames as inkNamesOf } from "@/lib/pricing";
 import DesignSearch, { type OrderArt } from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
 import ShirtDesigner from "@/components/ShirtDesigner";
@@ -492,6 +492,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // the customer's distress mask (brand standards): Peticolas' scratched texture, fitted over every logo of theirs
   const [brandMask, setBrandMask] = useState<{ path: string; url: string; name: string; layers: number } | null>(null);
   const [bsOpen, setBsOpen] = useSticky("mockup.brandStd", false);
+  /** which print's Specialty prints fold is open */
+  const [spOpen, setSpOpen] = useState("");
   const [distressing, setDistressing] = useState<string | null>(null);
   useEffect(() => {
     setBrandMask(null);
@@ -908,7 +910,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           }
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off, cw: cwK || undefined, method: "embroidery" } }));
           const names = [...new Set(Object.values(map).map((v) => v.name).filter((n) => n && n !== "none"))];
-          setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, inks: names.join(", "), colors: Math.max(1, names.length) } : x)));
+          setImprints((xs) => xs.map((x) => (x.id === im.id ? keepBlacklight(x, { ...x, inks: names.join(", "), colors: Math.max(1, names.length) }) : x)));
           return;
         }
         if (plan.method === "spot") {
@@ -976,7 +978,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off, cw: cwK || undefined } }));
           // a reorder awaiting production keeps the color count the old job printed (Printavo's 7/0 is a fact; the inks
           // painted here are our guess, and production confirms both: Oct 20, Nick)
-          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? { ...x, inks: names.join(", "), colors: keepCount(x) ? x.colors : Math.max(1, names.length) } : x)));
+          setImprints((xs) => xs.map((x) => (x.id === im.id && x.method !== "dtf" ? keepBlacklight(x, { ...x, inks: names.join(", "), colors: keepCount(x) ? x.colors : Math.max(1, names.length) }) : x)));
           return;
         }
         const sources = detectColors(img);
@@ -1127,7 +1129,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const map = { ...pt.map };
       for (const [k, v] of Object.entries(picks)) { if (v) map[k] = v; else delete map[k]; }
       const inks = inkNames(pt, map);
-      setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
+      setImprints((xs) => xs.map((x) => (x.id === id ? keepBlacklight(x, { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors }) : x)));
       return { ...p, [id]: { ...pt, map } };
     });
   }
@@ -1136,7 +1138,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const pt = p[id]; if (!pt) return p;
     const np = { ...pt, unite };
     const inks = inkNames(np);
-    setImprints((xs) => xs.map((x) => (x.id === id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
+    setImprints((xs) => xs.map((x) => (x.id === id ? keepBlacklight(x, { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors }) : x)));
     return { ...p, [id]: np };
   });
   /** Logo colors still printing "as uploaded" (no standard ink picked), per imprint. */
@@ -1204,7 +1206,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const np = { ...p, [im.id]: { ...pt, map } };
       // keep the imprint's ink list and color count in step with the choices
       const inks = inkNames(pt, map);
-      setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors } : x)));
+      setImprints((xs) => xs.map((x) => (x.id === im.id ? keepBlacklight(x, { ...x, inks: inks.length ? inks.join(", ") : x.inks, colors: inks.length && x.method !== "dtf" && x.colors < 11 ? inks.length : x.colors }) : x)));
       return np;
     });
   }
@@ -5158,16 +5160,44 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
                       {im.oversize && <div className="mk-over on" title={`Past the normal ${NORMAL_MAX_IN}" max, up to ${OVERSIZE_IN}": marked on the work order and runs slower. Size it back to ${NORMAL_MAX_IN}" or under and it's a normal print`}><b>Oversized</b> <span className="faint">up to {OVERSIZE_IN}&quot; · harder to run: marked on the work order, slower on the schedule</span></div>}
                       {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
-                      {/* puff ink (Oct 30, Nick: "add a puff print option to the screen print imprint… $1 typically"; not
-                          embroidery's 3D puff): a raised print, charged per piece, slower on press with a flash */}
-                      {im.method === "screen" && im.colors < FULL_COLOR && !portal && (
-                        <label className="check mk-puff" title="Puff ink: the print rises when it's cured. Charged per piece and printed slower, with a flash">
-                          <input type="checkbox" checked={!!im.puff} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, puff: e.target.checked || undefined, ...(e.target.checked ? { underbase: undefined } : {}) } : x)))} />
-                          Puff print {puffCost != null && <span className="faint">+${puffCost.toFixed(2)} each</span>}
-                        </label>
-                      )}
-                      {p.d && im.method === "screen" && !portal && (() => {
-                        // Brand standards (Oct 23, Nick: "a little pop-up at the bottom of the imprints… brand standards… soft
+                      {/* specialty prints (Nick, Nov 24 2026: "a thing that says specialty prints like brand standards is, and then
+                          drop it down… puff print, blacklight, some of those other specialty inks, soft hand"): every add-on
+                          that changes how a print is made, in one fold under the print */}
+                      {im.method === "screen" && im.colors < FULL_COLOR && !portal && (() => {
+                        const set = (ch: (x: Imprint) => Imprint) => setImprints((xs) => xs.map((x) => (x.id === im.id ? ch(x) : x)));
+                        const soft = im.printStyle === "fashion" || !!im.softHand, bl = hasBlacklight(im);
+                        const spNames = specialInks(im).filter((n) => !isBlacklightInk(n)), spOn = im.specialInk ?? spNames.length > 0;
+                        const onNow = [im.puff && "Puff", bl && "Blacklight", spOn && (spNames.join(", ") || "Specialty ink"), soft && "Soft Hand"].filter(Boolean) as string[];
+                        const open = spOpen === im.id;
+                        return (
+                          <div className={"mk-bs" + (open ? " on" : "")}>
+                            <button type="button" className="mk-bs-h" onClick={() => setSpOpen(open ? "" : im.id)} aria-expanded={open}>
+                              <b>Specialty prints</b>{onNow.length > 0 && <span className="mk-bs-who">{onNow.length} on</span>}
+                              {!open && onNow.length > 0 && <span className="faint">{onNow.join(" · ")}</span>}
+                              <span className="mk-bs-a" aria-hidden>{open ? "▾" : "▸"}</span>
+                            </button>
+                            {open && <div className="mk-bs-b">
+                              <label className="check" title="Puff ink: the print rises when it's cured. Charged per piece and printed slower, with a flash">
+                                <input type="checkbox" checked={!!im.puff} onChange={(e) => set((x) => ({ ...x, puff: e.target.checked || undefined, ...(e.target.checked ? { underbase: undefined } : {}) }))} />
+                                Puff print {puffCost != null && <span className="faint">+${puffCost.toFixed(2)} each</span>}
+                              </label>
+                              <label className="check" title="UV-reactive ink on one extra screen: glows under a blacklight. Add a 'Blacklight view' production file for the proof">
+                                <input type="checkbox" checked={bl} onChange={(e) => set((x) => { const ns = inkNamesOf(x.inks).filter((n) => !isBlacklightInk(n)); return e.target.checked ? { ...x, inks: [...ns, BLACKLIGHT_INK].join(", "), colors: (x.colors || 0) + 1 } : { ...x, inks: ns.join(", "), colors: Math.max(1, (x.colors || 1) - 1) }; })} />
+                                Blacklight <span className="faint">+1 screen, UV ink</span>
+                              </label>
+                              <label className="check" title="Metallic, shimmer, glitter, glow, reflective, high density, foil…: charged per piece on its own line. Pick the ink itself in the colors above">
+                                <input type="checkbox" checked={spOn} onChange={(e) => set((x) => { const y = { ...x }; if (e.target.checked === spNames.length > 0) delete y.specialInk; else y.specialInk = e.target.checked; return y; })} />
+                                Specialty ink <span className="faint">{spNames.length ? spNames.join(", ") : "metallic, glitter, glow, reflective, high density…"}</span>
+                              </label>
+                              <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen, so it feels soft">
+                                <input type="checkbox" checked={soft} onChange={(e) => set((x) => (e.target.checked ? { ...x, printStyle: "fashion", softHand: true, underbase: undefined } : { ...x, printStyle: undefined, softHand: undefined }))} /> Soft Hand (Fashion)
+                              </label>
+                            </div>}
+                          </div>
+                        );
+                      })()}
+                      {p.d && im.method === "screen" && !portal && (hasBrandPrint(brandPrint) || !!brandMask) && (() => {
+                        // Brand standards (only when this customer has some saved: Nick, Nov 24 2026) (Oct 23, Nick: "a little pop-up at the bottom of the imprints… brand standards… soft
                         // print… apply the distress effect… keep that upper section the same… on all prints"; "fashion hit
                         // and soft hand are really the same thing"): how this customer's prints are made, for this print
                         const soft = im.printStyle === "fashion" || !!im.softHand;
@@ -5179,12 +5209,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         return (
                           <div className={"mk-bs" + (bsOpen ? " on" : "")}>
                             <button type="button" className="mk-bs-h" onClick={() => setBsOpen(!bsOpen)} aria-expanded={bsOpen}>
-                              <b>Brand standards</b><span className="mk-bs-who">{hasBrandPrint(brandPrint) || brandMask ? who : "none set"}</span>
+                              <b>Brand standards</b><span className="mk-bs-who">{who}</span>
                               {!bsOpen && (soft || disOn) && <span className="faint">{[soft && "Soft Hand (Fashion)", disOn && "Distress"].filter(Boolean).join(" · ")}</span>}
                               <span className="mk-bs-a" aria-hidden>{bsOpen ? "▾" : "▸"}</span>
                             </button>
                             {bsOpen && <div className="mk-bs-b">
-                              <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen, so it feels soft"><input type="checkbox" checked={soft} onChange={(e) => set(e.target.checked ? { printStyle: "fashion", softHand: true, underbase: undefined } : { printStyle: undefined, softHand: undefined })} /> Soft Hand (Fashion)</label>
                               {(hasDis || brandMask) && <>
                                 <label className="check"><input type="checkbox" checked={disOn} disabled={distressing === im.id || (hasDis && !urls[p.d.id + ":clean"] && disOn)}
                                   onChange={async (e) => {

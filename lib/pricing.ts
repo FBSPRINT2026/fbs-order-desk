@@ -581,6 +581,12 @@ export const SPECIAL_INK = /\b(metallic|shimmer|glitter|glow|reflective|foil|hig
 export const BLACKLIGHT_INK = "Blacklight UV";
 export const isBlacklightInk = (n: string) => /\bblack ?light\b|\buv\b/i.test(n);
 export const hasBlacklight = (d: Pick<Imprint, "inks">) => inkNames(d.inks).some(isBlacklightInk);
+/** a print's inks rebuilt from its logo's colors (the Mockup Creator, a color picked) keep the blacklight ink it had:
+ *  it's a screen of its own, not one of the logo's colors */
+export function keepBlacklight<T extends Pick<Imprint, "inks" | "colors" | "method">>(prev: T, next: T): T {
+  if (!hasBlacklight(prev) || hasBlacklight(next) || next.method !== "screen") return next;
+  return { ...next, inks: [...inkNames(next.inks), BLACKLIGHT_INK].join(", "), colors: next.colors < FULL_COLOR ? (next.colors || 0) + 1 : next.colors };
+}
 /** the specialty inks a screen print uses, by name ("Gold Shimmer") */
 export const specialInks = (d: Pick<Imprint, "inks">) => inkNames(d.inks).filter((n) => SPECIAL_INK.test(n));
 /** does this screen print carry the specialty ink charge: set by hand, else read from its inks */
