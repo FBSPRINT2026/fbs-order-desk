@@ -103,7 +103,7 @@ export default function EquipmentEditor({ userId }: { userId: string }) {
 }
 
 /** the batch sizes this system brews (3, 5, 10 gal): each one a choice under the system in a recipe's Equipment */
-function SizesField({ sizes, onChange }: { sizes?: { label: string; batchGal: number }[]; batchGal?: number; onChange: (s: { label: string; batchGal: number }[] | undefined) => void }) {
+function SizesField({ sizes, onChange }: { sizes?: { label: string; batchGal: number; aidLb?: number }[]; batchGal?: number; onChange: (s: { label: string; batchGal: number; aidLb?: number }[] | undefined) => void }) {
   const [text, setText] = useState((sizes || []).map((s) => s.label.replace(/\s*gal$/, "")).join(", "));
   const commit = () => {
     // "3, 5, 10" are packaged gallons; into the fermenter is 10% more (5 gal → 5.5)
