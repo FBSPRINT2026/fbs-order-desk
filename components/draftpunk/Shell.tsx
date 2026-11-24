@@ -52,8 +52,7 @@ export default function Shell({ name, children }: { name: string; children: Reac
   return (
     <div className="dp-shell">
       <nav className="dp-side dp-noprint" aria-label="DraftPunk">
-        <Link href="/draftpunk" className="dp-brand"><Emblem size={34} /><span>Draft Punk<small>Homebrew Club · Est. 2013</small></span></Link>
-        {award && <Link href="/draftpunk/competitions" className="dp-side-award"><img src={award.image} alt="" /><span>{award.year ? `${award.year} ` : ""}{award.title} winners</span></Link>}
+        <Link href="/draftpunk" className="dp-brand"><Emblem size={34} /><span><span className="dp-brand-name">Draft Punk{award && <img className="dp-brand-award" src={award.image} alt={`${award.year ? `${award.year} ` : ""}${award.title} winners`} title={`${award.year ? `${award.year} ` : ""}${award.title} winners`} />}</span><small>Homebrew Club</small></span></Link>
         {NAV.map((n) => (
           <Link key={n.href} href={n.href} className={`dp-nav ${on(n.href) ? "on" : ""}`}><Icon name={n.icon} />{n.label}</Link>
         ))}

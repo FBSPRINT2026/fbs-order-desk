@@ -37,7 +37,7 @@ export default function Login({ signedInAs }: { signedInAs?: string }) {
           <div style={{ color: "#fff7ea", marginBottom: 18, position: "relative" }}><Emblem size={96} /></div>
           <span className="dp-award">★ Home of the 2017 Ninkasi Award winners</span>
           <h1>Draft<br />Punk</h1>
-          <div className="dp-door-sub">Homebrew Club · Est. 2013</div>
+          <div className="dp-door-sub">Homebrew Club</div>
           <p>Build recipes, brew them, log every batch, and share the good ones with the club.</p>
         </div>
       </div>
