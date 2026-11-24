@@ -33,3 +33,11 @@ create table if not exists dp_chambers (
 alter table dp_chambers enable row level security;
 create policy dp_chambers_own on dp_chambers for all using (owner_id = auth.uid()) with check (owner_id = auth.uid() and dp_is_brewer());
 create index if not exists dp_readings_chamber on dp_readings (chamber_id, read_at);
+
+-- A member changes only their own name; their club role and private Tilt key are set by the server (a club admin's
+-- Add member, the Tilt address) and a member never reads another's key (dp_brewers_read lets every brewer read the
+-- club list).
+revoke update on dp_brewers from anon, authenticated;
+grant update (name) on dp_brewers to authenticated;
+revoke select on dp_brewers from anon, authenticated;
+grant select (user_id, name, club_role, created_at) on dp_brewers to authenticated;
