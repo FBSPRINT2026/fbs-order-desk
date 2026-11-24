@@ -519,6 +519,9 @@ export const baseByDefault = (hex: string) => lightness(hex) >= 30;
 export const printShade = (k: { hex: string; name?: string }) => { const h = k.name ? colorHex(k.name) : ""; return /^#[0-9a-f]{6}$/i.test(h || "") ? h : k.hex; };
 export const neverBase = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L < 22 && Math.hypot(a, b) < 12; };
 
+/** where a color sits along a fade (0 one end, 1 the other) as the share of the far ink: the first and last 2% are the
+ *  end inks alone (noise in a flat area stays solid), and in between it ramps from 0 to 1 with no step at either end */
+export const fadeRamp = (t: number) => { const e = 0.02; return t <= e ? 0 : t >= 1 - e ? 1 : (t - e) / (1 - 2 * e); };
 /** a color this close (Lab distance) to an ink is that ink, printed solid (flat areas with a little noise) */
 const SNAP = 5;
 /** a color this close (sRGB units) to the line between two inks is an edge between them (anti-aliasing) */
@@ -569,6 +572,28 @@ function spotMixerOne(inks: SepInk[], s: SepSettings): (r: number, g: number, b:
     // (a near-black art color and a black ink: the same ink, solid, even a few shades apart; dark grays read far
     // apart in Lab, and splitting them into 90% black + 10% white puts tints in a solid black screen)
     const snap = labs[i1][0] < 20 && l[0] < 25 && Math.hypot(l[1], l[2]) < 10 ? 12 : SNAP;
+    // along a fade: the two inks it runs between, crossing over (one fading out as the other comes in). Read before
+    // the snap to the nearest ink when that ink is an end of the fade: snapping the last stretch of a fade to its end
+    // ink (anything within SNAP of it, 7–11% of a navy → pale blue fade) printed it solid there and then jumped
+    // straight to 10% of the other ink, a hard line across the fade at each end (Nov 23, #50141's left chest and full
+    // back, both "choppy" next to Separo's). Only a color within SNAP of an ink that isn't an end of the fade snaps.
+    let fi = -1, fj = -1, ft = 0, fd = Infinity;
+    if (fades.length && use.length && !(m === 1 && !dark)) {
+      for (const [i, j] of fades) {
+        const A = rgb[i], B = rgb[j], AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], L2 = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2; if (!L2) continue;
+        const t = ((r - A[0]) * AB[0] + (gg - A[1]) * AB[1] + (b - A[2]) * AB[2]) / L2; if (t < -0.05 || t > 1.05) continue;
+        const tc = Math.max(0, Math.min(1, t)), d = (r - A[0] - tc * AB[0]) ** 2 + (gg - A[1] - tc * AB[1]) ** 2 + (b - A[2] - tc * AB[2]) ** 2;
+        if (d < fd) { fd = d; fi = i; fj = j; ft = tc; }
+      }
+      if (fi >= 0 && fd < FADE * FADE && (d1 >= snap * snap || i1 === fi || i1 === fj)) {
+        // the ends stay clean solids (a little noise in a flat area of either ink is that ink alone), with no step:
+        // the first and last 2% ramp in from 0 instead of jumping to 2%
+        const t = fadeRamp(ft);
+        if (!dropped[fi]) out[fi] = 1 - t;
+        if (!dropped[fj]) out[fj] = t;
+        return out;
+      }
+    }
     if (d1 < snap * snap || !use.length || m === 1 && !dark) {
       if (m === 1 && !dark && d1 >= snap * snap) {
         // one ink on a light shirt: how much of it (between the shirt and the ink)
@@ -577,22 +602,6 @@ function spotMixerOne(inks: SepInk[], s: SepSettings): (r: number, g: number, b:
         return out;
       }
       if (!dropped[i1]) out[i1] = 1; return out;
-    }
-    // along a fade: the two inks it runs between, crossing over (one fading out as the other comes in)
-    if (fades.length) {
-      let fi = -1, fj = -1, ft = 0, fd = Infinity;
-      for (const [i, j] of fades) {
-        const A = rgb[i], B = rgb[j], AB = [B[0] - A[0], B[1] - A[1], B[2] - A[2]], L2 = AB[0] ** 2 + AB[1] ** 2 + AB[2] ** 2; if (!L2) continue;
-        const t = ((r - A[0]) * AB[0] + (gg - A[1]) * AB[1] + (b - A[2]) * AB[2]) / L2; if (t < -0.05 || t > 1.05) continue;
-        const tc = Math.max(0, Math.min(1, t)), d = (r - A[0] - tc * AB[0]) ** 2 + (gg - A[1] - tc * AB[1]) ** 2 + (b - A[2] - tc * AB[2]) ** 2;
-        if (d < fd) { fd = d; fi = i; fj = j; ft = tc; }
-      }
-      if (fi >= 0 && fd < FADE * FADE) {
-        const t = ft < 0.02 ? 0 : ft > 0.98 ? 1 : ft;
-        if (!dropped[fi]) out[fi] = 1 - t;
-        if (!dropped[fj]) out[fj] = t;
-        return out;
-      }
     }
     // the pair of inks whose line passes closest to this color
     let bi = -1, bj = -1, bt = 0, bd = Infinity;
