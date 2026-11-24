@@ -19,12 +19,17 @@
   .dp-app { --dp-bg: #121110; --dp-card: #1b1a18; --dp-sunk: #232120; --dp-line: #2e2b28; --dp-text: #f2eee8; --dp-mute: #a39b90;
     --dp-acc: #f0a03c; --dp-acc-ink: #1b1206; --dp-red: #ff7a5c; --dp-grn: #7ccf88; --dp-shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 28px rgba(0,0,0,.25); color-scheme: dark; }
 }
-/* three looks to pick from (Nick, Nov 24 2026: "show me three different styles… fonts and colors"); data-theme on .dp-app.
-   Taproom is the default above. */
+/* three looks to pick from (Nick, Nov 24 2026: "show me three different styles… fonts and colors"; he picked Brew Lab
+   as the default: "let's build 2"). data-theme on .dp-app (lab, set in app/draftpunk/layout.tsx; a brewer's own pick in
+   the side menu is kept on their device). Taproom is the plain .dp-app above. */
 .dp-app[data-theme="lab"] {
   --dp-bg: #f5f7fa; --dp-card: #ffffff; --dp-sunk: #eef2f6; --dp-line: #dbe2ea; --dp-text: #0f1b2d; --dp-mute: #5b6b80;
   --dp-acc: #0e7c86; --dp-red: #c2410c; --dp-grn: #15803d;
   --dp-font: "IBM Plex Sans", system-ui, sans-serif; --dp-head: "IBM Plex Sans", system-ui, sans-serif; --dp-shadow: 0 1px 2px rgba(15,27,45,.06);
+}
+@media (prefers-color-scheme: dark) {
+  .dp-app[data-theme="lab"] { --dp-bg: #0b1220; --dp-card: #111a2b; --dp-sunk: #172338; --dp-line: #24324a; --dp-text: #e6edf6; --dp-mute: #93a3b8;
+    --dp-acc: #2bb3be; --dp-red: #fb8a5b; --dp-grn: #4ade80; --dp-shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark; }
 }
 .dp-app[data-theme="lab"] .dp-big, .dp-app[data-theme="lab"] .dp-v, .dp-app[data-theme="lab"] .dp-clock, .dp-app[data-theme="lab"] .dp-tbl .dp-num { font-family: "IBM Plex Mono", ui-monospace, monospace; letter-spacing: -.02em; }
 .dp-app[data-theme="lab"] .dp-card { border-radius: 8px; }
