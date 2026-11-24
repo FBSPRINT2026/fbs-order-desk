@@ -281,7 +281,7 @@ export function WaterTab({ r, c, set }: Props) {
             <label className="dp-row" style={{ marginTop: 8 }}><input type="checkbox" checked={r.water.spargeSalts !== false} onChange={(e) => setW({ spargeSalts: e.target.checked })} /> Treat the sparge water too (same ppm)</label>
           )}
         </Win>
-        <Win title="MASH pH">
+        <Win title="Mash pH">
           <div className="dp-clock" style={{ fontSize: 30 }}>{c.mashPh ? r1(c.mashPh, 2).toFixed(2) : "-.--"}</div>
           <p className={c.mashPh && (c.mashPh < 5.2 || c.mashPh > 5.6) ? "dp-red" : "dp-dim"}>Aim: 5.2–5.6 (5.3–5.4 for pale and hoppy, 5.4–5.5 for dark)</p>
           <div className="dp-row">

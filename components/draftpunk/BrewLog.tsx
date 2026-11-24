@@ -109,7 +109,7 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
             <F label="Wind mph"><Num value={m.weather?.windMph} onChange={(n) => setMv({ weather: { tempF: m.weather?.tempF ?? 70, rh: m.weather?.rh ?? 50, windMph: n } })} /></F>
           </div>
           <div className="dp-row" style={{ marginTop: 8 }}>
-            <F label="MASH pH"><Num value={m.mashPh} onChange={(n) => setMv({ mashPh: n })} /></F>
+            <F label="Mash pH"><Num value={m.mashPh} onChange={(n) => setMv({ mashPh: n })} /></F>
             <F label="Pre-boil sg"><Num className="dp-nw" value={m.preBoilSg} onChange={(n) => setMv({ preBoilSg: n })} /></F>
             <F label="Pre-boil gal (hot)"><Num value={m.preBoilGal} onChange={(n) => setMv({ preBoilGal: n })} /></F>
             <F label="Boil min"><Num value={m.boilMin} onChange={(n) => setMv({ boilMin: n })} /></F>
