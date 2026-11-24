@@ -638,3 +638,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 24 12:33pm · 1.3.881 · Nick · DraftPunk: the award mark sits right beside the Draft Punk name; Est. 2013 taken off the header and sign-in page
 - Nov 24 12:37pm · 1.3.882 · Nick · DraftPunk: the award beside the name shows right after it's added to the trophy case
 - Nov 24 1:27pm · 1.3.883 · Nick · DraftPunk: the Ninkasi Award mark takes the emblem's place beside the name, full size, in the club's teal
+- Nov 24 1:38pm · 1.3.884 · Nick · DraftPunk Import: BeerSmith backups of either kind (a .zip of .bsmx files as well as BeerSmith 3's database): recipes found at any depth (folders are <Recipe>s holding <Recipe>s, cloud entries keep theirs in <F_C_RECIPE>), list items the same way, .bsmx read as Windows text; Nick's older backup: all 292 local recipes found (8 blank, 20 exact copies) + 166 cloud

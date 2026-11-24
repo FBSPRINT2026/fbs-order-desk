@@ -23,30 +23,47 @@ type Copy = Recipe & { from: string; folder?: string; sample?: boolean; date?: s
 type Found = { key: string; name: string; copies: Copy[]; take: boolean; sample?: boolean; here?: boolean };
 const KINDS: [keyof BsLibrary, string][] = [["fermentable", "fermentables"], ["hop", "hops"], ["yeast", "yeasts"], ["misc", "misc"], ["water", "water profiles"]];
 
-/** BeerSmith 3's backup (.zip) or its BeerSmith.sqlite: every table read in the browser (sql.js), nothing uploaded */
+/** a BeerSmith file's text: its .bsmx files are Windows text (1252), not UTF-8 */
+const bsText = (bytes: Uint8Array) => new TextDecoder("windows-1252").decode(bytes);
+const mergeReads = (rs: BsRead[]): BsRead => ({
+  recipes: rs.flatMap((r) => r.recipes),
+  library: dedupeLib(rs.reduce<BsLibrary>((a, l) => ({ fermentable: [...a.fermentable, ...l.library.fermentable], hop: [...a.hop, ...l.library.hop], yeast: [...a.yeast, ...l.library.yeast], misc: [...a.misc, ...l.library.misc], water: [...a.water, ...l.library.water] }), { fermentable: [], hop: [], yeast: [], misc: [], water: [] })),
+});
+
+/**
+ * A BeerSmith backup, whichever kind it is (Nick, Nov 24 2026: one backup was BeerSmith 3's database, another the
+ * older set of .bsmx files with his 292 local recipes): a .zip holding .sqlite and/or .bsmx files, or a BeerSmith.sqlite
+ * on its own. Everything is read here in the browser; nothing is uploaded.
+ */
 async function readBackup(file: File): Promise<BsRead> {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  let dbs: Uint8Array[] = [bytes];
+  let dbs: Uint8Array[] = [], xmls: Uint8Array[] = [];
   if (/\.zip$/i.test(file.name)) {
     const { unzipSync } = await import("fflate");
-    const files = unzipSync(bytes, { filter: (f) => /\.sqlite$/i.test(f.name) });
-    dbs = Object.entries(files).sort(([a], [b]) => Number(/beersmith\.sqlite$/i.test(b)) - Number(/beersmith\.sqlite$/i.test(a))).map(([, v]) => v);
-  }
-  const initSqlJs = (await import("sql.js")).default;
-  const SQL = await initSqlJs({ locateFile: (_f: string) => "/draftpunk-sql-wasm.wasm" } as unknown as Parameters<typeof initSqlJs>[0]);
-  const tables: Record<string, Record<string, unknown>[]> = {};
-  for (const buf of dbs) {
-    const db = new SQL.Database(buf);
-    const names = (db.exec("select name from sqlite_master where type='table'")[0]?.values || []).map((v) => String(v[0]));
-    // the recipes and the ingredient lists, from whichever file holds them (the backup's other files are settings)
-    for (const t of names.filter((x) => /^M_(CLOUD_)?(RECIPE|GRAIN|HOPS|YEAST|MISC|WATER)$|^M_CLOUD$/.test(x))) {
-      const res = db.exec(`select * from "${t}"`)[0];
-      if (res && !/DefRecipe/i.test(t)) tables[t] = [...(tables[t] || []), ...res.values.map((v) => Object.fromEntries(res.columns.map((c, i) => [c, v[i]])))];
+    const files = unzipSync(bytes, { filter: (f) => /\.(sqlite|bsmx)$/i.test(f.name) });
+    const entries = Object.entries(files);
+    dbs = entries.filter(([n]) => /\.sqlite$/i.test(n)).sort(([a], [b]) => Number(/beersmith\.sqlite$/i.test(b)) - Number(/beersmith\.sqlite$/i.test(a))).map(([, v]) => v);
+    // the recipes and ingredient lists; the backup's other .bsmx files are settings and profiles
+    xmls = entries.filter(([n]) => /(?:^|\/)(recipe|cloud|grain|hops|yeast|misc|water)\.bsmx$/i.test(n)).map(([, v]) => v);
+  } else dbs = [bytes];
+  const reads: BsRead[] = xmls.map((x) => readBsmx(bsText(x)));
+  if (dbs.length) {
+    const initSqlJs = (await import("sql.js")).default;
+    const SQL = await initSqlJs({ locateFile: (_f: string) => "/draftpunk-sql-wasm.wasm" } as unknown as Parameters<typeof initSqlJs>[0]);
+    const tables: Record<string, Record<string, unknown>[]> = {};
+    for (const buf of dbs) {
+      const db = new SQL.Database(buf);
+      const names = (db.exec("select name from sqlite_master where type='table'")[0]?.values || []).map((v) => String(v[0]));
+      for (const t of names.filter((x) => /^M_(CLOUD_)?(RECIPE|GRAIN|HOPS|YEAST|MISC|WATER)$|^M_CLOUD$/.test(x))) {
+        const res = db.exec(`select * from "${t}"`)[0];
+        if (res) tables[t] = [...(tables[t] || []), ...res.values.map((v) => Object.fromEntries(res.columns.map((c, i) => [c, v[i]])))];
+      }
+      db.close();
+      if (tables.M_CLOUD || tables.M_RECIPE) break;
     }
-    db.close();
-    if (tables.M_CLOUD || tables.M_RECIPE) break;
+    reads.push(readBsTables(tables));
   }
-  return readBsTables(tables);
+  return mergeReads(reads);
 }
 
 /**
@@ -71,7 +88,7 @@ export default function Importer({ userId, admin }: { userId: string; admin: boo
         let got: BsRead;
         if (/\.(zip|sqlite)$/i.test(f.name)) got = await readBackup(f);
         else {
-          const text = await f.text();
+          const text = /\.bsmx$/i.test(f.name) ? bsText(new Uint8Array(await f.arrayBuffer())) : await f.text();
           got = /<F_[A-Z]_NAME>/.test(text) ? readBsmx(text) : { recipes: fromBeerXml(text), library: { fermentable: [], hop: [], yeast: [], misc: [], water: [] } };
         }
         recipes.push(...got.recipes.map((r) => ({ ...r, from: f.name })));

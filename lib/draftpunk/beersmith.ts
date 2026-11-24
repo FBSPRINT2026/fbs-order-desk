@@ -21,13 +21,43 @@ const PREFIX: Record<BsKind, string> = { Grain: "F_G_", Hops: "F_H_", Yeast: "F_
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", deg: "°", nbsp: " ", reg: "®", trade: "™", copy: "©" };
 const ACCENT: Record<string, string> = { acute: "\u0301", grave: "\u0300", uml: "\u0308", circ: "\u0302", tilde: "\u0303", cedil: "\u0327", ring: "\u030A" };
 export const unent = (s: string) => s.replace(/&([a-z])(acute|grave|uml|circ|tilde|cedil|ring);/gi, (_m, c: string, a: string) => (c + ACCENT[a.toLowerCase()]).normalize("NFC")).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").replace(/&(#\d+|[a-z]+);/gi, (m, e: string) => (e[0] === "#" ? String.fromCharCode(Number(e.slice(1))) : ENT[e.toLowerCase()] ?? m)).trim();
-function xmlBlocks(xml: string, tag: string): string[] {
-  const out: string[] = [];
-  const re = new RegExp(`<${tag}(\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, "gi");
+/** every element with this tag at any depth, matched by depth (BeerSmith nests a tag inside the same tag: a folder
+ *  of recipes is a <Recipe> wrapping <Recipe>s), each as [start, its inner text] */
+function xmlElements(xml: string, tag: string): { start: number; inner: string }[] {
+  const out: { start: number; inner: string }[] = [];
+  const re = new RegExp(`<(/?)${tag}(?:\\s[^>]*)?>`, "gi");
+  const open: { start: number; at: number }[] = [];
   let m: RegExpExecArray | null;
-  while ((m = re.exec(xml))) out.push(m[2]);
+  while ((m = re.exec(xml))) {
+    if (!m[1]) open.push({ start: m.index, at: m.index + m[0].length });
+    else { const o = open.pop(); if (o) out.push({ start: o.start, inner: xml.slice(o.at, m.index) }); }
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+/** the outermost elements with this tag (an element inside another of the same tag belongs to that one) */
+function xmlBlocks(xml: string, tag: string): string[] {
+  const all = xmlElements(xml, tag);
+  const out: string[] = [];
+  let end = -1;
+  for (const e of all) { if (e.start < end) continue; out.push(e.inner); end = e.start + e.inner.length; }
   return out;
 }
+/** every recipe in a BeerSmith file, however it's wrapped: a recipe file's folders are <Recipe> elements holding
+ *  <Recipe>s, a cloud file keeps each recipe in its entry's <F_C_RECIPE>. A recipe is the innermost such element that
+ *  has a name. */
+export function itemElements(xml: string, tag: string, nameField: string): string[] {
+  const has = new RegExp(`<${nameField}>`, "i"), nested = new RegExp(`<${tag}(?:\\s[^>]*)?>`, "i");
+  return xmlElements(xml, tag).filter((e) => has.test(e.inner) && !nested.test(e.inner)).map((e) => e.inner);
+}
+export function recipeElements(xml: string): string[] {
+  const found: { start: number; inner: string }[] = [];
+  for (const tag of ["Recipe", "F_C_RECIPE"]) for (const e of xmlElements(xml, tag)) {
+    if (!/<F_R_NAME>/i.test(e.inner) || /<(?:Recipe|F_C_RECIPE)(?:\s[^>]*)?>/i.test(e.inner)) continue;
+    found.push(e);
+  }
+  return found.sort((a, b) => a.start - b.start).map((e) => e.inner);
+}
+
 export function xmlNode(xml: string): BsNode {
   return {
     get: (f) => { const m = new RegExp(`<${f}(?:\\s[^>]*)?>([\\s\\S]*?)</${f}>`, "i").exec(xml); return m ? unent(m[1]) : ""; },
@@ -224,17 +254,18 @@ const emptyLib = (): BsLibrary => ({ fermentable: [], hop: [], yeast: [], misc: 
 
 /** a .bsmx file: recipes (<Recipe>), or one of BeerSmith's ingredient lists (<Grain>, <Hops>, <Yeast>, <Misc>, <Water>) */
 export function readBsmx(xml: string): BsRead {
-  const root = xmlNode(xml);
-  const recipes = root.kids("Recipe").map((x) => ({ ...bsRecipe(x), folder: x.get("F_R_FOLDER_NAME") || undefined, date: bsDate(x.get("F_R_DATE")) }));
+  const recipes = recipeElements(xml).map(xmlNode).map((x) => ({ ...bsRecipe(x), folder: x.get("F_R_FOLDER_NAME") || undefined, date: bsDate(x.get("F_R_DATE")) }));
   const lib = emptyLib();
   if (!recipes.length) {
-    lib.fermentable = root.kids("Grain").map(bsFermentable);
-    lib.hop = root.kids("Hops").map(bsHop);
-    lib.yeast = root.kids("Yeast").map(bsYeast);
-    lib.misc = root.kids("Misc").map(bsMisc);
-    lib.water = root.kids("Water").map(bsWater);
+    // each list's items are the innermost elements of their kind that have a name (a list file wraps them in its own)
+    const items = (tag: string, f: string) => itemElements(xml, tag, f).map(xmlNode);
+    lib.fermentable = items("Grain", "F_G_NAME").map(bsFermentable);
+    lib.hop = items("Hops", "F_H_NAME").map(bsHop);
+    lib.yeast = items("Yeast", "F_Y_NAME").map(bsYeast);
+    lib.misc = items("Misc", "F_M_NAME").map(bsMisc);
+    lib.water = items("Water", "F_W_NAME").map(bsWater);
   }
-  return { recipes: recipes.filter(hasLines), library: lib };
+  return { recipes: dedupe(recipes.filter(hasLines)), library: dedupeLib(lib) };
 }
 
 /**
