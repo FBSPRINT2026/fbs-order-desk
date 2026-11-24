@@ -17,6 +17,8 @@ const P: Record<string, string> = {
   plus: "M12 5v14 M5 12h14",
   more: "M5 12h.01 M12 12h.01 M19 12h.01",
   brewery: "M5 3h9a1 1 0 0 1 1 1v17H4V4a1 1 0 0 1 1-1z M4 9h11 M12 5v2 M12 12v4 M17 21V11h3v10",
+  spark: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z",
+  star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z",
   medal: "M8 3h8l-2 6h-4z M12 21a6 6 0 1 0 0-12 6 6 0 0 0 0 12z M12 12.5l1 2 2 .3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1-1.5-1.4 2-.3z",
 };
 export default function Icon({ name }: { name: keyof typeof P | string }) {

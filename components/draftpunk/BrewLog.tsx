@@ -10,6 +10,8 @@ import { F, Num, Win } from "./ui";
 import TiltPanel from "./TiltPanel";
 import Autopilot from "./Autopilot";
 import type { Alarm, AutoState } from "@/lib/draftpunk/autopilot";
+import { saveVersion, type Version } from "@/lib/draftpunk/recipeStore";
+import { diffRecipes } from "@/lib/draftpunk/versions";
 
 type Measured = {
   weather?: Weather; mashPh?: number; preBoilSg?: number; preBoilGal?: number; boilMin?: number; postBoilGal?: number;
@@ -32,14 +34,17 @@ export function learnedBoilOff(log: NonNullable<Equipment["boilLog"]>, fallback:
 export default function BrewLog({ id, userId }: { id: string; userId: string }) {
   const { toast, node } = useToast();
   const [row, setRow] = useState<{ brewed_on: string; recipe_id: string | null; notes: string } | null>(null);
+  const [ver, setVer] = useState<Version | null>(null);
+  const [made, setMade] = useState(false);
   const [r, setR] = useState<Recipe | null>(null);
   const [m, setM] = useState<Measured>({});
   const [t, setT] = useState<Tasting>({});
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    createClient().from("dp_brews").select("brewed_on, recipe_id, notes, recipe_snapshot, measured, tasting").eq("id", id).maybeSingle().then(({ data }) => {
+    createClient().from("dp_brews").select("brewed_on, recipe_id, version_id, notes, recipe_snapshot, measured, tasting").eq("id", id).maybeSingle().then(async ({ data }) => {
       if (!data) return;
+      if (data.version_id) { const { data: v } = await createClient().from("dp_recipe_versions").select("*").eq("id", data.version_id).maybeSingle(); setVer((v as Version) || null); }
       const rec = normalize(data.recipe_snapshot as Recipe);
       setRow({ brewed_on: data.brewed_on as string, recipe_id: data.recipe_id as string | null, notes: (data.notes as string) || "" });
       setR(rec);
@@ -101,6 +106,27 @@ export default function BrewLog({ id, userId }: { id: string; userId: string }) 
         {row.recipe_id && <Link className="dp-btn" href={`/draftpunk/r/${row.recipe_id}`}>Open recipe</Link>}
         <span className="dp-dim">{dirty ? "Unsaved..." : "Saved"}</span>
       </div>
+      {ver && (() => {
+        // what this brew did differently from the version it brewed (a substitution, a tweak to try)
+        const tweaks = diffRecipes(normalize(ver.data), r);
+        return (
+          <Win title={`Brewed v${ver.num}`} note={ver.note}>
+            {tweaks.length ? (
+              <>
+                <p style={{ marginTop: 0 }}>Changed for this brew:</p>
+                <ul className="dp-list">{tweaks.map((l) => <li key={l}>{l}</li>)}</ul>
+                {row.recipe_id && !made && (
+                  <p className="dp-row" style={{ marginBottom: 0 }}>
+                    <button className="dp-btn dp-go" onClick={async () => { const res = await saveVersion(row.recipe_id!, userId, r, `From the ${fmtDate(row.brewed_on)} brew: ${tweaks.slice(0, 2).join("; ")}`, id); if (res.version) { setMade(true); toast(`Saved as v${res.version.num}`); } else toast(res.error || "Not saved"); }}>Make this the next version</button>
+                    <span className="dp-dim">If it turned out better. If not, the recipe stays v{ver.num}.</span>
+                  </p>
+                )}
+                {made && <p className="dp-grn" style={{ marginBottom: 0 }}>Saved as the recipe&apos;s next version.</p>}
+              </>
+            ) : <p className="dp-dim" style={{ margin: 0 }}>Brewed exactly as v{ver.num}.</p>}
+          </Win>
+        );
+      })()}
       <div className="dp-grid">
         <Win title="Measured">
           <div className="dp-row">

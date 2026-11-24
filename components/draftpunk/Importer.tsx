@@ -5,14 +5,22 @@ import { createClient } from "@/lib/supabase/client";
 import { readAll } from "@/lib/readAll";
 import { calcRecipe, calcSummary, r1 } from "@/lib/draftpunk/calc";
 import { fromBeerXml } from "@/lib/draftpunk/beerxml";
-import { type BsLibrary, type BsRead, dedupe, dedupeLib, readBsTables, readBsmx, recipeKey } from "@/lib/draftpunk/beersmith";
+import { type BsLibrary, type BsRead, dedupe, dedupeLib, readBsTables, readBsmx } from "@/lib/draftpunk/beersmith";
+import { baseName, groupKey } from "@/lib/draftpunk/versions";
+import { createRecipe } from "@/lib/draftpunk/recipeStore";
 import { styleById } from "@/lib/draftpunk/styles";
 import type { Recipe } from "@/lib/draftpunk/types";
 import { addToLibrary } from "@/app/draftpunk/actions";
 import { resetClubLib } from "./RecipeTabs";
 import { Win } from "./ui";
+import { ProposalView } from "./Assistant";
+import { useRouter } from "next/navigation";
+import { buildRecipe, type Proposal } from "@/lib/draftpunk/proposal";
+import { myEquipment } from "@/lib/draftpunk/recipeStore";
 
-type Found = Recipe & { take: boolean; from: string; folder?: string; sample?: boolean; here?: boolean };
+type Copy = Recipe & { from: string; folder?: string; sample?: boolean; date?: string };
+/** one recipe to bring in: BeerSmith's copies of it ("Witstanbul", "Witstanbul (NHC 2022)", "Witstanbul BBO 2025") as its versions, oldest first */
+type Found = { key: string; name: string; copies: Copy[]; take: boolean; sample?: boolean; here?: boolean };
 const KINDS: [keyof BsLibrary, string][] = [["fermentable", "fermentables"], ["hop", "hops"], ["yeast", "yeasts"], ["misc", "misc"], ["water", "water profiles"]];
 
 /** BeerSmith 3's backup (.zip) or its BeerSmith.sqlite: every table read in the browser (sql.js), nothing uploaded */
@@ -56,7 +64,7 @@ export default function Importer({ userId, admin }: { userId: string; admin: boo
   const read = async (files: FileList | null) => {
     if (!files?.length) return;
     setBusy(true); setMsg("Reading…");
-    const recipes: Found[] = [];
+    const recipes: Copy[] = [];
     const libs: BsLibrary[] = [];
     for (const f of Array.from(files)) {
       try {
@@ -66,33 +74,47 @@ export default function Importer({ userId, admin }: { userId: string; admin: boo
           const text = await f.text();
           got = /<F_[A-Z]_NAME>/.test(text) ? readBsmx(text) : { recipes: fromBeerXml(text), library: { fermentable: [], hop: [], yeast: [], misc: [], water: [] } };
         }
-        recipes.push(...got.recipes.map((r) => ({ ...r, take: true, from: f.name })));
+        recipes.push(...got.recipes.map((r) => ({ ...r, from: f.name })));
         libs.push(got.library);
       } catch (e) { setMsg(`Couldn't read ${f.name}${e instanceof Error ? `: ${e.message}` : ""}`); }
     }
-    // what this brewer already has (the same name and lines) isn't brought in twice
-    const mine = await readAll<{ data: Recipe }>((a, b) => createClient().from("dp_recipes").select("data").eq("owner_id", userId).order("id").range(a, b)).catch(() => []);
-    const have = new Set(mine.map((m) => { try { return recipeKey(m.data); } catch { return ""; } }));
-    const all = dedupe(recipes).map((r) => { const here = have.has(recipeKey(r)); return { ...r, here, take: !here && !r.sample }; });
+    // copies of one recipe become its versions; a recipe this brewer already has (same name) starts unticked
+    const mine = await readAll<{ name: string }>((a, b) => createClient().from("dp_recipes").select("name").eq("owner_id", userId).order("id").range(a, b)).catch(() => []);
+    const have = new Set(mine.map((m) => groupKey(m.name)));
+    const groups = new Map<string, Found>();
+    for (const r of dedupe(recipes)) {
+      const k = (r.sample ? "sample:" : "") + groupKey(r.name);
+      const g = groups.get(k) || { key: k, name: baseName(r.name).base, copies: [], take: false, sample: r.sample };
+      g.copies.push(r);
+      groups.set(k, g);
+    }
+    const all = [...groups.values()].map((g) => {
+      g.copies.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+      const here = have.has(groupKey(g.name));
+      return { ...g, here, take: !here && !g.sample };
+    }).sort((a, b) => a.name.localeCompare(b.name));
     const merged = dedupeLib(libs.reduce<BsLibrary>((a, l) => ({ fermentable: [...a.fermentable, ...l.fermentable], hop: [...a.hop, ...l.hop], yeast: [...a.yeast, ...l.yeast], misc: [...a.misc, ...l.misc], water: [...a.water, ...l.water] }), { fermentable: [], hop: [], yeast: [], misc: [], water: [] }));
     setFound(all);
     setLib(KINDS.some(([k]) => merged[k].length) ? merged : null);
-    const samples = all.filter((r) => r.sample).length, here = all.filter((r) => r.here).length;
-    setMsg(all.length ? `${all.length} recipe${all.length === 1 ? "" : "s"} found${samples ? `, ${samples} of them BeerSmith's samples` : ""}${here ? `, ${here} already here` : ""}. Tick the ones to keep.` : lib ? "" : "No recipes in that file.");
+    const samples = all.filter((r) => r.sample).length, here = all.filter((r) => r.here).length, copies = all.reduce((n, g) => n + g.copies.length, 0);
+    setMsg(all.length ? `${all.length} recipe${all.length === 1 ? "" : "s"} (${copies} saved copies, each copy a version)${samples ? `, ${samples} of them BeerSmith's samples` : ""}${here ? `, ${here} already here` : ""}. Tick the ones to keep.` : lib ? "" : "No recipes in that file.");
     setBusy(false);
   };
 
   const saveRecipes = async () => {
     setBusy(true);
-    const rows = found.filter((r) => r.take).map(({ take: _t, from: _f, folder: _d, sample: _s, here: _h, ...r }) => ({ owner_id: userId, name: r.name, style_id: r.styleId || null, data: r, calc: calcSummary(calcRecipe(r)) }));
     let saved = 0, err = "";
-    for (let i = 0; i < rows.length && !err; i += 40) {
-      const { error } = await createClient().from("dp_recipes").insert(rows.slice(i, i + 40));
-      if (error) err = error.message; else saved += Math.min(40, rows.length - i);
+    const todo = found.filter((g) => g.take);
+    for (const g of todo) {
+      setMsg(`Saving ${saved + 1} of ${todo.length}: ${g.name}`);
+      const versions = g.copies.map(({ from: _f, folder: _d, sample: _s, date, ...r }) => ({ data: { ...r, name: g.name } as Recipe, date, note: baseName(r.name).label || (g.copies.length > 1 ? "" : "Imported from BeerSmith") }));
+      const res = await createRecipe(userId, versions);
+      if (res.error) { err = `${g.name}: ${res.error}`; break; }
+      saved++;
     }
     setBusy(false);
-    setMsg(err ? `${saved} saved, then stopped: ${err}` : `${saved} recipe${saved === 1 ? "" : "s"} saved. See them under Recipes.`);
-    if (!err) setFound((xs) => xs.map((x) => (x.take ? { ...x, here: true, take: false } : x)));
+    setMsg(err ? `${saved} saved, then stopped at ${err}` : `${saved} recipe${saved === 1 ? "" : "s"} saved, each with its versions. See them under Recipes.`);
+    setFound((xs) => xs.map((x) => (x.take && (!err || todo.indexOf(x) < saved) ? { ...x, here: true, take: false } : x)));
   };
 
   const saveLib = async () => {
@@ -110,7 +132,7 @@ export default function Importer({ userId, admin }: { userId: string; admin: boo
     if (!err) setLib(null);
   };
 
-  const shown = useMemo(() => { const w = q.toLowerCase().split(/\s+/).filter(Boolean); return found.map((r, i) => ({ r, i })).filter(({ r }) => w.every((x) => `${r.name} ${r.brewer || ""} ${styleById(r.styleId)?.name || ""}`.toLowerCase().includes(x))); }, [found, q]);
+  const shown = useMemo(() => { const w = q.toLowerCase().split(/\s+/).filter(Boolean); return found.map((r, i) => ({ r, i })).filter(({ r }) => { const l = r.copies[r.copies.length - 1]; return w.every((x) => `${r.name} ${l.brewer || ""} ${styleById(l.styleId)?.name || ""}`.toLowerCase().includes(x)); }); }, [found, q]);
   const tick = (i: number, on: boolean) => setFound((xs) => xs.map((x, j) => (j === i ? { ...x, take: on } : x)));
   const taking = found.filter((r) => r.take).length;
 
@@ -128,6 +150,7 @@ export default function Importer({ userId, admin }: { userId: string; admin: boo
         {msg && <p>{msg}</p>}
         <p className="dp-dim">BeerSmith&apos;s efficiency is brewhouse efficiency; each recipe comes in with the mash efficiency that gives the same OG BeerSmith showed, so the numbers match. Pick your own equipment in a recipe and your brew logs dial it in.</p>
       </Win>
+      <PhotoImport userId={userId} />
       {lib && (
         <Win title="Ingredient lists">
           <p>{KINDS.filter(([k]) => lib[k].length).map(([k, label]) => `${lib[k].length.toLocaleString()} ${label}`).join(", ")}.</p>
@@ -146,10 +169,10 @@ export default function Importer({ userId, admin }: { userId: string; admin: boo
           <table className="dp-tbl">
             <thead><tr><th /><th>Recipe</th><th>Style</th><th className="dp-num">OG</th><th className="dp-num">IBU</th><th className="dp-num">Gal</th></tr></thead>
             <tbody>
-              {shown.map(({ r, i }) => { const c = calcRecipe(r); return (
-                <tr key={i} style={r.here || r.sample ? { opacity: 0.6 } : undefined}>
-                  <td><input type="checkbox" checked={r.take} onChange={(e) => tick(i, e.target.checked)} /></td>
-                  <td><div className="dp-namecell">{r.name}<span className="dp-sub">{[r.brewer, r.here ? "Already here" : r.sample ? "BeerSmith sample" : "", r.from].filter(Boolean).join(" · ")}</span></div></td>
+              {shown.map(({ r: g, i }) => { const r = g.copies[g.copies.length - 1], c = calcRecipe(r); return (
+                <tr key={g.key} style={g.here || g.sample ? { opacity: 0.6 } : undefined}>
+                  <td><input type="checkbox" checked={g.take} onChange={(e) => tick(i, e.target.checked)} aria-label={`Bring in ${g.name}`} /></td>
+                  <td><div className="dp-namecell">{g.name}<span className="dp-sub">{[g.copies.length > 1 ? `${g.copies.length} versions: ${g.copies.map((x) => baseName(x.name).label || "original").join(", ")}` : "", r.brewer, g.here ? "Already here" : g.sample ? "BeerSmith sample" : ""].filter(Boolean).join(" · ")}</span></div></td>
                   <td>{styleById(r.styleId)?.name || "-"}</td>
                   <td className="dp-num">{c.og.toFixed(3)}</td><td className="dp-num">{r1(c.ibu, 0)}</td><td className="dp-num">{r1(r.equipment.batchGal, 1)}</td>
                 </tr>
@@ -160,5 +183,49 @@ export default function Importer({ userId, admin }: { userId: string; admin: boo
         </Win>
       )}
     </>
+  );
+}
+
+/**
+ * A recipe from photos (a page of a brewing book the brewer owns, a printout, a card): read by the AI into a recipe in
+ * this brewer's own account, on their equipment, with where it came from in its notes.
+ */
+function PhotoImport({ userId }: { userId: string }) {
+  const router = useRouter();
+  const [source, setSource] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [got, setGot] = useState<{ proposal: Proposal; unread: string } | null>(null);
+  const read = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true); setErr(""); setGot(null);
+    const fd = new FormData();
+    Array.from(files).slice(0, 4).forEach((f) => fd.append("photo", f));
+    fd.append("source", source);
+    try { const res = await fetch("/api/draftpunk/read-recipe", { method: "POST", body: fd }); const j = await res.json(); if (!res.ok) setErr(j.error || "Couldn't read it"); else setGot(j); } catch { setErr("Couldn't send the photos"); }
+    setBusy(false);
+  };
+  const make = async () => {
+    if (!got) return;
+    const r = buildRecipe(got.proposal, await myEquipment(userId));
+    const res = await createRecipe(userId, [{ data: r, note: source ? `From ${source}` : "From a photo" }]);
+    if (res.id) router.push(`/draftpunk/r/${res.id}`); else setErr(res.error || "Not saved");
+  };
+  return (
+    <Win title="From photos of a recipe" note="a book you own, a printout, a recipe card">
+      <div className="dp-row">
+        <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="Where it's from (e.g. Brewing Classic Styles, p. 74)" style={{ flex: "1 1 260px" }} aria-label="Where the recipe is from" />
+        <label className="dp-btn dp-go">{busy ? "Reading…" : "Take or pick photos"}<input type="file" accept="image/*" capture="environment" multiple hidden disabled={busy} onChange={(e) => read(e.target.files)} /></label>
+      </div>
+      <p className="dp-dim">Up to 4 photos for a recipe that runs over pages. It reads only what&apos;s printed, works the grain out as percents, and builds it on your equipment. It stays private to you.</p>
+      {err && <p className="dp-red">{err}</p>}
+      {got && (
+        <>
+          <ProposalView p={got.proposal} />
+          {got.unread && <p className="dp-dim">Couldn&apos;t read: {got.unread}</p>}
+          <p className="dp-row"><button className="dp-btn dp-go" onClick={make}>Make it my recipe</button></p>
+        </>
+      )}
+    </Win>
   );
 }

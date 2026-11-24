@@ -213,13 +213,19 @@ export const recipeKey = (r: Recipe) => JSON.stringify([r.name.toLowerCase(), r.
 
 // ---------------- whole files ----------------
 export type BsLibrary = { fermentable: Fermentable[]; hop: Hop[]; yeast: Yeast[]; misc: Misc[]; water: WaterProfile[] };
-export type BsRead = { recipes: (Recipe & { folder?: string; sample?: boolean })[]; library: BsLibrary };
+export type BsRead = { recipes: (Recipe & { folder?: string; sample?: boolean; date?: string })[]; library: BsLibrary };
+/** BeerSmith's recipe date: seconds since 1970 in the backup, a date string in a .bsmx */
+export const bsDate = (v: string): string | undefined => {
+  const n = Number(v);
+  const d = Number.isFinite(n) && n > 1e8 ? new Date(n * 1000) : v ? new Date(v) : null;
+  return d && !isNaN(+d) ? d.toISOString().slice(0, 10) : undefined;
+};
 const emptyLib = (): BsLibrary => ({ fermentable: [], hop: [], yeast: [], misc: [], water: [] });
 
 /** a .bsmx file: recipes (<Recipe>), or one of BeerSmith's ingredient lists (<Grain>, <Hops>, <Yeast>, <Misc>, <Water>) */
 export function readBsmx(xml: string): BsRead {
   const root = xmlNode(xml);
-  const recipes = root.kids("Recipe").map((x) => ({ ...bsRecipe(x), folder: x.get("F_R_FOLDER_NAME") || undefined }));
+  const recipes = root.kids("Recipe").map((x) => ({ ...bsRecipe(x), folder: x.get("F_R_FOLDER_NAME") || undefined, date: bsDate(x.get("F_R_DATE")) }));
   const lib = emptyLib();
   if (!recipes.length) {
     lib.fermentable = root.kids("Grain").map(bsFermentable);
@@ -240,7 +246,7 @@ export function readBsTables(tables: Record<string, Record<string, unknown>[]>):
   const recipes: BsRead["recipes"] = [];
   for (const t of ["M_RECIPE", "M_CLOUD"]) for (const row of tables[t] || []) {
     const folder = String(row.F_R_FOLDER_NAME || "") || undefined;
-    recipes.push({ ...bsRecipe(rowNode(row)), folder, sample: /beersmith \d samples/i.test(folder || "") });
+    recipes.push({ ...bsRecipe(rowNode(row)), folder, sample: /beersmith \d samples/i.test(folder || ""), date: bsDate(String(row.F_R_DATE ?? "")) });
   }
   const lib = emptyLib();
   const both = (a: string) => [...(tables[`M_${a}`] || []), ...(tables[`M_CLOUD_${a}`] || [])].map((row) => rowNode(row));

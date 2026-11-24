@@ -9,7 +9,7 @@ import { STYLE_GROUPS, styleById, styleLabel } from "@/lib/draftpunk/styles";
 import { useToast } from "./Shell";
 import { F, Num, Win } from "./ui";
 
-type Entry = { id: string; owner_id: string; competition: string; held_on: string | null; style_id: string | null; entry_name: string; recipe_id: string | null; brew_id: string | null; scores: Sheet[]; place: string; mini_bos: boolean; notes: string };
+type Entry = { id: string; owner_id: string; competition: string; held_on: string | null; style_id: string | null; entry_name: string; recipe_id: string | null; brew_id: string | null; version_id?: string | null; scores: Sheet[]; place: string; mini_bos: boolean; notes: string };
 type Opt = { id: string; name: string };
 
 /**
@@ -20,7 +20,7 @@ export default function Competitions({ userId }: { userId: string }) {
   const { toast, node } = useToast();
   const [rows, setRows] = useState<Entry[] | null>(null);
   const [recipes, setRecipes] = useState<Opt[]>([]);
-  const [brews, setBrews] = useState<(Opt & { recipe_id: string | null })[]>([]);
+  const [brews, setBrews] = useState<(Opt & { recipe_id: string | null; version_id: string | null })[]>([]);
   const [members, setMembers] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [view, setView] = useState<"mine" | "club">("mine");
@@ -29,12 +29,12 @@ export default function Competitions({ userId }: { userId: string }) {
     const [{ data: e }, { data: rc }, { data: bw }, { data: m }] = await Promise.all([
       sb.from("dp_entries").select("*").order("held_on", { ascending: false, nullsFirst: true }),
       sb.from("dp_recipes").select("id, name").eq("owner_id", userId).order("name"),
-      sb.from("dp_brews").select("id, brewed_on, recipe_id, recipe_snapshot->name").eq("owner_id", userId).order("brewed_on", { ascending: false }).limit(200),
+      sb.from("dp_brews").select("id, brewed_on, recipe_id, version_id, recipe_snapshot->name").eq("owner_id", userId).order("brewed_on", { ascending: false }).limit(200),
       sb.from("dp_brewers").select("user_id, name"),
     ]);
     setRows((e || []) as Entry[]);
     setRecipes((rc || []) as Opt[]);
-    setBrews(((bw || []) as unknown as { id: string; brewed_on: string; recipe_id: string | null; name: string }[]).map((b) => ({ id: b.id, recipe_id: b.recipe_id, name: `${fmtDate(b.brewed_on)} · ${b.name}` })));
+    setBrews(((bw || []) as unknown as { id: string; brewed_on: string; recipe_id: string | null; version_id: string | null; name: string }[]).map((b) => ({ id: b.id, recipe_id: b.recipe_id, version_id: b.version_id, name: `${fmtDate(b.brewed_on)} · ${b.name}` })));
     setMembers(Object.fromEntries(((m || []) as { user_id: string; name: string }[]).map((x) => [x.user_id, x.name])));
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
@@ -123,7 +123,7 @@ export default function Competitions({ userId }: { userId: string }) {
   );
 }
 
-function EntryEditor({ e, recipes, brews, onChange, onDelete }: { e: Entry; recipes: Opt[]; brews: (Opt & { recipe_id: string | null })[]; onChange: (e: Entry) => void; onDelete: () => void }) {
+function EntryEditor({ e, recipes, brews, onChange, onDelete }: { e: Entry; recipes: Opt[]; brews: (Opt & { recipe_id: string | null; version_id: string | null })[]; onChange: (e: Entry) => void; onDelete: () => void }) {
   const [d, setD] = useState(e);
   // save a moment after typing stops
   useEffect(() => { if (d === e) return; const t = setTimeout(() => onChange(d), 800); return () => clearTimeout(t); }, [d, e, onChange]);
@@ -144,15 +144,16 @@ function EntryEditor({ e, recipes, brews, onChange, onDelete }: { e: Entry; reci
           </select>
         </F>
         <F label="Recipe" grow="1 1 200px">
-          <select value={d.recipe_id || ""} onChange={(x) => up({ recipe_id: x.target.value || null })}>
+          <select value={d.recipe_id || ""} onChange={(x) => up({ recipe_id: x.target.value || null, version_id: null })}>
             <option value="">(none)</option>{recipes.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </F>
         <F label="Batch (brew log)" grow="1 1 200px">
-          <select value={d.brew_id || ""} onChange={(x) => up({ brew_id: x.target.value || null })}>
+          <select value={d.brew_id || ""} onChange={(x) => { const b = brews.find((y) => y.id === x.target.value); up({ brew_id: x.target.value || null, version_id: b?.version_id ?? d.version_id ?? null }); }}>
             <option value="">(none)</option>{brews.filter((b) => !d.recipe_id || b.recipe_id === d.recipe_id).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </F>
+        {d.recipe_id && <VersionPick recipeId={d.recipe_id} value={d.version_id || ""} onPick={(v) => up({ version_id: v || null })} />}
         <F label="Result">
           <select value={d.place} onChange={(x) => up({ place: x.target.value })}>{PLACES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </F>
@@ -180,5 +181,19 @@ function EntryEditor({ e, recipes, brews, onChange, onDelete }: { e: Entry; reci
       </div>
       <F label="Notes"><textarea style={{ minHeight: 60 }} value={d.notes} onChange={(x) => up({ notes: x.target.value })} placeholder="what to change next time" /></F>
     </div>
+  );
+}
+
+/** which version of the recipe was entered (a brew picked above fills it in) */
+function VersionPick({ recipeId, value, onPick }: { recipeId: string; value: string; onPick: (id: string) => void }) {
+  const [vs, setVs] = useState<{ id: string; num: number; note: string }[]>([]);
+  useEffect(() => { createClient().from("dp_recipe_versions").select("id, num, note").eq("recipe_id", recipeId).order("num").then(({ data }) => setVs((data || []) as { id: string; num: number; note: string }[])); }, [recipeId]);
+  if (!vs.length) return null;
+  return (
+    <F label="Version" grow="1 1 160px">
+      <select value={value} onChange={(x) => onPick(x.target.value)}>
+        <option value="">(pick)</option>{vs.map((v) => <option key={v.id} value={v.id}>v{v.num} · {v.note.slice(0, 40)}</option>)}
+      </select>
+    </F>
   );
 }

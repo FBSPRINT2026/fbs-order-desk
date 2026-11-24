@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { styleById } from "@/lib/draftpunk/styles";
 import { fmtDate } from "@/lib/draftpunk/defaults";
 
-type Row = { id: string; name: string; style_id: string | null; visibility: string; calc: { og?: number; fg?: number; abv?: number; ibu?: number; srm?: number; color?: string }; updated_at: string; data: { type?: string; equipment?: { batchGal?: number } } };
+type Row = { id: string; name: string; style_id: string | null; visibility: string; status?: string; versions?: number; calc: { og?: number; fg?: number; abv?: number; ibu?: number; srm?: number; color?: string }; updated_at: string; data: { type?: string; equipment?: { batchGal?: number } } };
 
 /** the brewer's recipes: search, open, copy, share with the club */
 export default function RecipeList({ userId }: { userId: string }) {
@@ -14,11 +14,14 @@ export default function RecipeList({ userId }: { userId: string }) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [q, setQ] = useState("");
   const load = async () => {
-    const { data } = await createClient().from("dp_recipes").select("id, name, style_id, visibility, calc, updated_at, data->type, data->equipment").eq("owner_id", userId).order("updated_at", { ascending: false });
-    setRows(((data || []) as unknown as (Row & { type?: string; equipment?: { batchGal?: number } })[]).map((r) => ({ ...r, data: { type: r.type, equipment: r.equipment } })));
+    const { data } = await createClient().from("dp_recipes").select("id, name, style_id, visibility, status, calc, updated_at, data->type, data->equipment, dp_recipe_versions(count)").eq("owner_id", userId).order("updated_at", { ascending: false });
+    setRows(((data || []) as unknown as (Row & { type?: string; equipment?: { batchGal?: number }; dp_recipe_versions?: { count: number }[] })[]).map((r) => ({ ...r, versions: r.dp_recipe_versions?.[0]?.count || 0, data: { type: r.type, equipment: r.equipment } })));
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
-  const shown = useMemo(() => (rows || []).filter((r) => !q || `${r.name} ${styleById(r.style_id || "")?.name || ""}`.toLowerCase().includes(q.toLowerCase())), [rows, q]);
+  // where each recipe is: the ones being worked on and dialed in show; retired ones wait under their own tab
+  const [st, setSt] = useState<"active" | "dialed" | "retired" | "all">("active");
+  const shown = useMemo(() => (rows || []).filter((r) => (st === "all" || (st === "active" ? r.status !== "retired" : r.status === st)) && (!q || `${r.name} ${styleById(r.style_id || "")?.name || ""}`.toLowerCase().includes(q.toLowerCase()))), [rows, q, st]);
+  const sub = (r: Row) => [styleById(r.style_id || "")?.name || "No style", r.versions ? `v${r.versions}` : "", r.status === "dialed" ? "Dialed in" : r.status === "retired" ? "Retired" : "", r.visibility === "club" ? "shared" : ""].filter(Boolean).join(" · ");
   const copy = async (id: string) => {
     const sb = createClient();
     const { data } = await sb.from("dp_recipes").select("name, style_id, data, calc").eq("id", id).single();
@@ -40,11 +43,13 @@ export default function RecipeList({ userId }: { userId: string }) {
         <h1 className="dp-h1" style={{ margin: 0 }}>Recipes</h1>
         <div className="dp-row" style={{ alignItems: "center" }}>
           <Link href="/draftpunk/import" className="dp-btn">Import</Link>
+          <Link href="/draftpunk/assistant" className="dp-btn">Ask the assistant</Link>
           <Link href="/draftpunk/r/new" className="dp-btn dp-go">+ New recipe</Link>
         </div>
       </div>
       <div className="dp-row" style={{ alignItems: "center", marginBottom: 16 }}>
         <input style={{ flex: "1 1 260px", maxWidth: 420 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name or style" aria-label="Search recipes" />
+        <span className="dp-seg" role="group" aria-label="Which recipes">{([["active", "Active"], ["dialed", "Dialed in"], ["retired", "Retired"], ["all", "All"]] as const).map(([k, l]) => <button key={k} className={st === k ? "on" : ""} onClick={() => setSt(k)}>{l}</button>)}</span>
         <span className="dp-seg"><button className={view === "cards" ? "on" : ""} onClick={() => pickView("cards")}>Cards</button><button className={view === "list" ? "on" : ""} onClick={() => pickView("list")}>List</button></span>
         {rows && <span className="dp-dim" style={{ fontSize: 13 }}>{shown.length} of {rows.length}</span>}
       </div>
@@ -61,7 +66,7 @@ export default function RecipeList({ userId }: { userId: string }) {
               <div className="dp-glass dp-glass-sm" aria-hidden="true"><i /></div>
               <div style={{ minWidth: 0 }}>
                 <h3>{r.name}</h3>
-                <div className="dp-dim" style={{ fontSize: 13 }}>{styleById(r.style_id || "")?.name || "No style"}{r.visibility === "club" ? " · shared" : ""}</div>
+                <div className="dp-dim" style={{ fontSize: 13 }}>{sub(r)}</div>
                 <div className="dp-rnums">
                   <span><b>{r.calc?.og?.toFixed(3) || "–"}</b>OG</span>
                   <span><b>{r.calc?.ibu ?? "–"}</b>IBU</span>
@@ -83,7 +88,7 @@ export default function RecipeList({ userId }: { userId: string }) {
             <tbody>
               {shown.map((r) => (
                 <tr key={r.id} className="dp-pick" onClick={() => router.push(`/draftpunk/r/${r.id}`)}>
-                  <td><b>{r.name}</b>{r.visibility === "club" && <span className="dp-dim"> · shared</span>}</td>
+                  <td><b>{r.name}</b>{(r.versions || r.status !== "developing") && <span className="dp-dim"> · {[r.versions ? `v${r.versions}` : "", r.status === "dialed" ? "dialed in" : r.status === "retired" ? "retired" : ""].filter(Boolean).join(" · ")}</span>}{r.visibility === "club" && <span className="dp-dim"> · shared</span>}</td>
                   <td>{styleById(r.style_id || "")?.name || <span className="dp-dim">–</span>}</td>
                   <td className="dp-num">{r.calc?.og?.toFixed(3) || "–"}</td>
                   <td className="dp-num">{r.calc?.ibu ?? "–"}</td>

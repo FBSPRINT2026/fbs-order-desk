@@ -347,3 +347,27 @@
 
 /* a plain list inside a card (Import) */
 .dp-app .dp-list { margin: 4px 0 10px; padding-left: 20px; display: grid; gap: 4px; }
+
+/* recipes that grow: the Versions tab (versions, the brews and entries under each, scores over time) */
+.dp-app .dp-tool.on { background: var(--dp-sunk); color: var(--dp-acc); }
+.dp-app .dp-ver { border-top: 1px solid var(--dp-line); padding: 10px 0; }
+.dp-app .dp-ver:first-of-type { border-top: 0; }
+.dp-app .dp-ver-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.dp-app .dp-ver-h b { font-size: 15px; color: var(--dp-acc); min-width: 2.2em; }
+.dp-app .dp-ver-h > span:nth-child(2) { flex: 1 1 220px; min-width: 0; }
+.dp-app .dp-ver-sub { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding-left: calc(2.2em + 12px); }
+.dp-app .dp-ver-sub a.dp-chip { text-decoration: none; color: inherit; }
+.dp-app .dp-chart { width: 100%; height: auto; display: block; }
+.dp-app .dp-chart-grid { stroke: var(--dp-line); stroke-width: 1; }
+.dp-app .dp-chart-t { fill: var(--dp-mute); font: 11px var(--dp-font); }
+.dp-app .dp-chart-line { stroke: var(--dp-acc); stroke-width: 2.5; }
+.dp-app .dp-chart-dot { fill: var(--dp-acc); }
+.dp-app .dp-chart-medal { stroke: var(--dp-card); stroke-width: 2; fill: #e3b23c; }
+.dp-app .dp-chart-medal.dp-medal-silver { fill: #a9b2bd; }
+.dp-app .dp-chart-medal.dp-medal-bronze { fill: #b9773e; }
+/* the style target under the style guide numbers */
+.dp-app .dp-target { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--dp-sunk); font-size: 13px; display: grid; gap: 3px; }
+/* the assistant's answer and a proposed recipe */
+.dp-app .dp-asst-a { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--dp-line); }
+.dp-app .dp-asst textarea { min-height: 44px; resize: vertical; }
+.dp-app .dp-prop .dp-list { margin-top: 8px; }

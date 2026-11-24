@@ -14,8 +14,15 @@ import { F, Num, StyleBar, Win } from "./ui";
 import Icon from "./icons";
 import { DesignTab, FermentTab, MashTab, MineItem, NotesTab, WaterTab } from "./RecipeTabs";
 import BrewDay from "./BrewDay";
+import Assistant from "./Assistant";
+import Versions, { type Status } from "./Versions";
+import { applyProposal, type Proposal } from "@/lib/draftpunk/proposal";
+import { saveVersion, versionsOf } from "@/lib/draftpunk/recipeStore";
+import { diffRecipes } from "@/lib/draftpunk/versions";
+import { bitternessAdvice, gravityAdvice, styleTarget, type Point } from "@/lib/draftpunk/targets";
+import { entryScore, type Sheet } from "@/lib/draftpunk/judging";
 
-const TABS = ["Ingredients", "Mash", "Water", "Fermentation", "Brew day", "Notes"] as const;
+const TABS = ["Ingredients", "Mash", "Water", "Fermentation", "Brew day", "Versions", "Notes"] as const;
 type Tab = (typeof TABS)[number];
 const TYPES: [RecipeType, string][] = [["all_grain", "All Grain"], ["biab", "Biab"], ["partial_mash", "Partial Mash"], ["extract", "Extract"], ["mead", "Mead"], ["cider", "Cider"], ["wine", "Wine"]];
 
@@ -37,6 +44,11 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
   const [scaleTo, setScaleTo] = useState("");
   const [scaleOpen, setScaleOpen] = useState(false);
   const saving = useRef(false);
+  const [status, setStatus] = useState<Status>("developing");
+  const [goal, setGoal] = useState<"house" | "competition">("house");
+  const [asstOpen, setAsstOpen] = useState(false);
+  const [verKey, setVerKey] = useState(0);
+  const [points, setPoints] = useState<Point[]>([]);
 
   // load (or make) the recipe, the brewer's equipment and their own ingredients
   useEffect(() => {
@@ -56,10 +68,12 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
         else toast(error?.message || "Couldn't start a recipe");
         return;
       }
-      const { data } = await sb.from("dp_recipes").select("owner_id, name, style_id, visibility, data").eq("id", id).maybeSingle();
+      const { data } = await sb.from("dp_recipes").select("owner_id, name, style_id, visibility, data, status, goal").eq("id", id).maybeSingle();
       if (!data) { toast("Recipe not found"); return; }
       setOwner(data.owner_id === userId);
       setVisibility(data.visibility as "private" | "club");
+      setStatus((data.status as Status) || "developing");
+      setGoal((data.goal as "house" | "competition") || "house");
       setR(normalize({ ...(data.data as Recipe), name: data.name as string, styleId: (data.style_id as string) || (data.data as Recipe)?.styleId }));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,6 +87,29 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
     return () => { el?.style.removeProperty("--dp-beer"); };
   }, [c]);
   const style = styleById(r?.styleId);
+
+  // how this style's beers have done (entries anyone in the club scored, recipes marked dialed in): the targets learn from them
+  useEffect(() => {
+    if (!style) { setPoints([]); return; }
+    const sb = createClient();
+    (async () => {
+      const [{ data: ents }, { data: dialed }] = await Promise.all([
+        sb.from("dp_entries").select("recipe_id, version_id, scores, place").eq("style_id", style.id).limit(200),
+        sb.from("dp_recipes").select("id, calc").eq("style_id", style.id).eq("status", "dialed").limit(50),
+      ]);
+      const vids = (ents || []).map((e) => e.version_id).filter(Boolean) as string[], rids = (ents || []).map((e) => e.recipe_id).filter(Boolean) as string[];
+      const [{ data: vs }, { data: rs }] = await Promise.all([
+        vids.length ? sb.from("dp_recipe_versions").select("id, calc").in("id", vids) : Promise.resolve({ data: [] as { id: string; calc: unknown }[] }),
+        rids.length ? sb.from("dp_recipes").select("id, calc").in("id", rids) : Promise.resolve({ data: [] as { id: string; calc: unknown }[] }),
+      ]);
+      const cv = new Map((vs || []).map((v) => [v.id as string, v.calc as { buGu?: number; og?: number }])), cr = new Map((rs || []).map((v) => [v.id as string, v.calc as { buGu?: number; og?: number }]));
+      const pts: Point[] = [];
+      for (const e of ents || []) { const k = (e.version_id && cv.get(e.version_id as string)) || (e.recipe_id && cr.get(e.recipe_id as string)); if (k?.buGu) pts.push({ buGu: Number(k.buGu), og: Number(k.og), score: entryScore((e.scores || []) as Sheet[]), medal: !!e.place && e.place !== "hm" }); }
+      for (const d of dialed || []) { const k = d.calc as { buGu?: number; og?: number }; if (k?.buGu && d.id !== id) pts.push({ buGu: Number(k.buGu), og: Number(k.og), dialed: true }); }
+      setPoints(pts);
+    })();
+  }, [style, id]);
+  const target = useMemo(() => (style ? styleTarget(style, goal, points) : null), [style, goal, points]);
 
   const save = useCallback(async (rec: Recipe | null = r, vis = visibility) => {
     if (!rec || !owner || id === "new" || saving.current) return;
@@ -95,12 +132,33 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
     const { data } = await createClient().from("dp_recipes").insert({ owner_id: userId, name: `${r.name} (copy)`, style_id: r.styleId || null, data: { ...r, name: `${r.name} (copy)`, brewer: brewerName }, calc: calcSummary(calcRecipe(r)), copied_from: id }).select("id").single();
     if (data) router.push(`/draftpunk/r/${data.id}`);
   };
+  // A brew says which version it brewed. The working copy's changes since that version are this brew's own (an
+  // ingredient that wasn't in stock, a tweak to try): they go with the brew, and the recipe goes back to the version;
+  // the brew log can make them the next version.
   const startBrew = async () => {
     if (!r || !c) return;
     await save();
-    const { data, error } = await createClient().from("dp_brews").insert({ owner_id: userId, recipe_id: owner ? id : null, recipe_snapshot: r, measured: {}, notes: "" }).select("id").single();
-    if (data) router.push(`/draftpunk/brews/${data.id}`); else toast(error?.message || "Couldn't start the log");
+    let versionId: string | null = null, tweaks = 0;
+    if (owner) {
+      let vs = await versionsOf(id);
+      if (!vs.length) { const made = await saveVersion(id, userId, r, "First version"); if (made.version) vs = [made.version]; }
+      const last = vs[vs.length - 1];
+      versionId = last?.id || null;
+      tweaks = last ? diffRecipes(last.data, r).length : 0;
+      if (tweaks && last) { const back = normalize(last.data); setR(back); await save(back); }
+    }
+    const { data, error } = await createClient().from("dp_brews").insert({ owner_id: userId, recipe_id: owner ? id : null, version_id: versionId, recipe_snapshot: r, measured: {}, notes: "" }).select("id").single();
+    if (data) { if (tweaks) toast(`Brewing with ${tweaks} change${tweaks === 1 ? "" : "s"} for this brew only`); router.push(`/draftpunk/brews/${data.id}`); }
+    else toast(error?.message || "Couldn't start the log");
   };
+  const setMeta = async (patch: { status?: Status; goal?: "house" | "competition" }) => {
+    if (patch.status) setStatus(patch.status);
+    if (patch.goal) setGoal(patch.goal);
+    const { error } = await createClient().from("dp_recipes").update(patch).eq("id", id);
+    if (error) toast(error.message);
+  };
+  const applyP = (p: Proposal) => { set((x) => applyProposal(x, p)); setAsstOpen(false); setTab("Versions"); toast("On the working copy: see the changes under Versions"); };
+  const restore = (data: Recipe, num: number) => { const back = normalize(data); setR(back); setDirty(true); toast(`Working copy is v${num} again`); };
   const exportXml = () => {
     if (!r) return;
     const blob = new Blob([toBeerXml([r])], { type: "application/xml" });
@@ -130,6 +188,7 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
           <button className="dp-tool" onClick={() => save().then(() => toast("Saved"))}><Icon name="save" />Save</button>
         )}
         <button className="dp-tool" onClick={() => setTab("Brew day")}><Icon name="brewday" />Brew day</button>
+        <button className={`dp-tool${asstOpen ? " on" : ""}`} onClick={() => setAsstOpen((v) => !v)}><Icon name="spark" />Assistant</button>
         <button className="dp-tool" onClick={startBrew}><Icon name="brews" />Start log</button>
         {!ro && <button className="dp-tool" onClick={() => setScaleOpen((v) => !v)}><Icon name="scale" />Scale</button>}
         <span className="dp-sep" />
@@ -196,6 +255,11 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
             </Win>
           </fieldset>
 
+          {asstOpen && (
+            <Win title="Brewing assistant" note="knows the style, what wins and how your beers scored">
+              <Assistant recipe={r} goal={goal} onApply={ro ? undefined : applyP} />
+            </Win>
+          )}
           <div className="dp-tabs" role="tablist">
             {TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}
           </div>
@@ -205,6 +269,7 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
             {tab === "Water" && <WaterTab r={r} c={c} set={set} />}
             {tab === "Fermentation" && <FermentTab r={r} c={c} set={set} />}
             {tab === "Brew day" && <BrewDay r={r} storeKey={id} set={ro ? undefined : set} mine={mine} onStartLog={startBrew} onWeather={(w) => set((x) => ({ ...x, weather: w }))} />}
+            {tab === "Versions" && <Versions recipeId={id} userId={userId} r={r} owner={owner} status={status} goal={goal} refreshKey={verKey} onStatus={(s) => setMeta({ status: s })} onGoal={(g) => setMeta({ goal: g })} onRestore={restore} onApply={applyP} />}
             {tab === "Notes" && <NotesTab r={r} set={set} visibility={visibility} onVisibility={(v) => { setVisibility(v); save(r, v).then(() => toast(v === "club" ? "Shared with the club" : "Private")); }} onExport={exportXml} />}
           </fieldset>
         </div>
@@ -222,13 +287,20 @@ export default function RecipeEditor({ id, userId, brewerName }: { id: string; u
           <section className="dp-card">
             <h2 className="dp-card-t">Style guide<small>{style ? style.name : "pick a style to compare"}</small></h2>
             <div className="dp-kpis">
-              {kpi("Original gravity", sgFmt(c.og), c.og, style?.og, 1.0, 1.13, sg)}
+              {kpi("Original gravity", sgFmt(c.og), c.og, target?.og || style?.og, 1.0, 1.13, sg)}
               {kpi("Final gravity", sgFmt(c.fg), c.fg, style?.fg, 0.99, 1.04, sg)}
               {kpi("Alcohol", `${r1(c.abv, 1)}%`, c.abv, style?.abv, 0, 14, (x) => `${x}%`)}
               {kpi("Bitterness", `${r1(c.ibu, 0)} IBU`, c.ibu, style?.ibu, 0, 120)}
               {kpi("Color", `${r1(c.srm, 1)} SRM`, c.srm, style?.srm, 0, 40)}
-              {kpi("BU:GU", `${r1(c.buGu, 2)}`, c.buGu, undefined, 0, 2)}
+              {kpi("BU:GU", `${r1(c.buGu, 2)}`, c.buGu, target ? [r1(target.band[0], 2), r1(target.band[1], 2)] : undefined, 0, 1.6, (x) => x.toFixed(2))}
             </div>
+            {target && (
+              <div className="dp-target">
+                <div><b>{goal === "competition" ? "Competition" : "House"} target</b> · BU:GU {r1(target.buGu, 2)} · OG {target.og[0].toFixed(3)}–{target.og[1].toFixed(3)}</div>
+                <div>{bitternessAdvice(c.og, c.ibu, target)}. {gravityAdvice(c.og, target, goal)}.</div>
+                <div className="dp-dim">{target.from === "learned" ? `Learned from ${target.n} scored or dialed-in beer${target.n === 1 ? "" : "s"} in this style` : "From the style's middle; it learns as your beers score"}</div>
+              </div>
+            )}
           </section>
           <section className="dp-card">
             <h2 className="dp-card-t">Brew numbers</h2>

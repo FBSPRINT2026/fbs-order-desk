@@ -9,11 +9,13 @@ export const dynamic = "force-dynamic";
 export default async function More() {
   const { brewer } = await requireBrewer();
   const items: [string, string, string, string][] = [
+    ["/draftpunk/assistant", "Assistant", "spark", "Design a beer, ask anything about brewing it"],
+    ["/draftpunk/best", "Best ever", "star", "The club's best recipe for every style"],
     ["/draftpunk/competitions", "Competitions", "medal", "Entries, scoresheets and medals"],
     ["/draftpunk/inventory", "Ingredients", "stock", "What's on the shelf, and shopping lists"],
     ["/draftpunk/equipment", "Equipment", "equip", "Your systems, chambers and Inkbirds"],
     ["/draftpunk/club", "Club", "club", "Shared recipes and members"],
-    ["/draftpunk/import", "Import", "import", "BeerSmith and BeerXML files"],
+    ["/draftpunk/import", "Import", "import", "BeerSmith, BeerXML, or a photo of a recipe"],
   ];
   return (
     <Shell name={brewer.name}>

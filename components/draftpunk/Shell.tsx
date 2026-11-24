@@ -12,6 +12,8 @@ import Emblem from "./Emblem";
  */
 const NAV = [
   { href: "/draftpunk", label: "Recipes", icon: "recipes" },
+  { href: "/draftpunk/assistant", label: "Assistant", icon: "spark" },
+  { href: "/draftpunk/best", label: "Best ever", icon: "star" },
   { href: "/draftpunk/brewery", label: "Brewery", icon: "brewery" },
   { href: "/draftpunk/brews", label: "Brew log", icon: "brews" },
   { href: "/draftpunk/equipment", label: "Equipment", icon: "equip" },
@@ -60,7 +62,7 @@ export default function Shell({ name, children }: { name: string; children: Reac
         {NAV.filter((n) => ["Recipes", "Brewery", "Brew log", "Tools"].includes(n.label)).map((n) => (
           <Link key={n.href} href={n.href} className={on(n.href) ? "on" : ""}><Icon name={n.icon} />{n.label === "Ingredients" ? "Stock" : n.label}</Link>
         ))}
-        <Link href="/draftpunk/more" className={path.startsWith("/draftpunk/more") || ["/draftpunk/equipment", "/draftpunk/competitions", "/draftpunk/club", "/draftpunk/inventory"].some((h) => path.startsWith(h)) ? "on" : ""}><Icon name="more" />More</Link>
+        <Link href="/draftpunk/more" className={path.startsWith("/draftpunk/more") || ["/draftpunk/equipment", "/draftpunk/competitions", "/draftpunk/club", "/draftpunk/inventory", "/draftpunk/assistant", "/draftpunk/best"].some((h) => path.startsWith(h)) ? "on" : ""}><Icon name="more" />More</Link>
       </nav>
     </div>
   );
