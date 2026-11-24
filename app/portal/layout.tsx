@@ -8,12 +8,16 @@ import SameArtPrompt from "@/components/SameArtPrompt";
 import ArtboardPrompt from "@/components/ArtboardPrompt";
 import { fmtPhone } from "@/lib/phone";
 import { myAccountIds } from "@/app/portal/account-actions";
+import { redirect } from "next/navigation";
+import { brewerOnly } from "@/lib/draftpunk/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
-  const { email } = await getViewer();
+  const { email, user, isStaff } = await getViewer();
   const accounts = (await myAccountIds()).length;
+  // a DraftPunk club member with no customer account (Nick, Nov 23 2026) belongs in DraftPunk, not the customer portal
+  if (user && !isStaff && !accounts && (await brewerOnly(user.id))) redirect("/draftpunk");
   const { data } = await createAdminClient().from("settings").select("data").eq("id", 1).maybeSingle();
   const s = mergeSettings(data?.data);
   const addr = s.shop.address.replace(/\s*\n\s*/g, " · ").trim(), phone = fmtPhone(s.shop.phone);
