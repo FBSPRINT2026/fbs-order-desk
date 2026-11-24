@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { atSize, calcRecipe, fromPercents, isAid, r1, scaleRecipe, toPercents, volumes } from "@/lib/draftpunk/calc";
+import { atSize, calcRecipe, fromPercents, isAid, perGallon, r1, scaleRecipe, toPercents, volumes } from "@/lib/draftpunk/calc";
 import type { Equipment } from "@/lib/draftpunk/types";
 import { createRecipe, saveVersion } from "@/lib/draftpunk/recipeStore";
 import type { Recipe } from "@/lib/draftpunk/types";
@@ -76,10 +76,10 @@ export default function BringIn({ archiveId, r, folder, date, userId, onDone }: 
         <ul className="dp-list">
           <li><b>Target OG {design.byPercent!.targetOg.toFixed(3)}</b> · {r1(dc.ibu, 0)} IBU · BU:GU {r1(dc.buGu, 2)}</li>
           {[...design.ferms].filter((f) => !isAid(f)).sort((a, b) => (b.pct || 0) - (a.pct || 0)).map((f) => <li key={f.lid}><b>{r1(f.pct || 0, 1)}%</b> {f.name}</li>)}
-          {design.ferms.filter(isAid).map((f) => <li key={f.lid} className="dp-dim">{r1(f.lb, 2)} lb {f.name} (process aid, not in the percents)</li>)}
+          {design.ferms.filter(isAid).map((f) => <li key={f.lid} className="dp-dim">{r1(f.lb, 2)} lb {f.name} (process aid: your amount for this size, not in the percents)</li>)}
           {design.hops.map((h) => <li key={h.lid}>{h.name} {h.use === "dry_hop" ? `dry hop ${h.days || 4} d` : h.use === "whirlpool" ? `whirlpool ${h.min} min` : h.use === "first_wort" ? "first wort" : `${h.min} min`}: {r1(h.oz, 2)} oz{dc.hopIbus[h.lid] ? <> for <b>{r1(dc.hopIbus[h.lid], 1)} IBU</b></> : null}</li>)}
           {design.yeasts.map((y) => <li key={y.lid}>Yeast: {[y.lab, y.code, y.name].filter(Boolean).join(" ")}</li>)}
-          {design.miscs.map((m) => <li key={m.lid} className="dp-dim">{m.name} {r1(m.amount, 2)} {m.unit}</li>)}
+          {design.miscs.map((m) => <li key={m.lid}>{m.name}: <b>{r1(m.amount / Math.max(perGallon(r.equipment, m.use), 0.01), 3)} {m.unit}/gal</b> ({r1(m.amount, 2)} {m.unit} at this size)</li>)}
         </ul>
       </div>
       <span className="dp-seg" role="group" aria-label="How">

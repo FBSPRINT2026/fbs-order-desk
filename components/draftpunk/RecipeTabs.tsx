@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { readAll } from "@/lib/readAll";
-import { cellsNeeded, isAid, clSo4, co2Harvest, fromPercents, toPercents, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
+import { cellsNeeded, isAid, perGallon, clSo4, co2Harvest, fromPercents, toPercents, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
 import { asFerm, asHop, asMisc, asYeast } from "@/lib/draftpunk/defaults";
 import { FERMENTABLES, HOPS, MASH_PROFILES, MISCS, WATERS, YEASTS } from "@/lib/draftpunk/library";
 import type { Calc, Carb, Fermentable, FermType, Hop, HopForm, HopUse, Misc, MashStep, Recipe, Salts, WaterProfile, Yeast } from "@/lib/draftpunk/types";
@@ -163,7 +163,7 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
               <tr key={m.lid}>
                 <td className="dp-num"><Num value={m.amount} onChange={(n) => up("miscs", i, { amount: n })} /> <input aria-label="Unit" style={{ width: "6ch" }} value={m.unit} onChange={(e) => up("miscs", i, { unit: e.target.value })} /></td>
                 <td className="dp-namecell"><input aria-label="Name" value={m.name} onChange={(e) => up("miscs", i, { name: e.target.value })} /><div className="dp-sub"><select value={m.use} onChange={(e) => up("miscs", i, { use: e.target.value as Misc["use"] })}>{["boil", "mash", "primary", "secondary", "bottling"].map((u) => <option key={u}>{u}</option>)}</select>{m.use === "boil" && <span className="dp-row" style={{ gap: 6, alignItems: "center" }}><Num value={m.min} onChange={(n) => up("miscs", i, { min: n })} /><span className="dp-dim">min</span></span>}</div></td>
-                <td />
+                <td className="dp-num dp-dim" title={m.use === "primary" || m.use === "secondary" || m.use === "bottling" ? "Per gallon in the fermenter" : "Per gallon of wort at the end of the boil"}>{r1(m.amount / Math.max(perGallon(r.equipment, m.use), 0.01), 3)} {m.unit}/gal</td>
                 <td className="dp-num"><button className="dp-btn dp-x" aria-label={`Remove ${m.name}`} onClick={() => del("miscs", i)}>✕</button></td>
               </tr>
             ))}

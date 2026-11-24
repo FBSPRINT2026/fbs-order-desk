@@ -72,7 +72,9 @@ export type Equipment = {
    * the batch sizes this system brews (Nick, Nov 24 2026: "BrewBuilt No-Sparge RIMS, and then 3 gallon, 5 gallon,
    * 10 gallon"): each a label and its volume into the fermenter; losses left in the kettle scale with it
    */
-  sizes?: { label: string; batchGal: number }[];
+  sizes?: { label: string; batchGal: number; aidLb?: number }[];
+  /** rice hulls (any process aid) used at this size, lb (Nick, Nov 24 2026: ½ lb small batch, 1 lb 5 gal, 1½ lb 10 gal) */
+  aidLb?: number;
   /** volume into the fermenter, gal */
   batchGal: number;
   boilMin: number;

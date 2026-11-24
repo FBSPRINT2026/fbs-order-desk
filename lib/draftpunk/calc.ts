@@ -430,7 +430,14 @@ export function toPercents(r: Recipe): Recipe {
 /** a system at one of its batch sizes: the batch is the size's, what's left in the kettle grows with it */
 export function atSize(e: Equipment, batchGal: number): Equipment {
   const k = batchGal / Math.max(e.batchGal, 0.01);
-  return { ...e, batchGal, trubGal: Math.round(e.trubGal * k * 100) / 100 };
+  const size = e.sizes?.find((s) => Math.abs(s.batchGal - batchGal) < 0.05);
+  return { ...e, batchGal, trubGal: Math.round(e.trubGal * k * 100) / 100, aidLb: size?.aidLb ?? e.aidLb };
+}
+/** an addition's rate: per gallon of wort at the end of the boil for what goes in the kettle, per gallon in the
+ *  fermenter for what goes in the fermenter (Nick, Nov 24 2026: "a measurement per gallon… just like a percentage") */
+export function perGallon(e: Equipment, use?: string) {
+  const v = volumes(e);
+  return use === "primary" || use === "secondary" || use === "bottling" || use === "dry_hop" ? v.intoFerm : v.postBoilCold;
 }
 
 export function scaleRecipe(r: Recipe, to: Equipment): Recipe {
@@ -452,6 +459,11 @@ export function scaleRecipe(r: Recipe, to: Equipment): Recipe {
     yeasts: r.yeasts.map((y) => ({ ...y, packs: Math.max(1, Math.round(y.packs * ferm)) })),
     water: { ...r.water, salts: Object.fromEntries(Object.entries(r.water.salts).map(([k, g]) => [k, (g || 0) * kettle])) as Salts },
   };
+  // rice hulls: the amount this system uses at this size, when it says (shared out if there's more than one aid)
+  if (to.aidLb != null) {
+    const aids = out.ferms.filter(isAid), was = aids.reduce((s, f) => s + f.lb, 0);
+    if (aids.length) out.ferms = out.ferms.map((f) => (isAid(f) ? { ...f, lb: Math.round((was ? (f.lb / was) * to.aidLb! : to.aidLb! / aids.length) * 100) / 100 } : f));
+  }
   // a recipe designed by percent works its pounds out again for the new system (its target OG) before the hops
   if (out.byPercent?.on) Object.assign(out, fromPercents(out));
   // bitterness: the new kettle size, boil time and gravity change utilization, so match the old IBU

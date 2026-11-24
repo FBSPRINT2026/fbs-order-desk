@@ -107,7 +107,7 @@ function SizesField({ sizes, onChange }: { sizes?: { label: string; batchGal: nu
   const [text, setText] = useState((sizes || []).map((s) => s.label.replace(/\s*gal$/, "")).join(", "));
   const commit = () => {
     // "3, 5, 10" are packaged gallons; into the fermenter is 10% more (5 gal → 5.5)
-    const list = text.split(/[,\s]+/).map(Number).filter((n) => n > 0).map((n) => ({ label: `${n} gal`, batchGal: Math.round(n * 1.1 * 100) / 100 }));
+    const list = text.split(/[,\s]+/).map(Number).filter((n) => n > 0).map((n) => ({ label: `${n} gal`, batchGal: Math.round(n * 1.1 * 100) / 100, aidLb: sizes?.find((s) => s.label === `${n} gal`)?.aidLb ?? Math.round(n * 0.15 * 2) / 2 }));
     onChange(list.length ? list : undefined);
   };
   return (
