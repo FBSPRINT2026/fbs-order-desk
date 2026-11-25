@@ -2765,7 +2765,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         made.push({ d, im: { ...newImprint(r.location), ...(r.sizeFrom ? { sizeFrom: r.sizeFrom } : {}), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: given?.plain ? "" : `From ${H.name}: ${r.widthIn}" × ${r.heightIn}"${H.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
       }
       setDesigns((x) => [...made.map((m) => m.d), ...x]);
-      setUrls({ ...urls, ...(await previewUrls(sb, made.map((m) => m.d))) });
+      { const u = await previewUrls(sb, made.map((m) => m.d)); setUrls((x) => ({ ...x, ...u })); }
       // each print takes its location's spot when it's there (the art replaced), else an empty spot on that side, else a new one
       setImprints((xs) => {
         let out = [...xs];
@@ -2812,7 +2812,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const { data: u } = await sb.auth.getUser();
       d = await uploadDesign(sb, { draft: true, file: f, customer_id: customerId, by: u.user?.email || "", ...(others.length ? { with: others } : {}) });
       setDesigns((x) => [d, ...x.filter((y) => y.id !== d.id)]);
-      setUrls({ ...urls, ...(await previewUrls(sb, [d])) });
+      { const u = await previewUrls(sb, [d]); setUrls((x) => ({ ...x, ...u })); }
       setImprints((xs) => xs.map((x) => (x.id === im.id ? swapLogo(x, d) : x)));
       askRaster(im.id, d);
       setMsg(`Saved ${designLabel(d)} to the customer's account.`);
