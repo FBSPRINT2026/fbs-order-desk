@@ -672,3 +672,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 25 10:22am · 1.3.915 · Nick · Specialty ink charge: neon / fluorescent inks carry it like metallic and shimmer (read from the ink names on every screen print)
 - Nov 25 10:38am · 1.3.916 · Amanda · Order Totals spell out finishing: each ticked item (Size Tag, Fulfillment, fold…) on its own row with pieces × price, Line items shows the rest; same total (calcOrder.finishing; #50228)
 - Nov 25 10:39am · 1.3.917 · Nick · DTF transfer pieces drop the whole screen print they replace, its specialty ink / puff charge included; other prints (a back printed as usual) stay on them
+- Nov 25 10:43am · 1.3.918 · Nick · A print with its own youth screens used in several groups (one back on every team) is priced at the whole order's adult pieces on adult shirts and the whole order's youth pieces on youth shirts, not each group's own

@@ -1323,12 +1323,18 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const yQty = (g.lines || []).reduce((a, l, i) => a + (kidAt[i] ? billQty(l) : 0), 0), aQty = qty - yQty;
   const split = (d: Imprint) => youthSplit(g, d);
   type Side = "a" | "y" | undefined;
-  const sideQty = (side: Side) => (side === "y" ? yQty : aQty);
+  const sideQty0 = (side: Side) => (side === "y" ? yQty : aQty);
+  // a print with its own youth screens used in several groups (the same back on every team; Nov 25, Nick, #50227: "you gave
+  // them the price breaks on all the backs, right?"): each side priced at that side's pieces across the whole order, less
+  // the pieces sent to DTF transfers on that side
+  const dtfSide = (d: Imprint, side: Side) => (d.method === "screen" && d.dtf?.sizes?.length ? (g.lines || []).reduce((a, l, i) => a + ((side === "y") === !!kidAt[i] ? d.dtf!.sizes.reduce((b, z) => b + num((l.sizes as Record<string, number> | undefined)?.[z]), 0) : 0), 0) : 0);
+  const sideKey = (d: Imprint) => (d.method === "screen" ? seen?.links?.get(d.id) : undefined) || (d.design_id ? `${d.method}:${d.design_id}:${printSizeKey(d)}` : "");
+  const sideQtyOf = (d: Imprint, side: Side) => { const k = sideKey(d); const n = k ? seen?.designQty?.get(`${k}|${side}`) || 0 : 0; return Math.max(0, Math.max(n, sideQty0(side)) - dtfSide(d, side)); };
   // a program can price both sides at the whole group's break and only charge the youth screens (Group.youthTogether)
-  const tiOf = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? tierIndex(sideQty(side), pl) : dq(d) === qty ? ti : tierIndex(Math.max(1, dq(d)), pl));
-  const ixOf0 = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQty(side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
+  const tiOf = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? tierIndex(Math.max(1, sideQtyOf(d, side)), pl) : dq(d) === qty ? ti : tierIndex(Math.max(1, dq(d)), pl));
+  const ixOf0 = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQtyOf(d, side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
   // the pieces a print is priced at (DTF transfers are priced by size and these pieces, lib/dtfGrid.ts)
-  const ixOf = (d: Imprint, side?: Side) => ({ ...ixOf0(d, side), q: side && split(d) && !g.youthTogether ? sideQty(side) : dq(d) });
+  const ixOf = (d: Imprint, side?: Side) => ({ ...ixOf0(d, side), q: side && split(d) && !g.youthTogether ? sideQtyOf(d, side) : dq(d) });
   const anySplit = (g.imprints || []).some(split);
   // the youth screens' own underbase: none when every youth shirt is light (a Natural), the same rule as the adult's
   const kidLight = !!pl.darkAddsColor && !(g.lines || []).some((l, i) => kidAt[i] && billQty(l) > 0 && !isLightColor(l.color, pl));
@@ -1625,6 +1631,16 @@ export function calcOrder(
     // prints set as a color change of one another (Imprint.changeOf) print from one set of screens: one print, its
     // pieces counted together for the price break too (Nov 10, Tiger Blue #2845: five teams' backs priced at 193 pieces)
     for (const k of new Set((g.imprints || []).map((d) => seen.links?.get(d.id)).filter((k): k is string => !!k))) m.set(k, (m.get(k) || 0) + q);
+    // a print with its own youth screens: each side's pieces too, so youth and adult are each priced at the order's count
+    const kid = (g.lines || []).map(kidLine);
+    const yq = (g.lines || []).reduce((a, l, i) => a + (kid[i] ? billQty(l) : 0), 0);
+    for (const d of g.imprints || []) {
+      if (!youthSplit(g, d)) continue;
+      const k = (d.method === "screen" ? seen.links?.get(d.id) : undefined) || (d.design_id ? `${d.method}:${d.design_id}:${printSizeKey(d)}` : "");
+      if (!k) continue;
+      m.set(`${k}|y`, Math.max(m.get(`${k}|y`) || 0, 0) + yq);
+      m.set(`${k}|a`, Math.max(m.get(`${k}|a`) || 0, 0) + (q - yq));
+    }
     return m;
   };
   gs0.forEach((g, gi) => { if (!off.has(gi)) for (const [k, q] of dqOf(g)) dqm.set(k, (dqm.get(k) || 0) + q); });
