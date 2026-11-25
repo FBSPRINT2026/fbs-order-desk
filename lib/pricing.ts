@@ -579,8 +579,9 @@ export const patchApply = (pl: Pick<PriceList, "patchApply">) => (pl.patchApply 
 export const patchEach = (d: Pick<Imprint, "patch">, pl: Pick<PriceList, "patchApply">) => (d.patch?.price != null && !isNaN(+d.patch.price) ? +d.patch.price : patchApply(pl));
 /** puff ink on a screen print, each piece per puffed location (Imprint.puff) */
 export const PUFF_PRICE = 1;
-/** inks that are specialty inks by their name (Nov 10, Nick: "the speciality ink charge… for the gold metallic") */
-export const SPECIAL_INK = /\b(metallic|shimmer|glitter|glow|reflective|foil|high[- ]?density|pearl(escent)?|sparkle|chrome|black ?light|uv)\b/i;
+/** inks that are specialty inks by their name (Nov 10, Nick: "the speciality ink charge… for the gold metallic"; Nov 25,
+ *  #50227: "speciality ink charges for metallic and neon", so neon / fluorescent / day-glo inks too) */
+export const SPECIAL_INK = /\b(metallic|shimmer|glitter|glow|reflective|foil|high[- ]?density|pearl(escent)?|sparkle|chrome|black ?light|uv|neon|fluorescent|fluoro|day[- ]?glo)\b/i;
 /** the blacklight (UV-reactive) ink (Nick, Nov 24 2026, #50225: "one extra screen… apply the blacklight effect, and it
  *  needs to show to the customer"): one more screen and color on the print, a specialty ink, and its own view on the proof */
 export const BLACKLIGHT_INK = "Blacklight UV";
