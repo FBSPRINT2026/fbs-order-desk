@@ -1437,7 +1437,11 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const hasOv = !!l.shopUse || (l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride));
     // a sample: its flat price each (plus extras when the rule charges them), not the price list
     const smpEach = smp ? r2(num(smp.each) + (smp.extras === "charge" ? locExtra + puffExtra : 0)) : null;
-    const each = l.shopUse || gs ? 0 : hasOv ? r2(+(l.priceOverride as number)) : smpEach != null ? smpEach : calcEach;
+    // finishing ticked on the group (tagging, fulfillment, fold…) is charged on top of a price typed by hand, like on a
+    // listed price: the typed price is the garment and print (Amanda, Nov 25 2026, #50228: Size Tag and Fulfillment ticked
+    // on $4.50 crewnecks never reached the total); a program's all-in price (Group.allIn) already includes it
+    const ovFin = hasOv && !l.shopUse && !l.ghost && !g.allIn && !gs && +(l.priceOverride as number) !== 0 ? finishEach : 0; // a line typed as $0 is free, finishing included
+    const each = l.shopUse || gs ? 0 : hasOv ? r2(+(l.priceOverride as number) + ovFin) : smpEach != null ? smpEach : calcEach;
     // a line charged nothing (its price typed as $0, free extras) carries no 2XL+ materials charge either (Amanda,
     // Nov 18 2026, #50145: a $0 add-on still billed $5 for a 2XL and a 3XL); a size charge typed on the line still counts
     const free = hasOv && each === 0;
