@@ -893,28 +893,21 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
   // DTF transfers for some sizes (Nick, Nov 25 2026, #50048): a screen print in a group of mixed size ranges (youth and
   // adult, toddler and youth…) sends the sizes picked to DTF so one bigger set of screens prints the rest. One print, one
   // line, priced as the screen print; the Mockup Creator sizes the screens and the transfer
-  const [dtfOpen, setDtfOpen] = useState("");
+  // set for the whole group from "+ DTF Transfers" beside "+ Add garment" (Nick, Nov 25: "should just be right next to the
+  // add garment button"): every screen print in the group skips the sizes picked
+  const [dtfOpen, setDtfOpen] = useState(false);
+  const dtfPrints = g.imprints.filter((d) => d.method === "screen" && d.colors < FULL_COLOR && !d.supplied && !d.visualOnly);
+  const dtfAble = !g.youthSet && mixedRanges(g) && dtfPrints.length > 0;
+  const dtfOn = [...new Set(dtfPrints.flatMap((d) => d.dtf?.sizes || []))];
+  const dtfToggle = (z: string) => update((x) => {
+    const next = dtfOn.includes(z) ? dtfOn.filter((s) => s !== z) : [...dtfOn, z];
+    for (const im of x.imprints) if (im.method === "screen" && im.colors < FULL_COLOR && !im.supplied && !im.visualOnly) im.dtf = next.length ? { ...(im.dtf || {}), sizes: next } : undefined;
+  });
   const dtfCtl = (d: Group["imprints"][number]) => {
-    if (d.method !== "screen" || d.colors >= FULL_COLOR || g.youthSet || !mixedRanges(g)) return null;
-    const di = g.imprints.indexOf(d), sizes = groupSizes(g), on = d.dtf?.sizes || [], part = dtfPart(g, d);
-    if (fixed && !part) return null;
-    const open = dtfOpen === d.id || on.length > 0;
-    const toggle = (z: string) => update((x) => {
-      const cur = x.imprints[di].dtf?.sizes || [], next = cur.includes(z) ? cur.filter((s) => s !== z) : [...cur, z];
-      x.imprints[di].dtf = next.length ? { ...(x.imprints[di].dtf || {}), sizes: next } : undefined;
-    });
-    if (!open) return <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Mixed sizes?</span><span className="pr-scr-v faint">{sizes.map((s) => `${s.size} ${s.qty}`).join(" · ")}</span><button type="button" className="btn sm" onClick={() => setDtfOpen(d.id)}>+ DTF Transfers</button></div>;
-    const press = sizes.filter((s) => !on.includes(s.size)).reduce((a, s) => a + s.qty, 0);
-    return (
-      <div className="pr-scr pr-dtf">
-        <div className="pr-cc-line"><span className="pr-scr-l">Sizes on DTF</span>
-          <span className="pr-dtf-chips">{sizes.map((s) => <button key={s.size} type="button" disabled={fixed} className={"chip" + (on.includes(s.size) ? " on" : "")} aria-pressed={on.includes(s.size)} onClick={() => toggle(s.size)}>{s.size} {s.qty}</button>)}</span>
-          {!fixed && <button type="button" className="linkbtn" onClick={() => { update((x) => { x.imprints[di].dtf = undefined; }); setDtfOpen(""); }}>Remove DTF</button>}
-        </div>
-        {part ? <div className="pr-cc-line"><span className="pr-scr-l">DTF transfers</span><span className="pr-scr-v">{part.text}{d.dtf?.size ? "" : " · sized in the Mockup Creator"} · press prints {press}</span></div>
-          : <div className="pr-cc-line faint">Tap the sizes the press skips: they get a DTF transfer of the same art, and the screens can be sized for the rest.</div>}
-      </div>
-    );
+    const part = d.method === "screen" ? dtfPart(g, d) : null;
+    if (!part) return null;
+    const press = groupSizes(g).filter((s) => !(d.dtf?.sizes || []).includes(s.size)).reduce((a, s) => a + s.qty, 0);
+    return <div className="pr-scr pr-cc-line"><span className="pr-scr-l">DTF transfers</span><span className="pr-scr-v">{part.text}{d.dtf?.size ? "" : " · sized in the Mockup Creator"} · press prints {press}</span></div>;
   };
   const puffCtl = (d: Group["imprints"][number]) => {
     if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
@@ -1381,6 +1374,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
               <button type="button" disabled={g.lines.some((y) => y.ghost)} title="Pieces they pay the print price for, never printed: to reach the next price break" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { x.lines.push({ ...newGLine(), garment: "Ghost prints (not printed)", oneSize: true, ghost: true }); }); }}>Ghost prints</button>
             </div>
           </details>}
+          {!fixed && dtfAble && <button type="button" className={"btn sm" + (dtfOn.length || dtfOpen ? " on" : "")} title="Mixed sizes: print some sizes (the youth smalls) as DTF transfers, so one bigger set of screens prints the rest" onClick={() => setDtfOpen((v) => !v)}>+ DTF Transfers</button>}
           {/* a garment color in a second colorway (Nov 9, Nick: "Mauve in B and C"): a line of it of its own, with its own
               sizes and inks, in this one group (one set of screens) */}
           {!fixed && cwView && <details className="ot-more gl-addm" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
@@ -1399,6 +1393,12 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
           <b className="a-qt c num">{gc.qty}</b>
           <b className="a-to r num">{money(gc.sub)}</b>
         </div>
+        {dtfAble && (dtfOpen || dtfOn.length > 0) && <div className="gl-dtf">
+          <span className="gl-dtf-l">Sizes on DTF</span>
+          <span className="pr-dtf-chips">{groupSizes(g).map((z) => <button key={z.size} type="button" disabled={fixed} className={"chip" + (dtfOn.includes(z.size) ? " on" : "")} aria-pressed={dtfOn.includes(z.size)} onClick={() => dtfToggle(z.size)}>{z.size} {z.qty}</button>)}</span>
+          <span className="faint">{dtfOn.length ? `Press prints ${groupSizes(g).filter((z) => !dtfOn.includes(z.size)).reduce((a, z) => a + z.qty, 0)}; the screens are sized for the rest in the Mockup Creator.` : "Tap the sizes the press skips: they get a DTF transfer of the same art."}</span>
+          {!fixed && dtfOn.length > 0 && <button type="button" className="linkbtn" onClick={() => { update((x) => { for (const im of x.imprints) delete im.dtf; }); setDtfOpen(false); }}>Remove DTF</button>}
+        </div>}
         {ythNote && !yth && (
           <div className="yth-note">{ythNote.text}
             {ythNote.youthLi >= 0 && <button type="button" className="linkbtn" onClick={() => void addYouth(ythNote.youthLi, ythNote.li)}>Not right?</button>}
