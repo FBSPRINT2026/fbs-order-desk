@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { readAll } from "@/lib/readAll";
-import { cellsNeeded, isAid, perGallon, clSo4, co2Harvest, fromPercents, toPercents, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
+import { cellsNeeded, isAid, perGallon, clSo4, co2Harvest, fromPercents, toPercents, scaleGravity, kegPsi, lacticFor, primingOz, spundPlan, r1, residualAlk, SALT_LABEL, saltsFor, sgFmt, smbGrams, starterGrowth, treatWater, viability, waterSplit } from "@/lib/draftpunk/calc";
 import { asFerm, asHop, asMisc, asYeast } from "@/lib/draftpunk/defaults";
 import { FERMENTABLES, HOPS, MASH_PROFILES, MISCS, WATERS, YEASTS } from "@/lib/draftpunk/library";
 import type { Calc, Carb, Fermentable, FermType, Hop, HopForm, HopUse, Misc, MashStep, Recipe, Salts, WaterProfile, Yeast } from "@/lib/draftpunk/types";
@@ -103,6 +103,7 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
           {!!r.hops.length && <button className="dp-btn dp-sm" onClick={() => setHopFix((v) => !v)}>Adjust for my hops&apos; alpha</button>}
         </div>
         {hopFix && <HopAdjust r={r} set={set} mine={mine} onDone={() => setHopFix(false)} />}
+        <ScaleOg og={c.og} ibu={c.ibu} onScale={(og, keep) => set((x) => scaleGravity(x, og, keep))} />
         <div className="dp-row" style={{ margin: "4px 0 8px", alignItems: "center" }}>
           <span className="dp-dim" style={{ fontSize: 13, fontWeight: 600 }}>Grain bill by</span>
           <span className="dp-seg" role="group" aria-label="Grain bill by">
@@ -120,21 +121,21 @@ export function DesignTab({ r, c, set, mine }: Props & { mine: MineItem[] }) {
               <tr key={f.lid}>
                 <td className="dp-num">{pctMode && !isAid(f)
                   ? <><Num value={f.pct} onChange={(n) => up("ferms", i, { pct: n })} digits={1} /> %</>
-                  : <><Num value={f.lb} onChange={(n) => up("ferms", i, { lb: n })} digits={3} /> lb</>}</td>
+                  : <><Num value={f.lb} onChange={(n) => up("ferms", i, { lb: n })} digits={2} /> lb</>}</td>
                 <td className="dp-namecell"><input aria-label="Name" value={f.name} onChange={(e) => up("ferms", i, { name: e.target.value })} /><div className="dp-sub"><select value={f.type} onChange={(e) => up("ferms", i, { type: e.target.value as FermType })}>{FTYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}</select><span className="dp-row" style={{ gap: 6, alignItems: "center" }}>
                     <Num value={r1((f.potential - 1) * 1000, 1)} title="Points per pound per gallon" onChange={(n) => up("ferms", i, { potential: 1 + n / 1000 })} /><span className="dp-dim">ppg</span>
                     <Num value={f.color} title="Color, °Lovibond" onChange={(n) => up("ferms", i, { color: n })} /><span className="dp-dim">°L</span>
                     <label className="dp-dim" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={!!f.late} onChange={(e) => up("ferms", i, { late: e.target.checked })} />late</label>
                     {stockOf(f.name) != null && <span className="dp-chip" title="In stock">{stockOf(f.name)} lb</span>}
                   </span></div></td>
-                <td className="dp-num" {...tdl(pctMode ? "lb" : "%")}>{isAid(f) ? <span className="dp-dim" title="Not part of the grist's percents">process aid</span> : pctMode ? `${r1(f.lb, 2)} lb` : `${r1(c.fermPct[f.lid] || 0, 1)}%`}</td>
+                <td className="dp-num" {...tdl(isAid(f) || !pctMode ? "" : "lb")}>{isAid(f) ? <span className="dp-dim dp-word" title="Not part of the grist's percents">process aid</span> : pctMode ? `${r1(f.lb, 2)} lb` : `${r1(c.fermPct[f.lid] || 0, 1)}%`}</td>
                 <td className="dp-num"><button className="dp-btn dp-x" aria-label="Move up" onClick={() => move("ferms", i, -1)}>↑</button><button className="dp-btn dp-x" aria-label={`Remove ${f.name}`} onClick={() => del("ferms", i)}>✕</button></td>
               </tr>
             ))}
             {!!r.hops.length && <tr className="dp-group"><td colSpan={4}>Hops</td></tr>}
             {r.hops.map((h, i) => (
               <tr key={h.lid}>
-                <td className="dp-num"><Num value={h.oz} onChange={(n) => up("hops", i, { oz: n })} digits={3} /> oz</td>
+                <td className="dp-num"><Num value={h.oz} onChange={(n) => up("hops", i, { oz: n })} digits={2} /> oz</td>
                 <td className="dp-namecell"><input aria-label="Name" value={h.name} onChange={(e) => up("hops", i, { name: e.target.value })} /><div className="dp-sub"><select value={h.use} onChange={(e) => { const use = e.target.value as HopUse; up("hops", i, { use, tempF: use === "whirlpool" ? h.tempF || 180 : h.tempF, days: use === "dry_hop" ? h.days || 4 : h.days, min: use === "whirlpool" ? 20 : use === "dry_hop" ? 0 : h.min }); }}>{USES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select><span className="dp-row" style={{ gap: 6, alignItems: "center" }}>
                     <Num value={h.alpha} title={h.designAlpha ? `Alpha acid % (designed at ${h.designAlpha}%)` : "Alpha acid %"} onChange={(n) => up("hops", i, { alpha: n })} /><span className="dp-dim">AA%{h.designAlpha && h.designAlpha !== h.alpha ? ` (was ${h.designAlpha})` : ""}</span>
                     {h.use === "dry_hop" ? <><Num value={h.days} onChange={(n) => up("hops", i, { days: n })} /><span className="dp-dim">days</span></>
@@ -461,5 +462,23 @@ export function NotesTab({ r, set, visibility, onVisibility, onExport }: { r: Re
         </p>
       </Win>
     </>
+  );
+}
+
+/** Scale gravity (Nick, Nov 24 2026, like BeerSmith): the same beer, its grain by the same percentages, at another OG */
+function ScaleOg({ og, ibu, onScale }: { og: number; ibu: number; onScale: (og: number, keepBitterness: boolean) => void }) {
+  const [to, setTo] = useState(""), [keep, setKeep] = useState(true), [done, setDone] = useState("");
+  const t = parseFloat(to);
+  const ok = t > 1.0 && t < 1.2 && Math.abs(t - og) >= 0.0005;
+  const go = () => { if (!ok) return; onScale(t, keep); setDone(`Scaled from ${sgFmt(og)} to ${sgFmt(t)}${keep && ibu > 0 ? ", bitterness kept to the gravity" : ""}.`); setTo(""); };
+  return (
+    <div className="dp-scaleog">
+      <span className="dp-dim">Scale gravity</span>
+      <span className="dp-scaleog-from">{sgFmt(og)} →</span>
+      <input className="dp-n" inputMode="decimal" aria-label="New OG" placeholder={sgFmt(og + 0.005)} value={to} onChange={(e) => { setTo(e.target.value); setDone(""); }} onKeyDown={(e) => { if (e.key === "Enter") go(); }} />
+      <label className="dp-dim"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> keep bitterness</label>
+      <button className="dp-btn dp-sm" disabled={!ok} onClick={go}>Scale</button>
+      {done && <span className="dp-dim dp-scaleog-done">{done}</span>}
+    </div>
   );
 }

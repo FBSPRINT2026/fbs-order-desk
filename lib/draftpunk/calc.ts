@@ -416,6 +416,30 @@ export function fromPercents(r: Recipe): Recipe {
   // process aids keep the weight they were given
   return { ...r, ferms: r.ferms.map((f) => (isAid(f) ? { ...f, pct: undefined } : { ...f, lb: Math.round(((f.pct || 0) / total) * billLb * 100) / 100 })) };
 }
+/**
+ * The same beer at another gravity (Nick, Nov 24 2026: "make same beer by percentages but scale from 1.050 to 1.055",
+ * BeerSmith's scale gravity): the grain bill keeps its percentages and is sized to hit `og`; process aids keep their
+ * weight. With `keepBitterness`, the hops are scaled so the bitterness keeps the same ratio to the gravity (BU:GU),
+ * worked out against the recipe's own IBU method (a couple of passes, since a bigger beer uses hops less well).
+ */
+export function scaleGravity(r: Recipe, og: number, keepBitterness = true): Recipe {
+  const before = calcRecipe(r);
+  if (!(og > 1) || !(before.og > 1)) return r;
+  const wasPct = r.byPercent;
+  let out = fromPercents({ ...toPercents(r), byPercent: { on: true, targetOg: og } });
+  out = { ...out, byPercent: wasPct?.on ? { on: true, targetOg: og } : wasPct ? { ...wasPct, on: false } : undefined };
+  if (keepBitterness && r.hops.length && before.ibu > 0) {
+    const want = (before.ibu / ((before.og - 1) * 1000)) * ((og - 1) * 1000);
+    for (let i = 0; i < 3; i++) {
+      const now = calcRecipe(out).ibu;
+      if (!(now > 0)) break;
+      const k = want / now;
+      if (Math.abs(k - 1) < 0.002) break;
+      out = { ...out, hops: out.hops.map((h) => (h.use === "dry_hop" ? h : { ...h, oz: Math.round(h.oz * k * 1000) / 1000 })) };
+    }
+  }
+  return out;
+}
 /** the percentages of a bill given in pounds (to switch a recipe to designing by percentages) */
 export function toPercents(r: Recipe): Recipe {
   const lb = r.ferms.filter((f) => !isAid(f)).reduce((a, f) => a + f.lb, 0);
