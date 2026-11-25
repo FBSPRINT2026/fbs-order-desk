@@ -877,12 +877,12 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
   // ink (charged by the line above), and the proof shows it beside a blacklight view (a production file labeled so)
   // effect inks (blacklight, Nick Nov 24 2026, #50225; glow in the dark beside it, Nov 25): one more screen and color with
   // the effect ink; a specialty ink (charged by the line above), and the proof shows its view (a production file so labeled)
-  const blacklightCtl = (d: Group["imprints"][number]) => {
+  const blacklightCtl = (d: Group["imprints"][number], onlyOn = false) => {
     if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
     const di = g.imprints.indexOf(d);
     const rows = EFFECT_INKS.map((e) => {
       const on = hasEffect(d, e.key);
-      if (fixed && !on) return null;
+      if ((fixed || onlyOn) && !on) return null;
       const setOn = (want: boolean) => update((x) => { x.imprints[di] = setEffect(x.imprints[di], e.key, want); });
       return on
         ? <div key={e.key} className="pr-scr pr-cc-line"><span className="pr-scr-l">{e.label}</span><span className="pr-scr-v">{e.ink} · 1 extra screen · add a {e.view} view to Production files for the proof</span>{!fixed && <button type="button" className="linkbtn" onClick={() => setOn(false)}>Remove</button>}</div>
@@ -1596,7 +1596,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen || d.ok ? (
-              <div key={d.id} className="imp-okw">{!frozen && d.ok && <div className="imp-ok-h"><span className="imp-ok-by">✓ Confirmed{d.ok.by ? ` by ${d.ok.by}` : ""}</span><button type="button" className="btn sm" onClick={() => update((x) => { delete x.imprints[di].ok; })}>Edit</button></div>}<PrintRow shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{!d.supplied && dtfCtl(d)}{puffCtl(d)}{specialCtl(d)}{!d.supplied && blacklightCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setDgzAsk(d.id) : undefined} /></div>
+              <div key={d.id} className="imp-okw">{!frozen && d.ok && <div className="imp-ok-h"><span className="imp-ok-by">✓ Confirmed{d.ok.by ? ` by ${d.ok.by}` : ""}</span><button type="button" className="btn sm" onClick={() => update((x) => { delete x.imprints[di].ok; })}>Edit</button></div>}<PrintRow shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{!d.supplied && dtfCtl(d)}{puffCtl(d)}{specialCtl(d)}{!d.supplied && blacklightCtl(d, true)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setDgzAsk(d.id) : undefined} /></div>
             ) : (
               <div key={d.id} className={"imp-card" + (needOk(d) && !d.ok ? " imp-need" : "")}>
                 <div className="imp-card-h">
