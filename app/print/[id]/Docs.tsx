@@ -1350,7 +1350,7 @@ function PaperProof(p: DocData & { printed: string; version?: number }) {
       const both = twoSided(s) || !!pics.back;
       // a wide piece (a business card, a postcard): front over back, each as big as the page takes (Nick, Nov 25: "stacked
       // on front and back so that they can be bigger and fill the whole page"); a tall one (a flyer) side by side
-      const wide = !sz || sz.w >= sz.h, cardW = wide ? Math.min(6.6, (3.3 * (sz ? sz.w / sz.h : 1.75))) : 0;
+      const wide = !sz || sz.w >= sz.h, cardW = wide ? Math.min(6.4, 3.0 * (sz ? sz.w / sz.h : 1.75)) : 0;
       const side = (label: string, url?: string, blank?: string) => (
         <div>
           <p className="pp-side" style={cardW ? { width: `${cardW}in`, margin: "0 auto .06in" } : undefined}>{label}</p>

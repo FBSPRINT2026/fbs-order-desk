@@ -661,3 +661,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 25 8:20am · 1.3.904 · Nick · + DTF Transfers moved beside + Add garment: the group's sizes picked once for every screen print in the group; each print shows its DTF transfers line
 - Nov 25 8:21am · 1.3.905 · Nick · Paper proof: a wide piece (business card, postcard) shows front over back, each as big as the page takes; a tall one stays side by side
 - Nov 25 8:22am · 1.3.906 · Nick · Order page prints: Blacklight / Glow lines only when they're on (added from Specialty prints in the Mockup Creator), not offered on every print
+- Nov 25 8:22am · 1.3.907 · Nick · Paper proof: stacked cards sized so front, back, specs and the approval line fit one page
