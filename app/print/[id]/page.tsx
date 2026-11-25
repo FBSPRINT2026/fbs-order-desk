@@ -116,7 +116,17 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     if (pics.length) { const { data: bs } = await admin.storage.from("proofs").createSignedUrls(pics.map((f) => f.file_path), 3600); (bs || []).forEach((r, i) => { if (r.signedUrl) (effectViews[pics[i].category] ||= []).push(r.signedUrl); }); }
   }
   const blacklight = effectViews.blacklight || [];
-  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, byLine, hexes, colorHexes, maxes, blacklight, effectViews, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
+  // paper printing items: each one's front and back pictures, for the paper proof (Nov 25 2026, #50226)
+  const paper: Record<string, { front?: string; back?: string }> = {};
+  {
+    const { linePic, backPic } = await import("@/lib/simpleOrders");
+    const want = groups.flatMap((g) => g.lines).filter((l) => (l.spec as { kind?: string } | undefined)?.kind === "paper").flatMap((l) => [[l.id, "front", linePic(l.spec as never)], [l.id, "back", backPic(l.spec as never)]] as [string, "front" | "back", string][]).filter((x) => x[2]);
+    if (want.length) {
+      const { data: ps } = await admin.storage.from("proofs").createSignedUrls(want.map((x) => x[2]), 3600);
+      want.forEach(([id, side], i) => { const u = ps?.[i]?.signedUrl; if (u) (paper[id] ||= {})[side] = u; });
+    }
+  }
+  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, byLine, hexes, colorHexes, maxes, blacklight, effectViews, paper, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
 
   // one tidy file name for every PDF (Oct 20, Nick): "40072 - Methodist Dallas - 2026 Donor Shirts - Proof v1"
   const short = (t: string, n: number) => { const x = (t || "").replace(/\s+/g, " ").trim(); return x.length <= n ? x : (x.slice(0, n).replace(/\s+\S*$/, "") || x.slice(0, n)); };

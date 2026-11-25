@@ -10,6 +10,7 @@ import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksFo
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { dtfPart } from "@/lib/pricing";
+import { paperSize, twoSided, type SimpleSpec } from "@/lib/simpleOrders";
 import { calcOrder, changeWord, inkWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, methodShort, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
@@ -46,6 +47,7 @@ export type DocData = {
   /** per group, per print: the largest it can print (inches) and on which size */ maxes: ({ w: number; h: number; on: string } | null)[][];
   printavo: boolean;
   /** the order's "Blacklight view" production files (signed pictures), shown beside the daylight mockup on the proof */ blacklight?: string[];
+  /** paper printing items' front and back pictures by line id (the paper proof) */ paper?: Record<string, { front?: string; back?: string }>;
   /** each effect ink's view pictures by its key (blacklight, glow), beside the daylight mockup on the proof */ effectViews?: Record<string, string[]>;
 };
 
@@ -1315,8 +1317,67 @@ function Wrap({ half, children }: { half?: boolean; children?: ReactNode }) {
  * mockups two to a page; then each print up close on the shirt color with its size, placement and inks. No prices,
  * no quantities.
  */
+/**
+ * The proof for paper printing (Nick, Nov 25 2026, #50226 business cards: "the outside of the box needs to have like a
+ * black line… shows like front, back, basically on paper printing"): one page per item, the front and the back side by
+ * side at the piece's own shape, a black line where it's cut, the bleed (red, dashed) and the safe area (blue, dashed),
+ * then its size, stock, ink and quantity.
+ */
+function PaperProof(p: DocData & { printed: string; version?: number }) {
+  const { o, cust, groups } = p;
+  const who = [cust.company || cust.name, cust.company && cust.name && cust.name !== cust.company ? cust.name : ""].filter(Boolean).join(" · ");
+  const items = groups.flatMap((g) => g.lines).filter((l) => (l.spec as SimpleSpec | undefined)?.kind === "paper");
+  return (<>
+    <style>{`
+      .pp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(3.2in,1fr));gap:.35in;margin-top:.25in}
+      .pp-side{font-size:10pt;color:#555;margin:0 0 .06in}
+      .pp-bleed{position:relative;padding:.12in;border:1px dashed #c33}
+      .pp-card{position:relative;border:1.5px solid #111;background:#fff;overflow:hidden}
+      .pp-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+      .pp-safe{position:absolute;inset:.12in;border:1px dashed #3a7bd5;pointer-events:none;z-index:1}
+      .pp-none{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#999;font-size:10pt}
+      .pp-dim{font-size:9pt;color:#555;text-align:center;margin-top:.05in}
+      .pp-key{display:flex;gap:.25in;flex-wrap:wrap;font-size:8.5pt;color:#555;margin-top:.2in}
+      .pp-kv{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.12in;margin-top:.2in;font-size:10pt}
+      .pp-kv span{display:block;color:#777;font-size:8.5pt}
+      .pp-ok{margin-top:.3in;border-top:1px solid #ddd;padding-top:.12in;font-size:10pt;color:#555;display:flex;gap:.4in}
+    `}</style>
+    {items.map((l, i) => {
+      const s = (l.spec || {}) as SimpleSpec, sz = paperSize(s.size), pics = p.paper?.[l.id] || {};
+      const ratio = sz ? `${sz.w} / ${sz.h}` : "3.5 / 2", dim = sz ? `${sz.w}" × ${sz.h}"` : s.size || "";
+      const both = twoSided(s) || !!pics.back;
+      const side = (label: string, url?: string, blank?: string) => (
+        <div>
+          <p className="pp-side">{label}</p>
+          <div className="pp-bleed"><div className="pp-card" style={{ aspectRatio: ratio }}>
+            {url ? <img src={url} alt={label} /> : <div className="pp-none">{blank || "Art coming"}</div>}
+            <div className="pp-safe" />
+          </div></div>
+          {dim && <div className="pp-dim">{dim}</div>}
+        </div>
+      );
+      return (
+        <section className="sheet pf" key={l.id}>
+          <div className="p2h"><div className="t disp">{l.garment || "Item"}</div><div className="r">Proof{p.version ? ` v${p.version}` : ""} · #{o.number} · page {i + 1} of {items.length}</div></div>
+          {who && <div style={{ fontSize: "10pt", color: "#555" }}>{who}{o.nickname ? ` · ${o.nickname}` : ""}</div>}
+          <div className="pp-cards">
+            {side("Front", pics.front)}
+            {both ? side("Back", pics.back, "Back art coming") : side("Back", undefined, "Blank")}
+          </div>
+          <div className="pp-key"><span><b style={{ color: "#111" }}>━</b> trim (where it&apos;s cut)</span><span style={{ color: "#c33" }}>┄ bleed: color runs past here</span><span style={{ color: "#3a7bd5" }}>┄ safe area: keep words inside</span></div>
+          <div className="pp-kv"><div><span>Size</span>{dim || "—"}</div><div><span>Stock</span>{s.stock || "—"}</div><div><span>Ink</span>{s.ink || "—"}</div><div><span>Quantity</span>{lineQty(l).toLocaleString()}</div></div>
+          {s.details && <div style={{ fontSize: "10pt", marginTop: ".1in" }}>{s.details}</div>}
+          <div className="pp-ok"><span>Approved by ______________________</span><span>Date ________</span></div>
+        </section>
+      );
+    })}
+  </>);
+}
+
 export function ProofDoc(p: DocData & { printed: string; version?: number }) {
   const { o, cust, groups } = p;
+  // paper printing (business cards, postcards, flyers): its own proof, front and back of each piece
+  if (groups.some((g) => g.lines.some((l) => (l.spec as SimpleSpec | undefined)?.kind === "paper")) && groups.every((g) => g.lines.every((l) => (l.spec as SimpleSpec | undefined)?.kind === "paper"))) return <PaperProof {...p} />;
   const sh = p.settings.shop;
   const who = [cust.company || cust.name, cust.company && cust.name && cust.name !== cust.company ? cust.name : ""].filter(Boolean).join(" · ");
   const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric", year: "numeric" });

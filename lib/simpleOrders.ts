@@ -36,6 +36,8 @@ export type SimpleSpec = {
   itemNo?: string; supplier?: string; productColor?: string; imprintType?: string; imprintColor?: string;
   // paper printing
   size?: string; stock?: string; ink?: string; details?: string;
+  /** the back (Nick, Nov 25 2026, #50226: "add a back"): its file and, for a PDF, its first page as a picture; the proof
+   *  shows front and back side by side */ back?: string; backName?: string; backPreview?: string;
   /** made from a card template (lib/printTemplates.ts): the template and what was typed, so it opens again as it was */
   card?: { template: string; name?: string; values: Record<string, string> };
 };
@@ -81,6 +83,17 @@ export const qtyOf = (l: GLine) => Object.values(l.sizes || {}).reduce((a: numbe
 
 /** the picture to show for a line: its own image, or a PDF's first-page preview */
 export const linePic = (s?: SimpleSpec | null) => (!s?.image ? "" : /\.(png|jpe?g|webp|gif|svg)$/i.test(s.image) ? s.image : s.preview || "");
+/** the back's picture (a paper item's back side) */
+export const backPic = (s?: SimpleSpec | null) => (!s?.back ? "" : /\.(png|jpe?g|webp|gif|svg)$/i.test(s.back) ? s.back : s.backPreview || "");
+/** a paper size typed any way ("3.5 x 2", "3.5 × 2\"", "8.5x11") in inches, width first; null when it can't be read */
+export function paperSize(t?: string | null): { w: number; h: number } | null {
+  const m = (t || "").match(/([\d.]+)\s*["”]?\s*[x×X]\s*([\d.]+)/);
+  if (!m) return null;
+  const w = +m[1], h = +m[2];
+  return w > 0 && h > 0 && w < 100 && h < 100 ? { w, h } : null;
+}
+/** printed on both sides: the ink says so ("4/4", "1/1"); "4/0" is one side */
+export const twoSided = (s?: SimpleSpec | null) => { const m = (s?.ink || "").match(/(\d)\s*\/\s*(\d)/); return m ? +m[2] > 0 : !!s?.back; };
 
 /** a PDF's first page as a PNG file (in the browser), for the line's preview */
 export async function pdfFirstPage(src: Blob, name: string, maxPx = 1400): Promise<File | null> {

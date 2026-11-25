@@ -5,7 +5,7 @@ import { ONE_SIZE, type GLine, type Group } from "@/lib/pricing";
 import { itemMockup } from "@/lib/itemProofs";
 import BusinessCardTool from "@/components/tools/BusinessCardTool";
 import type { CardFill } from "@/lib/printTemplates";
-import { IMPRINT_TYPES, SIGN_FINISHING, SIGN_MATERIALS, kindLabel, linePic, newSimpleGroup, pdfFirstPage, qtyOf, signEach, specText, sqft, type ProductKind, type SimpleSpec } from "@/lib/simpleOrders";
+import { IMPRINT_TYPES, SIGN_FINISHING, SIGN_MATERIALS, kindLabel, linePic, backPic, newSimpleGroup, pdfFirstPage, qtyOf, signEach, specText, sqft, type ProductKind, type SimpleSpec } from "@/lib/simpleOrders";
 
 /**
  * The middle of a signage / promotional products / paper printing order (lib/simpleOrders.ts; Nov 4, Nick): one card per
@@ -32,7 +32,7 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
   const lines = groups.flatMap((g, gi) => g.lines.map((l, li) => ({ g, gi, l, li })));
   // a group's logo mockup (Add logo) is its items' picture when they have none of their own
   const logoPic = (g: Group) => (g.mockupKind === "logo" && g.mockupThumbs?.[0]) || "";
-  const paths = [...lines.map((x) => linePic(x.l.spec)), ...groups.map(logoPic)].filter((p): p is string => !!p);
+  const paths = [...lines.map((x) => linePic(x.l.spec)), ...lines.map((x) => backPic(x.l.spec)), ...groups.map(logoPic)].filter((p): p is string => !!p);
   const key = paths.join("|");
   useEffect(() => {
     if (!paths.length) return;
@@ -68,6 +68,17 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
     const mk = shown ? await itemMockup(orderId, l?.id || "", l?.garment || "", shown, l?.spec?.mockupId) : null;
     setBusy("");
     spec(gi, li, { image: path, imageName: f.name, preview, proof: undefined, mockupId: mk && mk.ok ? mk.id || undefined : l?.spec?.mockupId, ...(extra || {}) });
+  };
+  /** a paper item's back (Nick, Nov 25 2026, #50226): its file and, for a PDF, its first page as a picture */
+  const uploadBack = async (gi: number, li: number, f: File) => {
+    setBusy(`${gi}-${li}-b`); setErr("");
+    const l = groups[gi]?.lines[li];
+    const path = `orders/${orderId}/items/${l?.id || "x"}-back-${Date.now()}-${f.name.replace(/[^\w.-]+/g, "_")}`;
+    const { error } = await sb.storage.from("proofs").upload(path, f, { contentType: f.type || "application/octet-stream" });
+    if (error) { setBusy(""); return setErr(`The back didn't upload: ${error.message}`); }
+    const backPreview = /pdf/i.test(f.type) || /\.pdf$/i.test(f.name) ? await makePreview(f, path) : undefined;
+    setBusy("");
+    spec(gi, li, { back: path, backName: f.name, backPreview, proof: undefined });
   };
   const savePreview = async (png: File, path: string) => {
     const pp = path.replace(/\.[^.]+$/, "") + "-preview.png";
@@ -113,13 +124,28 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
           const pf = s.proof ? PROOF[s.proof.status] : null;
           const id = `${gi}-${li}`;
           return (
-            <div key={l.id} className="sol-ln">
+            <div key={l.id} className={"sol-ln" + (kind === "paper" ? " sol-two" : "")}>
               <label className={"sol-img" + (s.image ? " has" : "")} title={s.image ? "Change the picture" : "Add a picture: what the customer approves"}>
                 {s.image ? (url ? <img src={url} alt={l.garment || "Item"} /> : isPdf(s.image) ? <span className="sol-pdf">PDF<small>{s.imageName}</small></span> : <span className="faint">…</span>)
                   : url ? <img src={url} alt={l.garment || "Item"} />
                   : <span className="sol-add">{busy === id ? "Uploading…" : "+ Picture"}</span>}
                 <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(gi, li, f); }} />
+                {kind === "paper" && <span className="sol-side">Front</span>}
               </label>
+              {kind === "paper" && (() => {
+                const bp = backPic(s), bu = bp ? urls[bp] : "";
+                return (
+                  <div className="sol-back">
+                    <label className={"sol-img" + (s.back ? " has" : "")} title={s.back ? "Change the back" : "Add the back: printed on the other side"}>
+                      {s.back ? (bu ? <img src={bu} alt="Back" /> : isPdf(s.back) ? <span className="sol-pdf">PDF<small>{s.backName}</small></span> : <span className="faint">…</span>)
+                        : <span className="sol-add">{busy === `${id}-b` ? "Uploading…" : "+ Back"}</span>}
+                      <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void uploadBack(gi, li, f); }} />
+                      {s.back && <span className="sol-side">Back</span>}
+                    </label>
+                    {s.back && <button type="button" className="linkbtn" onClick={() => spec(gi, li, { back: undefined, backName: undefined, backPreview: undefined, proof: undefined })}>Remove back</button>}
+                  </div>
+                );
+              })()}
               <div className="sol-body">
                 <div className="sol-top">
                   <input className="sol-name" aria-label="Item name" placeholder={kind === "signage" ? "Mambo 5K start banner" : kind === "promo" ? "20 oz vacuum tumbler" : "Business cards: Sarah Lee"} value={l.garment} onChange={(e) => edit(gi, li, (x) => { x.garment = e.target.value; })} />
