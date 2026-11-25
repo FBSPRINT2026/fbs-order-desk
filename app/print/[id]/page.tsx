@@ -5,7 +5,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { jobActor } from "@/lib/jobAccess";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { trainingSaid } from "@/lib/orderTrainings";
-import { calcOrder, hasBlacklight, withoutShopPieces, mergeSettings, orderGroups, type Customer, type Order, type Payment } from "@/lib/pricing";
+import { calcOrder, effectsOn, withoutShopPieces, mergeSettings, orderGroups, type Customer, type Order, type Payment } from "@/lib/pricing";
 import { loadGroupLook } from "@/lib/groupLook";
 import { addStockInks } from "@/lib/inkColors";
 import PrintButton from "./PrintButton";
@@ -106,14 +106,17 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
       (vs || []).forEach((r, i) => { if (r.signedUrl) designFiles[vec[i].id] = r.signedUrl; });
     }
   }
-  // the "Blacklight view" production files, beside the daylight mockup on the proof (Nov 24 2026, #50225)
-  const blacklight: string[] = [];
-  if (proof0 && groups.some((g) => g.imprints.some((d) => hasBlacklight(d)))) {
-    const { data: bf } = await admin.from("art_files").select("file_path, file_type, name").eq("order_id", id).eq("category", "blacklight").order("created_at");
-    const pics = ((bf || []) as { file_path: string; file_type: string | null; name: string | null }[]).filter((f) => /^image\//.test(f.file_type || "") || /\.(png|jpe?g|webp|gif)$/i.test(f.name || f.file_path));
-    if (pics.length) { const { data: bs } = await admin.storage.from("proofs").createSignedUrls(pics.map((f) => f.file_path), 3600); (bs || []).forEach((r) => { if (r.signedUrl) blacklight.push(r.signedUrl); }); }
+  // each effect ink's view (a "Blacklight view" / "In the dark view" production file), beside the daylight mockup on the
+  // proof (Nov 24 2026, #50225; glow Nov 25)
+  const effectViews: Record<string, string[]> = {};
+  const effKeys = [...new Set(groups.flatMap((g) => g.imprints.flatMap((d) => effectsOn(d).map((e) => e.key))))];
+  if (proof0 && effKeys.length) {
+    const { data: bf } = await admin.from("art_files").select("file_path, file_type, name, category").eq("order_id", id).in("category", effKeys).order("created_at");
+    const pics = ((bf || []) as { file_path: string; file_type: string | null; name: string | null; category: string }[]).filter((f) => /^image\//.test(f.file_type || "") || /\.(png|jpe?g|webp|gif)$/i.test(f.name || f.file_path));
+    if (pics.length) { const { data: bs } = await admin.storage.from("proofs").createSignedUrls(pics.map((f) => f.file_path), 3600); (bs || []).forEach((r, i) => { if (r.signedUrl) (effectViews[pics[i].category] ||= []).push(r.signedUrl); }); }
   }
-  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, byLine, hexes, colorHexes, maxes, blacklight, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
+  const blacklight = effectViews.blacklight || [];
+  const data: DocData = { o, cust, groups, c, settings, pays: (pays || []) as Payment[], designs, designUrls, designFiles, mockups, byLine, hexes, colorHexes, maxes, blacklight, effectViews, printavo: !!(od as { printavo_id?: string | null }).printavo_id };
 
   // one tidy file name for every PDF (Oct 20, Nick): "40072 - Methodist Dallas - 2026 Donor Shirts - Proof v1"
   const short = (t: string, n: number) => { const x = (t || "").replace(/\s+/g, " ").trim(); return x.length <= n ? x : (x.slice(0, n).replace(/\s+\S*$/, "") || x.slice(0, n)); };

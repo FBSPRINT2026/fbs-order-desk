@@ -581,11 +581,30 @@ export const SPECIAL_INK = /\b(metallic|shimmer|glitter|glow|reflective|foil|hig
 export const BLACKLIGHT_INK = "Blacklight UV";
 export const isBlacklightInk = (n: string) => /\bblack ?light\b|\buv\b/i.test(n);
 export const hasBlacklight = (d: Pick<Imprint, "inks">) => inkNames(d.inks).some(isBlacklightInk);
-/** a print's inks rebuilt from its logo's colors (the Mockup Creator, a color picked) keep the blacklight ink it had:
- *  it's a screen of its own, not one of the logo's colors */
+/** effect inks: an ink that's a screen of its own on top of the logo's colors, a specialty ink, with its own view on the
+ *  proof (Blacklight, Nick Nov 24 2026; Glow in the dark beside it, Nick Nov 25 2026). A new effect ink is one more entry. */
+export const EFFECT_INKS = [
+  { key: "blacklight", ink: BLACKLIGHT_INK, label: "Blacklight", hint: "UV ink, glows under a blacklight", view: "Under blacklight", test: /\bblack ?light\b|\buv\b/i },
+  { key: "glow", ink: "Glow in the Dark", label: "Glow in the dark", hint: "charges in light, glows in the dark", view: "In the dark", test: /\bglow\b/i },
+] as const;
+export type EffectInk = (typeof EFFECT_INKS)[number];
+export type EffectKey = EffectInk["key"];
+export const effectOf = (n: string) => EFFECT_INKS.find((e) => e.test.test(n));
+export const hasEffect = (d: Pick<Imprint, "inks">, key: EffectKey) => inkNames(d.inks).some((n) => effectOf(n)?.key === key);
+export const effectsOn = (d: Pick<Imprint, "inks">) => EFFECT_INKS.filter((e) => hasEffect(d, e.key));
+/** an effect ink put on or taken off a print: one screen and color more or less */
+export function setEffect<T extends Pick<Imprint, "inks" | "colors">>(im: T, key: EffectKey, on: boolean): T {
+  const e = EFFECT_INKS.find((x) => x.key === key)!, rest = inkNames(im.inks).filter((n) => effectOf(n)?.key !== key), had = rest.length !== inkNames(im.inks).length;
+  if (on === had) return im;
+  return on ? { ...im, inks: [...rest, e.ink].join(", "), colors: (im.colors || 0) + 1 } : { ...im, inks: rest.join(", "), colors: Math.max(1, (im.colors || 1) - 1) };
+}
+/** a print's inks rebuilt from its logo's colors (the Mockup Creator, a color picked) keep the effect inks it had
+ *  (blacklight, glow): each is a screen of its own, not one of the logo's colors */
 export function keepBlacklight<T extends Pick<Imprint, "inks" | "colors" | "method">>(prev: T, next: T): T {
-  if (!hasBlacklight(prev) || hasBlacklight(next) || next.method !== "screen") return next;
-  return { ...next, inks: [...inkNames(next.inks), BLACKLIGHT_INK].join(", "), colors: next.colors < FULL_COLOR ? (next.colors || 0) + 1 : next.colors };
+  if (next.method !== "screen") return next;
+  let out = next;
+  for (const e of effectsOn(prev)) if (!hasEffect(out, e.key)) out = { ...out, inks: [...inkNames(out.inks), e.ink].join(", "), colors: out.colors < FULL_COLOR ? (out.colors || 0) + 1 : out.colors };
+  return out;
 }
 /** the specialty inks a screen print uses, by name ("Gold Shimmer") */
 export const specialInks = (d: Pick<Imprint, "inks">) => inkNames(d.inks).filter((n) => SPECIAL_INK.test(n));

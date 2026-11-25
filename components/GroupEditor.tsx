@@ -8,7 +8,7 @@ import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "
 import { PrintThumb } from "@/components/LogoThumb";
 import { estimateStitches, threadByName } from "@/lib/embroidery";
 import { kidLine, screenFeeOf } from "@/lib/pricing";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled, specialInks, specialInkEach, BLACKLIGHT_INK, hasBlacklight, isBlacklightInk } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled, specialInks, specialInkEach, BLACKLIGHT_INK, hasBlacklight, isBlacklightInk, EFFECT_INKS, hasEffect, setEffect } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
@@ -875,18 +875,20 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
   };
   // blacklight effect (Nick, Nov 24 2026, #50225): one more screen and color with the Blacklight UV ink; it's a specialty
   // ink (charged by the line above), and the proof shows it beside a blacklight view (a production file labeled so)
+  // effect inks (blacklight, Nick Nov 24 2026, #50225; glow in the dark beside it, Nov 25): one more screen and color with
+  // the effect ink; a specialty ink (charged by the line above), and the proof shows its view (a production file so labeled)
   const blacklightCtl = (d: Group["imprints"][number]) => {
     if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
-    const di = g.imprints.indexOf(d), on = hasBlacklight(d);
-    if (fixed && !on) return null;
-    const setBl = (want: boolean) => update((x) => {
-      const im = x.imprints[di], inks = inkNames(im.inks);
-      if (want) { im.inks = [...inks, BLACKLIGHT_INK].join(", "); im.colors = (im.colors || 0) + 1; }
-      else { im.inks = inks.filter((n) => !isBlacklightInk(n)).join(", "); im.colors = Math.max(1, (im.colors || 1) - 1); }
-    });
-    return on
-      ? <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Blacklight effect</span><span className="pr-scr-v">{BLACKLIGHT_INK} · 1 extra screen · add a Blacklight view to Production files for the proof</span>{!fixed && <button type="button" className="linkbtn" onClick={() => setBl(false)}>Remove</button>}</div>
-      : <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Blacklight?</span><span className="pr-scr-v faint">UV-reactive ink, 1 extra screen</span><button type="button" className="btn sm" onClick={() => setBl(true)}>+ Blacklight effect</button></div>;
+    const di = g.imprints.indexOf(d);
+    const rows = EFFECT_INKS.map((e) => {
+      const on = hasEffect(d, e.key);
+      if (fixed && !on) return null;
+      const setOn = (want: boolean) => update((x) => { x.imprints[di] = setEffect(x.imprints[di], e.key, want); });
+      return on
+        ? <div key={e.key} className="pr-scr pr-cc-line"><span className="pr-scr-l">{e.label}</span><span className="pr-scr-v">{e.ink} · 1 extra screen · add a {e.view} view to Production files for the proof</span>{!fixed && <button type="button" className="linkbtn" onClick={() => setOn(false)}>Remove</button>}</div>
+        : <div key={e.key} className="pr-scr pr-cc-line"><span className="pr-scr-l">{e.label}?</span><span className="pr-scr-v faint">{e.hint}, 1 extra screen</span><button type="button" className="btn sm" onClick={() => setOn(true)}>+ {e.label}</button></div>;
+    }).filter(Boolean);
+    return rows.length ? <>{rows}</> : null;
   };
   const puffCtl = (d: Group["imprints"][number]) => {
     if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;

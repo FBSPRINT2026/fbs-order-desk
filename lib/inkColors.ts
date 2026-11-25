@@ -23,6 +23,8 @@ export const SHOP_INK_HEX: Record<string, string> = {
   "Athletic Gold": "#FFB612", Silver: "#A2AAAD", Red: "#C8102E", Orange: "#FF6A13", Purple: "#4B2E83",
   // shown as UV violet wherever its swatch is drawn (clear or faint in daylight; it glows under a blacklight)
   "Blacklight UV": "#7C3AED",
+  // glow ink: the pale green it glows
+  "Glow in the Dark": "#B9F5A0",
 };
 
 /** Common PMS (coated) colors with approximate screen values. Other PMS numbers can be typed with a custom color. */
@@ -98,6 +100,7 @@ export const colorHex = (name: string) => {
   if (WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name] || SHOP_INK_HEX[name]) return WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name] || SHOP_INK_HEX[name];
   if (/^#[0-9a-f]{6}$/i.test(name)) return name;
   if (/\bblack ?light\b|\buv\b/i.test(name)) return SHOP_INK_HEX["Blacklight UV"];
+  if (/\bglow\b/i.test(name)) return SHOP_INK_HEX["Glow in the Dark"];
   const m = name.trim().replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "");
   // a thread by its name ("Madeira 1981 Carmine", "Isacord 0670 Cream"): its color, wherever an embroidery print's
   // threads are shown with the inks' swatches (Oct 31: a work order showed them gray)

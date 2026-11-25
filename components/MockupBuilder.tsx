@@ -50,7 +50,7 @@ import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, onPage
 import { detectCenter } from "@/lib/visualCenter";
 import { tintBase, tintPhoto } from "@/lib/tintPhoto";
 import { applyDistress } from "@/lib/distress";
-import { PREVIEWABLE_TYPES, KID_SIZES, type GLine, BLACKLIGHT_INK, hasBlacklight, isBlacklightInk, keepBlacklight, specialInks, inkNames as inkNamesOf } from "@/lib/pricing";
+import { PREVIEWABLE_TYPES, KID_SIZES, type GLine, BLACKLIGHT_INK, hasBlacklight, isBlacklightInk, keepBlacklight, effectOf, hasEffect, setEffect, specialInks, inkNames as inkNamesOf } from "@/lib/pricing";
 import DesignSearch, { type OrderArt } from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
 import ShirtDesigner from "@/components/ShirtDesigner";
@@ -5166,8 +5166,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       {im.method === "screen" && im.colors < FULL_COLOR && !portal && (() => {
                         const set = (ch: (x: Imprint) => Imprint) => setImprints((xs) => xs.map((x) => (x.id === im.id ? ch(x) : x)));
                         const soft = im.printStyle === "fashion" || !!im.softHand, bl = hasBlacklight(im);
-                        const spNames = specialInks(im).filter((n) => !isBlacklightInk(n)), spOn = im.specialInk ?? spNames.length > 0;
-                        const onNow = [im.puff && "Puff", bl && "Blacklight", spOn && (spNames.join(", ") || "Specialty ink"), soft && "Soft Hand"].filter(Boolean) as string[];
+                        const spNames = specialInks(im).filter((n) => !effectOf(n)), spOn = im.specialInk ?? spNames.length > 0, glow = hasEffect(im, "glow");
+                        const onNow = [im.puff && "Puff", bl && "Blacklight", glow && "Glow", spOn && (spNames.join(", ") || "Specialty ink"), soft && "Soft Hand"].filter(Boolean) as string[];
                         const open = spOpen === im.id;
                         return (
                           <div className={"mk-bs" + (open ? " on" : "")}>
@@ -5184,6 +5184,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                               <label className="check" title="UV-reactive ink on one extra screen: glows under a blacklight. Add a 'Blacklight view' production file for the proof">
                                 <input type="checkbox" checked={bl} onChange={(e) => set((x) => { const ns = inkNamesOf(x.inks).filter((n) => !isBlacklightInk(n)); return e.target.checked ? { ...x, inks: [...ns, BLACKLIGHT_INK].join(", "), colors: (x.colors || 0) + 1 } : { ...x, inks: ns.join(", "), colors: Math.max(1, (x.colors || 1) - 1) }; })} />
                                 Blacklight <span className="faint">+1 screen, UV ink</span>
+                              </label>
+                              <label className="check" title="Glow-in-the-dark ink on one extra screen: charges in light and glows in the dark. Add an 'In the dark' production file for the proof">
+                                <input type="checkbox" checked={glow} onChange={(e) => set((x) => setEffect(x, "glow", e.target.checked))} />
+                                Glow in the dark <span className="faint">+1 screen, glow ink</span>
                               </label>
                               <label className="check" title="Metallic, shimmer, glitter, glow, reflective, high density, foil…: charged per piece on its own line. Pick the ink itself in the colors above">
                                 <input type="checkbox" checked={spOn} onChange={(e) => set((x) => { const y = { ...x }; if (e.target.checked === spNames.length > 0) delete y.specialInk; else y.specialInk = e.target.checked; return y; })} />

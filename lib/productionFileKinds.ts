@@ -24,6 +24,7 @@ export const PROD_KINDS = [
   { k: "proof", label: "Approved proof", hint: "The signed-off proof" },
   // the one production file the customer sees (Nick, Nov 24 2026, #50225): beside the daylight mockup on the proof
   { k: "blacklight", label: "Blacklight view (on the proof)", hint: "The mockup or a photo under UV light: the proof shows it beside the daylight mockup" },
+  { k: "glow", label: "In the dark view (on the proof)", hint: "The mockup or a photo in the dark (glow ink): the proof shows it beside the daylight mockup" },
   { k: "photo", label: "Photo", hint: "A real photo: first off the press, finished product, a sample" },
   { k: "other", label: "Other", hint: "Anything else" },
 ] as const;
