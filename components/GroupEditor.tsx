@@ -1038,12 +1038,18 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
     const fin = Math.round((finAll - tags) * 100) / 100;
     // names (personalization, names & numbers) are their own part of the total, not "Garments" (Nov 1, #40345: the
     // three names' $15 showed as Garments $15.00 on customer supplied jackets)
-    const pers = Math.round(((gc as { persTotal?: number }).persTotal || 0) * 100) / 100;
-    const gar = Math.round((gc.sub - imp - finAll - pers) * 100) / 100;
+    // DTF transfers for some sizes (and the screen print taken off them) are their own part too
+    const pItems = ((gc as { persItems?: { label?: string; amount: number }[] }).persItems || []);
+    const isDtf = (x: { label?: string }) => x.label === "DTF transfers" || x.label === "Screen print not on these";
+    const dtfAmt = Math.round(pItems.filter(isDtf).reduce((a, x) => a + x.amount, 0) * 100) / 100;
+    const persN = pItems.filter((x) => !isDtf(x)).length;
+    const pers = Math.round((((gc as { persTotal?: number }).persTotal || 0) - dtfAmt) * 100) / 100;
+    const gar = Math.round((gc.sub - imp - finAll - pers - dtfAmt) * 100) / 100;
     const bits: [string, number, string?][] = [
       ...(gc.wholesale && Math.abs(gar) < 0.01 ? [] : [["Garments", gar] as [string, number]]),
-      ...(pers > 0.004 ? [["Personalization", pers, `${(gc as { persItems?: unknown[] }).persItems?.length || 0} name${((gc as { persItems?: unknown[] }).persItems?.length || 0) === 1 ? "" : "s"}`] as [string, number, string]] : []),
-      ["Imprints", imp],
+      ...(pers > 0.004 ? [["Personalization", pers, `${persN} name${persN === 1 ? "" : "s"}`] as [string, number, string]] : []),
+      ["Imprints", Math.round((imp + Math.min(0, pItems.filter((x) => x.label === "Screen print not on these").reduce((a, x) => a + x.amount, 0))) * 100) / 100],
+      ...(pItems.some((x) => x.label === "DTF transfers") ? [["DTF transfers", Math.round(pItems.filter((x) => x.label === "DTF transfers").reduce((a, x) => a + x.amount, 0) * 100) / 100] as [string, number]] : []),
       // finishing by name when there's one ("Tag removal & custom imprint"), its own line on top of the prints
       ...(tags ? [["Tag prints", tags, `${money(tagEach)} a piece`] as [string, number, string]] : []),
       ...(fin > 0.004 ? [["Finishing", fin, gc.finishing.filter((f) => !isRelabel(f)).map((f) => `${f.name} ${money(+f.price)}/pc`).join(", ")] as [string, number, string]] : []),
@@ -1397,6 +1403,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
         {dtfAble && (dtfOpen || dtfOn.length > 0) && <div className="gl-dtf">
           <span className="gl-dtf-l">Sizes on DTF</span>
           <span className="pr-dtf-chips">{groupSizes(g).map((z) => <button key={z.size} type="button" disabled={fixed} className={"chip" + (dtfOn.includes(z.size) ? " on" : "")} aria-pressed={dtfOn.includes(z.size)} onClick={() => dtfToggle(z.size)}>{z.size} {z.qty}</button>)}</span>
+          {dtfOn.length > 0 && <label className="gl-dtf-each"><span className="gl-dtf-l">Price per transfer</span><MoneyField min="0" className="gl-dtf-in" aria-label="Price per transfer" placeholder="0.00" value={dtfPrints.find((d) => d.dtf?.each != null)?.dtf?.each ?? ""} disabled={fixed} onChange={(e) => { const t = e.target.value, v = t === "" ? undefined : +t; if (v !== undefined && isNaN(v)) return; update((x) => { for (const im of x.imprints) if (im.dtf) im.dtf.each = v; }); }} /><span className="faint">made and pressed, each</span></label>}
           <span className="faint">{dtfOn.length ? `Press prints ${groupSizes(g).filter((z) => !dtfOn.includes(z.size)).reduce((a, z) => a + z.qty, 0)}; the screens are sized for the rest in the Mockup Creator.` : "Tap the sizes the press skips: they get a DTF transfer of the same art."}</span>
           {!fixed && dtfOn.length > 0 && <button type="button" className="linkbtn" onClick={() => { update((x) => { for (const im of x.imprints) delete im.dtf; }); setDtfOpen(false); }}>Remove DTF</button>}
         </div>}

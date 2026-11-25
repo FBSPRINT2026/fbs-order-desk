@@ -663,3 +663,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 25 8:22am · 1.3.906 · Nick · Order page prints: Blacklight / Glow lines only when they're on (added from Specialty prints in the Mockup Creator), not offered on every print
 - Nov 25 8:22am · 1.3.907 · Nick · Paper proof: stacked cards sized so front, back, specs and the approval line fit one page
 - Nov 25 8:23am · 1.3.908 · Nick · Quote options: Remove option on each option's bar; when one option is left it's an ordinary group again
+- Nov 25 8:48am · 1.3.909 · Nick · DTF transfers priced: a price per transfer (made and pressed) typed beside the sizes; those sizes drop the screen print charge and carry the transfer instead, each its own row under the line on the order, quote, invoice and QuickBooks; the screen print's price break counts only what the press prints

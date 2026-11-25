@@ -201,7 +201,7 @@ export type Imprint = { /** a sample run's copy of this print: the order's print
    *  as DTF… so we can make the screens bigger"): the sizes the press skips, printed as a DTF transfer of the same art at
    *  `size` (the largest that fits the smallest of them; set by the Mockup Creator). One print, one line: priced as the
    *  screen print, every piece counted for its break */
-  dtf?: { sizes: string[]; size?: string };
+  dtf?: { sizes: string[]; size?: string; /** the price each transfer is charged at (made and pressed), typed on the order */ each?: number };
   /** the ink picked for each color of the logo (logo color hex → ink), from the Mockup Creator, so the order page and a
    *  reopened mockup show the logo in the chosen inks (Oct 20, Nick: changed green to yellow, the order still showed green) */
   /** where the logo is centered, as a share of its picture, when its box's middle isn't its middle (a round badge with a
@@ -1310,7 +1310,10 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const eti = pl.embTiers?.length ? tierIndex(qty, { tiers: pl.embTiers }) : ti;
   const ix = { eti, remake: !!g.remake, screenFee: g.screenFee != null && !isNaN(+g.screenFee) ? +g.screenFee : undefined };
   // each print's price break: the pieces carrying its logo across the whole order (never fewer than this group's)
-  const dq = (d: Imprint) => { const lk = d.method === "screen" ? seen?.links?.get(d.id) : undefined; const n = lk ? seen?.designQty?.get(lk) || 0 : d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}:${printSizeKey(d)}`) || 0 : 0; return n > qty ? n : qty; };
+  // a screen print sending some sizes to DTF transfers (Imprint.dtf): its pieces are only the ones the press prints (Nick,
+  // Nov 25 2026, #50048: "2 shirts as transfer, now you're going to do 38 printed")
+  const dtfOff = (d: Imprint) => (d.method === "screen" && d.dtf?.sizes?.length ? (g.lines || []).reduce((a, l) => a + d.dtf!.sizes.reduce((b, z) => b + num((l.sizes as Record<string, number> | undefined)?.[z]), 0), 0) : 0);
+  const dq = (d: Imprint) => { const lk = d.method === "screen" ? seen?.links?.get(d.id) : undefined; const n = lk ? seen?.designQty?.get(lk) || 0 : d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}:${printSizeKey(d)}`) || 0 : 0; return Math.max(0, (n > qty ? n : qty) - dtfOff(d)); };
   // youth screens (Oct 30, Nick: "two fronts, which both get setups… the quantity discount on the front for one, and…
   // for the other. Then they both get the same sleeve. They get the full discount on the sleeve. And only one setup"):
   // a print with its own youth screen is priced at the youth pieces' break on youth shirts and the adult pieces' on
@@ -1321,7 +1324,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   type Side = "a" | "y" | undefined;
   const sideQty = (side: Side) => (side === "y" ? yQty : aQty);
   // a program can price both sides at the whole group's break and only charge the youth screens (Group.youthTogether)
-  const tiOf = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? tierIndex(sideQty(side), pl) : dq(d) === qty ? ti : tierIndex(dq(d), pl));
+  const tiOf = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? tierIndex(sideQty(side), pl) : dq(d) === qty ? ti : tierIndex(Math.max(1, dq(d)), pl));
   const ixOf0 = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQty(side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
   // the pieces a print is priced at (DTF transfers are priced by size and these pieces, lib/dtfGrid.ts)
   const ixOf = (d: Imprint, side?: Side) => ({ ...ixOf0(d, side), q: side && split(d) && !g.youthTogether ? sideQty(side) : dq(d) });
@@ -1418,7 +1421,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       if (c.digits && rr.digit) persItems.push({ lineId, text: `${c.digits} digit${c.digits === 1 ? "" : "s"}${at}`, size: "" as Size | "", qty: c.digits, unit: rr.digit, amount: r2(c.digits * rr.digit), label: "Number digits" });
     }
   }
-  const persTotal = r2(persItems.reduce((a, x) => a + x.amount, 0));
+  let persTotal = r2(persItems.reduce((a, x) => a + x.amount, 0));
   const lines: LineCalc[] = (g.lines || []).map((l, li) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
@@ -1445,6 +1448,23 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     });
     return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
+  // DTF transfers for some sizes of a screen print (Imprint.dtf): on each line, those sizes don't carry the screen print
+  // (taken off as its own row) and carry the transfer at the price typed. Lines with a price typed by hand, a sample or
+  // the shop's own are left as they are
+  (g.imprints || []).forEach((d, di) => {
+    if (d.method !== "screen" || !d.dtf?.sizes?.length || gs || smp) return;
+    const scrEach = r2(imprints[di]?.each || 0), at = d.location || "Print";
+    (g.lines || []).forEach((l, li) => {
+      if (l.shopUse || l.ghost || lines[li]?.hasOv) return;
+      const by = d.dtf!.sizes.map((z) => [z, num((l.sizes as Record<string, number> | undefined)?.[z])] as const).filter(([, n]) => n > 0);
+      const q = by.reduce((a, [, n]) => a + n, 0);
+      if (!q) return;
+      const zs = by.map(([z, n]) => `${z} ${n}`).join(" · ");
+      if (scrEach > 0) persItems.push({ lineId: l.id, text: `${at} · ${zs} on DTF transfers, not screen printed`, size: "" as Size | "", qty: q, unit: -scrEach, amount: r2(-q * scrEach), label: "Screen print not on these" });
+      persItems.push({ lineId: l.id, text: `${at} · same art · ${zs}`, size: "" as Size | "", qty: q, unit: num(d.dtf!.each), amount: r2(q * num(d.dtf!.each)), label: "DTF transfers" });
+    });
+  });
+  persTotal = r2(persItems.reduce((a, x) => a + x.amount, 0));
   // screens: no underbase screen when every garment is light
   const anyDark = !pl.darkAddsColor || (g.lines || []).some((l) => billQty(l) > 0 && !isLightColor(l.color, pl));
   const setups0 = anyDark ? imprints : (g.imprints || []).map((d) => ({ id: d.id, ...imprintPrice(d, tiOf(d), pl, true, true, ixOf(d)) }));

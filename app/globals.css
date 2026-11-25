@@ -24446,3 +24446,5 @@ button.sst-o{cursor:pointer}button.sst-o:hover{border-color:var(--accent);backgr
 /* the group's "+ DTF Transfers" sizes (beside + Add garment, Nov 25 2026) */
 .gl-dtf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 14px 10px; font-size: 13px; }
 .gl-dtf-l { font-weight: 700; font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+.gl-dtf-each { display: inline-flex; align-items: center; gap: 6px; }
+.gl-dtf-each .gl-dtf-in { width: 90px; height: 32px; }
