@@ -1467,7 +1467,11 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (dps.length && dtfSz.size) (g.lines || []).forEach((l, li) => {
       const lc = lines[li]; if (!lc?.dtfQty) return;
       const zs = [...dtfSz].map((z) => [z, num((l.sizes as Record<string, number> | undefined)?.[z])] as const).filter(([, n]) => n > 0).map(([z, n]) => `${z} ${n}`).join(" · ");
-      const unit = r2(lc.each - dps.reduce((a, { di }) => a + num(imprints[di]?.each), 0) + dps.reduce((a, { d }) => a + num(d.dtf!.each), 0));
+      // the transfer replaces the whole screen print on these pieces: its print price and its per-piece extras (specialty
+      // ink, puff) come off; the other prints (a back printed as usual) stay (Nov 25, Nick, #50227: "the front only gets
+      // the DTF, the back gets the regular print"; the neon front's $0.50 was still on the transfer pieces)
+      const extraOf = (d: Imprint) => (g.specialtyInk ? (pl.specialtyInk?.length ? specialInkEach(pl, ti) : 0) : specialInkOf(d) ? specialInkEach(pl, ti) : 0) + (d.puff ? puffEach(pl) : 0);
+      const unit = r2(lc.each - dps.reduce((a, { d, di }) => a + num(imprints[di]?.each) + extraOf(d), 0) + dps.reduce((a, { d }) => a + num(d.dtf!.each), 0));
       persItems.push({ lineId: l.id, text: `${[...new Set(dps.map(({ d }) => d.location || "Print"))].join(", ")} · same art · ${zs}`, size: "" as Size | "", qty: lc.dtfQty, unit: Math.max(0, unit), amount: r2(lc.dtfQty * Math.max(0, unit)), label: "DTF transfers" });
     });
   }
