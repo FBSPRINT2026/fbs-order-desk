@@ -1314,7 +1314,18 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   // a screen print sending some sizes to DTF transfers (Imprint.dtf): its pieces are only the ones the press prints (Nick,
   // Nov 25 2026, #50048: "2 shirts as transfer, now you're going to do 38 printed")
   const dtfOff = (d: Imprint) => (d.method === "screen" && d.dtf?.sizes?.length ? (g.lines || []).reduce((a, l) => a + d.dtf!.sizes.reduce((b, z) => b + num((l.sizes as Record<string, number> | undefined)?.[z]), 0), 0) : 0);
-  const dq = (d: Imprint) => { const lk = d.method === "screen" ? seen?.links?.get(d.id) : undefined; const n = lk ? seen?.designQty?.get(lk) || 0 : d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}:${printSizeKey(d)}`) || 0 : 0; return Math.max(0, (n > qty ? n : qty) - dtfOff(d)); };
+  const dq = (d: Imprint) => {
+    const lk = d.method === "screen" ? seen?.links?.get(d.id) : undefined;
+    const k = lk || (d.design_id ? `${d.method}:${d.design_id}:${printSizeKey(d)}` : "");
+    let n = k ? seen?.designQty?.get(k) || 0 : 0;
+    // a print another group gives its own youth screens: a group of only adult shirts (or only youth) prints from that
+    // side's screens, so it's priced at that side's pieces across the order
+    if (k && seen?.designQty?.get(`${k}|split`) && !youthSplit(g, d)) {
+      const kids = (g.lines || []).map(kidLine), yq = (g.lines || []).reduce((a, l, i) => a + (kids[i] ? billQty(l) : 0), 0);
+      if (yq === 0) n = seen.designQty.get(`${k}|a`) || n; else if (yq === qty) n = seen.designQty.get(`${k}|y`) || n;
+    }
+    return Math.max(0, (n > qty ? n : qty) - dtfOff(d));
+  };
   // youth screens (Oct 30, Nick: "two fronts, which both get setups… the quantity discount on the front for one, and…
   // for the other. Then they both get the same sleeve. They get the full discount on the sleeve. And only one setup"):
   // a print with its own youth screen is priced at the youth pieces' break on youth shirts and the adult pieces' on
@@ -1634,12 +1645,18 @@ export function calcOrder(
     // a print with its own youth screens: each side's pieces too, so youth and adult are each priced at the order's count
     const kid = (g.lines || []).map(kidLine);
     const yq = (g.lines || []).reduce((a, l, i) => a + (kid[i] ? billQty(l) : 0), 0);
+    // every group's adult and youth pieces of the print, and whether any group gives it its own youth screens: a group
+    // of only adult (or only youth) shirts is then priced at that side's count too, the same as the split groups' sides
+    // (Nov 25, #50227: Genesis and Kings' backs were at all 784 pieces, the other teams' adult backs at the 596 adults)
+    const keys = new Set<string>();
     for (const d of g.imprints || []) {
-      if (!youthSplit(g, d)) continue;
       const k = (d.method === "screen" ? seen.links?.get(d.id) : undefined) || (d.design_id ? `${d.method}:${d.design_id}:${printSizeKey(d)}` : "");
       if (!k) continue;
-      m.set(`${k}|y`, Math.max(m.get(`${k}|y`) || 0, 0) + yq);
-      m.set(`${k}|a`, Math.max(m.get(`${k}|a`) || 0, 0) + (q - yq));
+      if (youthSplit(g, d)) m.set(`${k}|split`, 1);
+      if (keys.has(k)) continue;
+      keys.add(k);
+      m.set(`${k}|y`, (m.get(`${k}|y`) || 0) + yq);
+      m.set(`${k}|a`, (m.get(`${k}|a`) || 0) + (q - yq));
     }
     return m;
   };
