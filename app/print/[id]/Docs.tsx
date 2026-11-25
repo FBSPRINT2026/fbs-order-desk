@@ -1330,6 +1330,8 @@ function PaperProof(p: DocData & { printed: string; version?: number }) {
   return (<>
     <style>{`
       .pp-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(3.2in,1fr));gap:.35in;margin-top:.25in}
+      .pp-cards.stack{grid-template-columns:1fr;justify-items:center;gap:.25in}
+      .pp-cards.stack > div{width:100%}
       .pp-side{font-size:10pt;color:#555;margin:0 0 .06in}
       .pp-bleed{position:relative;padding:.12in;border:1px dashed #c33}
       .pp-card{position:relative;border:1.5px solid #111;background:#fff;overflow:hidden}
@@ -1346,10 +1348,13 @@ function PaperProof(p: DocData & { printed: string; version?: number }) {
       const s = (l.spec || {}) as SimpleSpec, sz = paperSize(s.size), pics = p.paper?.[l.id] || {};
       const ratio = sz ? `${sz.w} / ${sz.h}` : "3.5 / 2", dim = sz ? `${sz.w}" × ${sz.h}"` : s.size || "";
       const both = twoSided(s) || !!pics.back;
+      // a wide piece (a business card, a postcard): front over back, each as big as the page takes (Nick, Nov 25: "stacked
+      // on front and back so that they can be bigger and fill the whole page"); a tall one (a flyer) side by side
+      const wide = !sz || sz.w >= sz.h, cardW = wide ? Math.min(6.6, (3.3 * (sz ? sz.w / sz.h : 1.75))) : 0;
       const side = (label: string, url?: string, blank?: string) => (
         <div>
-          <p className="pp-side">{label}</p>
-          <div className="pp-bleed"><div className="pp-card" style={{ aspectRatio: ratio }}>
+          <p className="pp-side" style={cardW ? { width: `${cardW}in`, margin: "0 auto .06in" } : undefined}>{label}</p>
+          <div className="pp-bleed" style={cardW ? { width: `${cardW}in`, margin: "0 auto" } : undefined}><div className="pp-card" style={{ aspectRatio: ratio }}>
             {url ? <img src={url} alt={label} /> : <div className="pp-none">{blank || "Art coming"}</div>}
             <div className="pp-safe" />
           </div></div>
@@ -1360,7 +1365,7 @@ function PaperProof(p: DocData & { printed: string; version?: number }) {
         <section className="sheet pf" key={l.id}>
           <div className="p2h"><div className="t disp">{l.garment || "Item"}</div><div className="r">Proof{p.version ? ` v${p.version}` : ""} · #{o.number} · page {i + 1} of {items.length}</div></div>
           {who && <div style={{ fontSize: "10pt", color: "#555" }}>{who}{o.nickname ? ` · ${o.nickname}` : ""}</div>}
-          <div className="pp-cards">
+          <div className={"pp-cards" + (wide ? " stack" : "")}>
             {side("Front", pics.front)}
             {both ? side("Back", pics.back, "Back art coming") : side("Back", undefined, "Blank")}
           </div>

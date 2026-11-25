@@ -659,3 +659,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 25 8:15am · 1.3.902 · Nick · Paper printing: + Back on each item (its file beside the front), and the paper proof: one page per item with the front and back side by side at the piece's own shape, a black trim line, dashed bleed and safe lines, then size, stock, ink and quantity (#50226 business cards)
 - Nov 25 8:18am · 1.3.903 · Nick · + DTF Transfers (and Blacklight / Glow) show on the order page's print as the Mockup Creator set it, not only when the print is being edited
 - Nov 25 8:20am · 1.3.904 · Nick · + DTF Transfers moved beside + Add garment: the group's sizes picked once for every screen print in the group; each print shows its DTF transfers line
+- Nov 25 8:21am · 1.3.905 · Nick · Paper proof: a wide piece (business card, postcard) shows front over back, each as big as the page takes; a tall one stays side by side
