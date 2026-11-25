@@ -9,6 +9,7 @@ import { threadByName } from "@/lib/embroidery";
 import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksFor, inksOnColor, livePrint, liveInkBy } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
+import { dtfPart } from "@/lib/pricing";
 import { calcOrder, changeWord, inkWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, methodShort, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
@@ -1228,6 +1229,9 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
     const at = specs.findIndex(([k]) => k === "Print size" || k === "Size");
     if (at >= 0) specs.splice(at, 1, [`Adult (${pcs(false)} pcs)`, sz.label || "—"], [`Youth (${pcs(true)} pcs)`, `${ysz.label || "—"}${d.method === "screen" ? " · own screen" : ""}`]);
   }
+  // some sizes on DTF transfers (Nov 25 2026, #50048): the press skips them; the transfers are the same art at their size
+  const dtfP = grp && !d.visualOnly && d.method === "screen" ? dtfPart(grp, d) : null;
+  if (dtfP) specs.push(["DTF transfers", `${dtfP.text} · press skips these`]);
   const inkRows = d.method === "dtf" ? [] : inks.length ? inks : Array.from({ length: d.colors >= FULL_COLOR ? 0 : Math.max(1, d.colors || 1) }, () => "");
   return (
     <Wrap half={half}>
@@ -1506,6 +1510,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   const specs: [string, string][] = d.visualOnly ? [["Location", d.location || "—"], ["Print", MATCH_PREV]] : [
     ["Location", d.location || "—"], ["Print size", (sz.label || "—") + (o.groups[gi] && youthSplit(o.groups[gi], d) ? ` adult · youth ${(d.youth?.size || "").replace(/\s*wide$/, "")} (own screen)` : o.groups[gi]?.youthSet && d.youth?.same ? " · youth same screen" : "")], ["Placement", d.drop ? `${d.drop}" below the collar` : "Standard"],
     ["Print", printHow(d)],
+    ...((): [string, string][] => { const dp = o.groups[gi] && d.method === "screen" ? dtfPart(o.groups[gi], d) : null; return dp ? [["DTF transfers", dp.text]] : []; })(),
   ];
   return (
     <section className="sheet pf">

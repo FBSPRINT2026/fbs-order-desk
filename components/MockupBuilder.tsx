@@ -1156,7 +1156,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
   /** Resize a sleeve print (sleeves stay a sleeve: capped at the sleeve's max area). */
   const growTo = (im: Imprint, inches: number) => {
-    const { over, cap } = overFit(im, maxWidthFor0(im.location, ratioIm(im), fitBody(body)), inches);
+    const { over, cap } = overFit(im, maxWidthFor0(im.location, ratioIm(im), fitBody(body, im)), inches);
     const v = Math.max(0.5, Math.min(cap, Math.round(inches * 100) / 100));
     setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${v}" wide`, oversize: over || undefined } : x)));
     return v;
@@ -1178,7 +1178,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const sp = spotFor(im.location);
     if (sp.wrap) return growTo(im, wantW);
     const d = designOf(im), r = ratioIm(im) || 0.6;
-    const { over, cap } = overFit(im, sideMaxWidth0(im.location, ratioIm(im), fitBody(body)), wantW);
+    const { over, cap } = overFit(im, sideMaxWidth0(im.location, ratioIm(im), fitBody(body, im)), wantW);
     const wIn = Math.max(0.5, Math.min(cap, Math.round(wantW * 100) / 100));
     const ppi = PX_PER_IN * scale;
     const z = autoSpot(im.location, sp.view, (at.left + (wIn * ppi) / 2 - CENTER_X) / ppi, (at.top - COLLAR_Y[sp.view]) / ppi, wIn, wIn * r);
@@ -2008,12 +2008,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // picture stays on the middle size (a 3T)
   // with youth screens, each side has its own screens: the adult prints are sized for the smallest adult size and the
   // youth prints for the smallest youth size, never the adult for the YS
-  const capAll = smallestOrdered(shownG, ordered, body);
+  const capAll = smallestOrdered(shownG, ordered, body), capG = shownG;
+  // a print sending some sizes to DTF transfers (Imprint.dtf, Nick Nov 25 2026, #50048): its screens are sized for the
+  // smallest size the press still prints, and the transfer for the smallest of the DTF sizes
+  const capFor = (im?: Pick<Imprint, "dtf"> | null) => (!youthOn && im?.dtf?.sizes?.length ? smallestOrdered(shownG, ordered.filter((z) => !im.dtf!.sizes.includes(z)), body) : capAll);
   const kidSizes: string[] = youthOn ? [...new Set<string>(kidLines.flatMap((l) => orderedBy[l.id] || []))] : [];
   const kidShown = youthOn ? kidLines[0] : undefined;
   const capKid = kidShown ? smallestOrdered(garmentFor(kidShown), kidSizes, bodyFor(kidShown)) : null;
   const capBody = youthOn ? (onYouth ? capKid : null) : capAll;
-  const fitBody = (b: Body) => { const cb = youthOn ? (b.kind === "adult" ? null : capKid) : capAll; return !b.cap && cb && cb.widthIn < b.widthIn ? cb : b; };
+  const fitBody = (b: Body, im?: Pick<Imprint, "dtf"> | null) => { const cb = youthOn ? (b.kind === "adult" ? null : capKid) : capFor(im); return !b.cap && cb && cb.widthIn < b.widthIn ? cb : b; };
   // where a print sits follows the shown size; how big it can be follows the smallest size ordered
   // an oversized print (Imprint.oversize) may go past the normal max, up to 15" (OVERSIZE_IN)
   const overLocs = new Set(imprints.filter((x) => x.oversize).map((x) => (x.location || "").toLowerCase()));
@@ -2026,17 +2029,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const w = overCap(loc, s0.maxW);
     return w === s0.maxW ? s0 : { ...s0, maxW: Math.round(w * 100) / 100 };
   };
-  const maxWidthFor = (loc: string, r: number, b: Body = body) => overCap(loc, maxWidthFor0(loc, r, fitBody(b)));
+  const maxWidthFor = (loc: string, r: number, b: Body = body, im?: Imprint | null) => overCap(loc, maxWidthFor0(loc, r, fitBody(b, im)));
   // a size off the job's film was printed before on these same garments: it's kept (up to what the shown size takes)
   const printWidth = (im: Imprint, loc: string, r: number, b: Body = body) => {
-    const w0 = printWidth0(im.size, loc, r, im.sizeFrom === "film" ? b : fitBody(b));
+    const w0 = printWidth0(im.size, loc, r, im.sizeFrom === "film" ? b : fitBody(b, im));
     // an oversized print is held to the oversized max, not the normal one (lib/mockup printWidth stops at the normal)
     const m = overLocs.has((loc || "").toLowerCase()) ? (im.size || "").trim().match(/^([\d.]+)/) : null;
     if (!m) return w0;
     const v = +m[1], w = /tall/i.test(im.size || "") ? (r ? v / r : v) : v;
     return Math.max(w0, Math.min(w, maxWidthFor(loc, r, b)));
   };
-  const sideMaxWidth = (loc: string, r: number, b: Body = body) => overCap(loc, sideMaxWidth0(loc, r, fitBody(b)));
+  const sideMaxWidth = (loc: string, r: number, b: Body = body, im?: Imprint | null) => overCap(loc, sideMaxWidth0(loc, r, fitBody(b, im)));
   const autoSpot = (cur: string, v: View, dx: number, top: number, w: number, h: number) => autoSpot0(cur, v, dx, top, w, h, body);
   const basePlacement = (loc: string, wIn: number, r: number, drop: number | null, sc: number, view?: View, fit?: Fit | null, b: Body = body) => basePlacement0(loc, wIn, r, drop, sc, view, fit, b);
   // the art's own proportions: cropped to what's left after the background came out (this session, or saved on the design)
@@ -2316,7 +2319,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     let t = v.replace(/[^\d.]/g, "");
     // cap at the biggest print this side of the shirt takes (sleeves: 3.5" x 3.5"); the location follows when you leave the box
     const r = ratioIm(im) || 0;
-    const capW = sideMaxWidth(im.location, r), cap = dim === "wide" ? capW : capW * (r || 1);
+    const capW = sideMaxWidth(im.location, r, body, im), cap = dim === "wide" ? capW : capW * (r || 1);
     if (t && !t.endsWith(".") && +t > cap) t = String(Math.round(cap * 100) / 100);
     guardSize(im.id, () => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: t ? `${t}" ${dim}` : "", sizeFrom: "staff" as const } : x))));
   };
@@ -3745,14 +3748,30 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const fixes: Record<string, { size: string; note: string }> = {};
     for (const im of imprints) {
       const d = designOf(im); if (!d || im.sizeFrom === "customer" || im.sizeFrom === "film") continue; // the customer's own size, or the size printed before (film): not changed
+      const cb = capFor(im); if (!cb) continue; // the small sizes on DTF transfers: nothing smaller holds this print down
       const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/); if (!m) continue;
       const want = /tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1];
-      const cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4;
-      if (want > cap + 0.01) fixes[im.id] = { size: `${cap}" wide`, note: `${cap}" wide: the largest that fits the ${capBody.size}, the smallest size on this order (one screen prints every size). Was ${im.size}.` };
+      const cap = Math.floor(sideMaxWidth(im.location, r, body, im) * 4) / 4;
+      if (want > cap + 0.01) fixes[im.id] = { size: `${cap}" wide`, note: `${cap}" wide: the largest that fits the ${cb.size}, the smallest size on this order (one screen prints every size). Was ${im.size}.` };
     }
     if (!Object.keys(fixes).length) return;
     setImprints((xs) => xs.map((x) => (fixes[x.id] ? { ...x, size: fixes[x.id].size, notes: [(x.notes || "").replace(/\s*\d+(\.\d+)?" wide: the largest that fits[^.]*\.[^.]*\.( Was [^.]*\.?)?/g, ""), fixes[x.id].note].filter((z) => z.trim()).join(" ").slice(0, 300) } : x)));
-  }, [capBody?.size, ready, imprints.map((x) => `${x.id}:${x.size}:${x.design_id}`).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [capBody?.size, ready, imprints.map((x) => `${x.id}:${x.size}:${x.design_id}:${(x.dtf?.sizes || []).join(".")}`).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the DTF transfer's size: the print's own, brought down to the largest that fits the smallest of its DTF sizes
+  useEffect(() => {
+    if (!ready || youthOn) return;
+    const want: Record<string, string> = {};
+    for (const im of imprints) {
+      if (!im.dtf?.sizes?.length || !designOf(im)) continue;
+      const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/); if (!m) continue;
+      const w = /tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1];
+      const small = smallestOrdered(capG, im.dtf.sizes, body);
+      const cap = small ? Math.floor(overCap(im.location, sideMaxWidth0(im.location, r, small)) * 4) / 4 : w;
+      const size = `${Math.min(w, cap)}" wide`;
+      if (im.dtf.size !== size) want[im.id] = size;
+    }
+    if (Object.keys(want).length) setImprints((xs) => xs.map((x) => (want[x.id] && x.dtf ? { ...x, dtf: { ...x.dtf, size: want[x.id] } } : x)));
+  }, [ready, youthOn, capG, body.widthIn, imprints.map((x) => `${x.id}:${x.size}:${x.design_id}:${(x.dtf?.sizes || []).join(".")}:${x.dtf?.size || ""}`).join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
   /* ---------- Design with Canva (staff, and customers in their portal) ----------
    * Canva opens in a new tab on a blank design the size of this side's print area (or one of our Canva-made designs,
    * "Edit in Canva"), in the person's OWN Canva account (Canva's editor links only work for the account that owns
@@ -3981,7 +4000,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     // bigger than the print area allows: shrunk around its middle, so it stays centered where it was drawn
     const drawn = wIn;
-    wIn = Math.max(0.5, Math.min(sideMaxWidth(z, rr), wIn));
+    wIn = Math.max(0.5, Math.min(sideMaxWidth(z, rr, body, imprints.find((x) => x.id === imId)), wIn));
     if (wIn < drawn) { const d0 = (drawn - wIn) * ppiPhoto; tl.x += d0 / 2; tl.y += (d0 * rr) / 2; }
     const nb = basePlacement(z, wIn, rr, null, sc, v, fit, bdy);
     const target = imprints.find((x) => x.id === imId) || imprints.find((x) => sideOf(x.location) === side && !x.design_id && !qt[x.id]);
@@ -4730,7 +4749,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             const im = imprints.find((x) => x.id === sizer.ids[sizer.i]);
             if (!im) return null;
             const d = designOf(im), p = place(im), r = ratioIm(im) || 0;
-            const cap = Math.max(1, Math.floor(sideMaxWidth(im.location, r) * 4) / 4);
+            const cap = Math.max(1, Math.floor(sideMaxWidth(im.location, r, body, im) * 4) / 4);
             const cur = Math.round(p.wIn * 4) / 4;
             const steps = Array.from({ length: Math.round((cap - 0.5) / 0.25) + 1 }, (_, k) => 0.5 + k * 0.25);
             const next = () => { if (sizer.i + 1 < sizer.ids.length) setSizer({ ...sizer, i: sizer.i + 1, pick: null }); else { setSizer(null); setMsg("Drag the design to place it. Pinch or the corner handle to fine-tune."); } };
@@ -5157,9 +5176,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           </>
                         );
                       })()}
-                      {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
+                      {capFor(im) && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r, body, im) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capFor(im)!.size} ({cap}&quot; max). Check with them.</div> : null; })()}
                       {im.oversize && <div className="mk-over on" title={`Past the normal ${NORMAL_MAX_IN}" max, up to ${OVERSIZE_IN}": marked on the work order and runs slower. Size it back to ${NORMAL_MAX_IN}" or under and it's a normal print`}><b>Oversized</b> <span className="faint">up to {OVERSIZE_IN}&quot; · harder to run: marked on the work order, slower on the schedule</span></div>}
-                      {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
+                      {capFor(im) && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0, body, im) * 4) / 4}&quot; wide: the largest that fits the {capFor(im)!.size}, the smallest size {im.dtf?.sizes?.length ? "the press prints" : "ordered"} (one screen prints every size).</div>}
+                      {im.dtf?.sizes?.length ? <div className="mk-capnote">DTF transfers for {im.dtf.sizes.join(", ")}{im.dtf.size ? ` at ${im.dtf.size}` : ""}: the screens skip them. Change it on the order&apos;s print.</div> : null}
                       {/* specialty prints (Nick, Nov 24 2026: "a thing that says specialty prints like brand standards is, and then
                           drop it down… puff print, blacklight, some of those other specialty inks, soft hand"): every add-on
                           that changes how a print is made, in one fold under the print */}

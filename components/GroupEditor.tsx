@@ -8,7 +8,7 @@ import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "
 import { PrintThumb } from "@/components/LogoThumb";
 import { estimateStitches, threadByName } from "@/lib/embroidery";
 import { kidLine, screenFeeOf } from "@/lib/pricing";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled, specialInks, specialInkEach, BLACKLIGHT_INK, hasBlacklight, isBlacklightInk, EFFECT_INKS, hasEffect, setEffect } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled, specialInks, specialInkEach, BLACKLIGHT_INK, hasBlacklight, isBlacklightInk, EFFECT_INKS, hasEffect, setEffect, groupSizes, mixedRanges, dtfPart } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
@@ -890,6 +890,32 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
     }).filter(Boolean);
     return rows.length ? <>{rows}</> : null;
   };
+  // DTF transfers for some sizes (Nick, Nov 25 2026, #50048): a screen print in a group of mixed size ranges (youth and
+  // adult, toddler and youth…) sends the sizes picked to DTF so one bigger set of screens prints the rest. One print, one
+  // line, priced as the screen print; the Mockup Creator sizes the screens and the transfer
+  const [dtfOpen, setDtfOpen] = useState("");
+  const dtfCtl = (d: Group["imprints"][number]) => {
+    if (d.method !== "screen" || d.colors >= FULL_COLOR || g.youthSet || !mixedRanges(g)) return null;
+    const di = g.imprints.indexOf(d), sizes = groupSizes(g), on = d.dtf?.sizes || [], part = dtfPart(g, d);
+    if (fixed && !part) return null;
+    const open = dtfOpen === d.id || on.length > 0;
+    const toggle = (z: string) => update((x) => {
+      const cur = x.imprints[di].dtf?.sizes || [], next = cur.includes(z) ? cur.filter((s) => s !== z) : [...cur, z];
+      x.imprints[di].dtf = next.length ? { ...(x.imprints[di].dtf || {}), sizes: next } : undefined;
+    });
+    if (!open) return <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Mixed sizes?</span><span className="pr-scr-v faint">{sizes.map((s) => `${s.size} ${s.qty}`).join(" · ")}</span><button type="button" className="btn sm" onClick={() => setDtfOpen(d.id)}>+ DTF Transfers</button></div>;
+    const press = sizes.filter((s) => !on.includes(s.size)).reduce((a, s) => a + s.qty, 0);
+    return (
+      <div className="pr-scr pr-dtf">
+        <div className="pr-cc-line"><span className="pr-scr-l">Sizes on DTF</span>
+          <span className="pr-dtf-chips">{sizes.map((s) => <button key={s.size} type="button" disabled={fixed} className={"chip" + (on.includes(s.size) ? " on" : "")} aria-pressed={on.includes(s.size)} onClick={() => toggle(s.size)}>{s.size} {s.qty}</button>)}</span>
+          {!fixed && <button type="button" className="linkbtn" onClick={() => { update((x) => { x.imprints[di].dtf = undefined; }); setDtfOpen(""); }}>Remove DTF</button>}
+        </div>
+        {part ? <div className="pr-cc-line"><span className="pr-scr-l">DTF transfers</span><span className="pr-scr-v">{part.text}{d.dtf?.size ? "" : " · sized in the Mockup Creator"} · press prints {press}</span></div>
+          : <div className="pr-cc-line faint">Tap the sizes the press skips: they get a DTF transfer of the same art, and the screens can be sized for the rest.</div>}
+      </div>
+    );
+  };
   const puffCtl = (d: Group["imprints"][number]) => {
     if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
     const di = g.imprints.indexOf(d);
@@ -1617,6 +1643,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
                 {d.supplied && <SupNote d={d} />}
                 {!d.supplied && screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
                 {youthInfo(d) && <div className="imp-scr"><YouthSpec y={youthInfo(d)!} note /></div>}
+                {!d.supplied && dtfCtl(d) && <div className="imp-scr">{dtfCtl(d)}</div>}
                 {!d.supplied && puffCtl(d) && <div className="imp-scr">{puffCtl(d)}</div>}
                 {!d.supplied && specialCtl(d) && <div className="imp-scr">{specialCtl(d)}</div>}
                 {!d.supplied && blacklightCtl(d) && <div className="imp-scr">{blacklightCtl(d)}</div>}

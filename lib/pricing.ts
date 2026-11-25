@@ -197,6 +197,11 @@ export type Imprint = { /** a sample run's copy of this print: the order's print
    *  `same` when the youth shirts print from the adult screen. Its own youth screens get their own setup and are priced
    *  at the youth pieces' break; the adult print at the adult pieces' (lib/pricing.ts calcGroup) */
   youth?: { same?: boolean; size?: string };
+  /** DTF transfers for some sizes of a screen print (Nick, Nov 25 2026, #50048: "one set of screens, print the youth smalls
+   *  as DTF… so we can make the screens bigger"): the sizes the press skips, printed as a DTF transfer of the same art at
+   *  `size` (the largest that fits the smallest of them; set by the Mockup Creator). One print, one line: priced as the
+   *  screen print, every piece counted for its break */
+  dtf?: { sizes: string[]; size?: string };
   /** the ink picked for each color of the logo (logo color hex → ink), from the Mockup Creator, so the order page and a
    *  reopened mockup show the logo in the chosen inks (Oct 20, Nick: changed green to yellow, the order still showed green) */
   /** where the logo is centered, as a share of its picture, when its box's middle isn't its middle (a round badge with a
@@ -605,6 +610,26 @@ export function keepBlacklight<T extends Pick<Imprint, "inks" | "colors" | "meth
   let out = next;
   for (const e of effectsOn(prev)) if (!hasEffect(out, e.key)) out = { ...out, inks: [...inkNames(out.inks), e.ink].join(", "), colors: out.colors < FULL_COLOR ? (out.colors || 0) + 1 : out.colors };
   return out;
+}
+/** the size range a size is in (DTF transfers for some sizes: a group that mixes ranges) */
+export const sizeRange = (z: string): "adult" | "youth" | "toddler" | "baby" | "" =>
+  (YOUTH_SIZES as readonly string[]).includes(z) ? "youth" : (TODDLER_SIZES as readonly string[]).includes(z) ? "toddler" : (BABY_SIZES as readonly string[]).includes(z) ? "baby" : (ADULT_SIZES as readonly string[]).includes(z) ? "adult" : "";
+/** a group's ordered sizes, smallest first, with their pieces */
+export function groupSizes(g: Pick<Group, "lines">): { size: string; qty: number }[] {
+  const q: Record<string, number> = {};
+  for (const l of g.lines) for (const [z, n] of Object.entries(l.sizes || {})) if (+(n || 0) > 0) q[z] = (q[z] || 0) + +(n || 0);
+  const order = [...BABY_SIZES, ...TODDLER_SIZES, ...YOUTH_SIZES, ...ADULT_SIZES] as string[];
+  return Object.keys(q).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99)).map((size) => ({ size, qty: q[size] }));
+}
+/** a group of more than one size range (youth and adult, toddler and youth…): where a screen print can send some sizes to DTF */
+export const mixedRanges = (g: Pick<Group, "lines">) => new Set(groupSizes(g).map((s) => sizeRange(s.size)).filter(Boolean)).size > 1;
+/** the pieces of a screen print sent to DTF transfers, and the line saying so ("YS 2 · 9\" wide") */
+export function dtfPart(g: Pick<Group, "lines">, d: Pick<Imprint, "dtf">): { qty: number; text: string } | null {
+  if (!d.dtf?.sizes?.length) return null;
+  const by = groupSizes(g).filter((s) => d.dtf!.sizes.includes(s.size));
+  const qty = by.reduce((a, s) => a + s.qty, 0);
+  if (!qty) return null;
+  return { qty, text: by.map((s) => `${s.size} ${s.qty}`).join(" · ") + (d.dtf.size ? ` · ${d.dtf.size}` : "") };
 }
 /** the specialty inks a screen print uses, by name ("Gold Shimmer") */
 export const specialInks = (d: Pick<Imprint, "inks">) => inkNames(d.inks).filter((n) => SPECIAL_INK.test(n));
