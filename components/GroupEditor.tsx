@@ -356,7 +356,10 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
       const swap: Record<string, string> = {};
       for (const [a, b] of Object.entries(m)) if (b && b.trim().toLowerCase() !== a.trim().toLowerCase()) swap[a.trim().toLowerCase()] = b.trim();
       return { color: baseColor(color), hex: hexOfColor(color), swap };
-    }).filter((x) => Object.keys(x.swap).length);
+    });
+    // every garment color of the group gets its close-up, the ones printed as is too, so each color the print goes on is
+    // seen (Nov 25, Amanda, #50228: Navy and Ash, the same inks, showed only the Navy close-up); no colors that change,
+    // and only one garment color, is the one close-up as before
   };
   // color changes across the group's prints: each garment color's version (A as printed, B… a change), for grouping lines
   // a print's color changes on this group's own garment colors only (lib/inkBy.ts liveInkBy)
@@ -2258,15 +2261,17 @@ function ChangeTile({ d, url, color, hex, swap, sym, own, bg, caption, first }: 
   /** its background swatch (components/MockupBg.tsx) */ bg?: React.ReactNode; /** what it is, in the blow-up ("Colorway A · Maroon / Black") */ caption?: string }) {
   const pic = usePainted(own ? own.url : url, own ? { ...d, inkMap: undefined, inks: own.to } : d, own ? undefined : swap);
   const [zoom, setZoom] = useState(false);
+  // a garment color printed as is: its close-up, no change mark
+  const plain = !own && !Object.keys(swap).length;
   return (
     <div className="pr-tw">
       <span className="pr-tc">{color}</span>
       <span className="pr-lw"><button type="button" className="pr-logo" style={{ background: hex }} onClick={() => pic && setZoom(true)} title="See it bigger">{pic ? <img src={pic} alt="" /> : <span>No logo</span>}</button>{bg}</span>
-      {first ? null : sym ? <span className="pr-cc sym" title={changeWord(d.method)}><CcIcon /></span> : <span className="pr-cc">{changeWord(d.method)}</span>}
+      {first || plain ? null : sym ? <span className="pr-cc sym" title={changeWord(d.method)}><CcIcon /></span> : <span className="pr-cc">{changeWord(d.method)}</span>}
       {zoom && pic && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label={`On ${color}`} onClick={() => setZoom(false)} tabIndex={-1} ref={(el) => el?.focus()} onKeyDown={(e) => { if (e.key === "Escape") setZoom(false); }}>
         <figure onClick={(e) => e.stopPropagation()}>
           <img src={pic} alt="" style={{ background: hex }} />
-          <figcaption><span><b>{caption || `${changeWord(d.method)} on ${color}`}</b>{caption ? ` · ${color}` : ` · ${Object.entries(swap).map(([a, b]) => `${b} instead of ${a}`).join(", ")}`}</span><button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
+          <figcaption><span><b>{caption || (plain ? `As printed on ${color}` : `${changeWord(d.method)} on ${color}`)}</b>{caption ? ` · ${color}` : plain ? "" : ` · ${Object.entries(swap).map(([a, b]) => `${b} instead of ${a}`).join(", ")}`}</span><button type="button" className="btn sm" onClick={() => setZoom(false)}>Close</button></figcaption>
         </figure>
       </div>}
     </div>
