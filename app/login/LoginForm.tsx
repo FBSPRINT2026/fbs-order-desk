@@ -28,14 +28,14 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
   const [err, setErr] = useState(linkError ? "That sign-in link expired or was already used. Enter your email to get a new one." : "");
   const safeNext = next.startsWith("/") ? next : "/";
 
-  async function sendCode(e: React.FormEvent) {
+  async function sendCode(e: { preventDefault(): void }, forgot = false) {
     e.preventDefault();
     setBusy(true);
     setErr("");
-    if (staff && password) {
+    if (staff && password && !forgot) {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
       setBusy(false);
-      if (error) setErr(error.message.includes("rate") ? "Too many tries. Wait a minute, then try again." : "That email and password didn't match. No password yet? Leave it empty and we'll email you a code.");
+      if (error) setErr(error.message.includes("rate") ? "Too many tries. Wait a minute, then try again." : "That email and password didn't match. Forgot it? Use the button below to get a code.");
       else { router.replace(safeNext); router.refresh(); }
       return;
     }
@@ -97,7 +97,7 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
           <div>
             {payLink && <a className="lgn-pay" href={payLink.href}><b>Just paying your bill?</b><span>Pay invoice {payLink.label} without signing in</span></a>}
             <h1>Sign In</h1>
-            <p className="muted" style={{ margin: "6px 0 0" }}>Enter the email we have on file for you. {staff ? "Type your password, or leave it empty and we'll email you a code." : <>We&apos;ll email you a sign-in link and a code. No password needed.</>}</p>
+            <p className="muted" style={{ margin: "6px 0 0" }}>Enter the email we have on file for you. {staff ? "Then your password." : <>We&apos;ll email you a sign-in link and a code. No password needed.</>}</p>
           </div>
           <div className="field">
             <label htmlFor="email">Email</label>
@@ -106,11 +106,14 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
           {staff && (
             <div className="field">
               <label htmlFor="password">Password</label>
-              <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Empty: email me a code" />
+              <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
           )}
           {err && <div className="err">{err}</div>}
-          <button className="btn primary" disabled={busy} type="submit">{busy ? (staff && password ? "Signing in…" : "Sending…") : staff && password ? "Sign in" : "Email me a sign-in code"}</button>
+          <button className="btn primary" disabled={busy || (staff && !password)} type="submit">{busy ? (staff && password ? "Signing in…" : "Sending…") : staff ? "Sign in" : "Email me a sign-in code"}</button>
+          {/* staff sign in with their password; the emailed code is only for a forgotten one (Nick, Nov 24 2026: "a password
+              permanently, no code") */}
+          {staff && <button className="btn ghost" type="button" disabled={busy || !email.trim()} onClick={(e) => { setPassword(""); void sendCode(e, true); }}>Forgot your password? Email me a code</button>}
         </form>
       ) : (
         <form onSubmit={verify} className="stack">

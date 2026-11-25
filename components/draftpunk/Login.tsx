@@ -13,11 +13,20 @@ export default function Login({ signedInAs }: { signedInAs?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  // a member who has a password (shop staff, or one set in the portal) signs in with it; no code (Nick, Nov 24 2026)
+  const [pw, setPw] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const send = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setErr("");
+    if (pw) {
+      const { error: pe } = await createClient().auth.signInWithPassword({ email: email.trim().toLowerCase(), password: pw });
+      setBusy(false);
+      if (pe) setErr(/rate/i.test(pe.message) ? "Too many tries. Wait a minute." : "That email and password didn't match. Leave the password empty to get a code.");
+      else router.refresh();
+      return;
+    }
     const { error } = await createClient().auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: false, emailRedirectTo: `${location.origin}/draftpunk` } });
     setBusy(false);
     if (error) setErr(/signups? not allowed|not found/i.test(error.message) ? "That email isn't in the club yet. Ask a club admin to add you." : error.message);
@@ -47,15 +56,18 @@ export default function Login({ signedInAs }: { signedInAs?: string }) {
           {signedInAs ? (
             <>
               <p className="dp-red">{signedInAs} is signed in but isn&apos;t in the club yet. Ask a club admin to add you.</p>
-              <button className="dp-btn" onClick={async () => { await createClient().auth.signOut(); router.refresh(); }}>Use another email</button>
+              <button className="dp-btn" onClick={async () => { await createClient().auth.signOut({ scope: "local" }); router.refresh(); }}>Use another email</button>
             </>
           ) : !sent ? (
             <form onSubmit={send} style={{ display: "grid", gap: 12 }}>
               <label className="dp-f"><span>Email</span>
                 <input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" />
               </label>
-              <button className="dp-btn dp-go" disabled={busy}>{busy ? "Sending…" : "Email me a code"}</button>
-              <p className="dp-dim" style={{ margin: 0, fontSize: 13 }}>Club members only. No password: we email you a code.</p>
+              <label className="dp-f"><span>Password</span>
+                <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" placeholder="Empty: email me a code" />
+              </label>
+              <button className="dp-btn dp-go" disabled={busy}>{busy ? (pw ? "Signing in…" : "Sending…") : pw ? "Sign in" : "Email me a code"}</button>
+              <p className="dp-dim" style={{ margin: 0, fontSize: 13 }}>Club members only. No password? Leave it empty and we email you a code.</p>
             </form>
           ) : (
             <form onSubmit={verify} style={{ display: "grid", gap: 12 }}>

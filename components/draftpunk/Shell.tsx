@@ -47,7 +47,7 @@ export default function Shell({ name, children }: { name: string; children: Reac
       setAward(v); try { sessionStorage.setItem("dp:award", JSON.stringify(v)); } catch { /* fine */ }
     });
   }, []);
-  const signOut = async () => { await createClient().auth.signOut(); router.push("/draftpunk"); router.refresh(); };
+  const signOut = async () => { await createClient().auth.signOut({ scope: "local" }); router.push("/draftpunk"); router.refresh(); };
   const on = (href: string) => (href === "/draftpunk" ? path === "/draftpunk" || path.startsWith("/draftpunk/r/") || path.startsWith("/draftpunk/import") : path.startsWith(href));
   return (
     <div className="dp-shell">
