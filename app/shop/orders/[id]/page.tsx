@@ -2245,7 +2245,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="panel-h"><h2>Totals</h2><span className="faint num">{calc.qty} pcs</span></div>
             <div className="panel-b">
               <div className="totals">
-                <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
+                <div className="tr"><span>Line items</span><span>{money(calc.items - calc.finishing.reduce((a, f) => a + f.amount, 0))}</span></div>
+                {calc.finishing.map((f) => <div className="tr" key={f.name + f.each}><span>{f.name} <span className="faint">{f.qty.toLocaleString()} × {money(f.each)}</span></span><span>{money(f.amount)}</span></div>)}
                 <div className="tr"><span title={adjFee ? `Includes ${money(adjFee)} setup adjustment from Printavo` : undefined}>{setupWords(calc) ? `Setup (${setupWords(calc)})` : "Setup"}</span><span>{money(calc.setup + adjFee)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
                 {calc.fees - calc.shipping - adjFee ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping - adjFee)}</span></div> : null}
@@ -2536,7 +2537,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="panel-h"><h2>Totals</h2><span className="faint num">{calc.qty} pcs</span></div>
             <div className="panel-b">
               <div className="totals">
-                <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
+                <div className="tr"><span>Line items</span><span>{money(calc.items - calc.finishing.reduce((a, f) => a + f.amount, 0))}</span></div>
+                {calc.finishing.map((f) => <div className="tr" key={f.name + f.each}><span>{f.name} <span className="faint">{f.qty.toLocaleString()} × {money(f.each)}</span></span><span>{money(f.amount)}</span></div>)}
                 <div className="tr"><span title={adjFee ? `Includes ${money(adjFee)} setup adjustment from Printavo` : undefined}>{setupWords(calc) ? `Setup (${setupWords(calc)})` : "Setup"}</span><span>{money(calc.setup + adjFee)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
                 {calc.fees - calc.shipping - adjFee ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping - adjFee)}</span></div> : null}

@@ -1238,7 +1238,7 @@ export function specialLocEach(g: Pick<Group, "imprints" | "lines">, pl: PriceLi
   return (g.imprints || []).filter((d) => !d.patch && (specLocs.includes((d.location || "").toLowerCase()) || onPocket(d))).length * num(pl.specialLocPrice);
 }
 
-export type LineCalc = { /** pieces of this line on DTF transfers instead of the screen print (Imprint.dtf): not in its sub, charged on their own row */ dtfQty?: number; id: string; qty: number; garmentEach: number; printEach: number; light: boolean; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
+export type LineCalc = { /** pieces of this line whose price carries the group's finishing (tags, fulfillment…) */ finQty?: number; /** pieces of this line on DTF transfers instead of the screen print (Imprint.dtf): not in its sub, charged on their own row */ dtfQty?: number; id: string; qty: number; garmentEach: number; printEach: number; light: boolean; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
 export type GroupCalc = ReturnType<typeof calcGroup>;
 /**
  * Screens shared across groups (Oct 20, Nick: a reorder of #32668 The Bottles charged 14 screens for one 7-color front:
@@ -1455,7 +1455,9 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       if (!(offDtf && dtfSz.has(sz))) sub += q * each; // 2XL+ Materials Charge are billed as their own line
       if (!l.shopUse && !smp && !gs && !l.ghost) upTotal += q * up;
     });
-    return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal), ...(dtfQ ? { dtfQty: dtfQ } : {}) };
+    // the pieces on this line that carry the group's finishing (in its price): listed or typed, not free, not a ghost
+    const finQ = finishEach && !l.ghost && !l.shopUse && !gs && smpEach == null && (!hasOv || ovFin > 0) ? Math.max(0, lq - dtfQ) : 0;
+    return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal), ...(dtfQ ? { dtfQty: dtfQ } : {}), ...(finQ ? { finQty: finQ } : {}) };
   });
   // DTF transfers for some sizes of the group's screen prints (Imprint.dtf; Nick, Nov 25 2026: "right below it said DTF
   // transfer YS, add the qty to the right and subtract the quantity from above"): those pieces are off their line and on a
@@ -1548,7 +1550,11 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, /** why no setup is charged on this group ("" when it is) */ setupWaived, /** a sample run's charges (Group.sample), inside sub */ sampleCharges, /** each print's color changes as charged (its own plus the inks it changes from the same print in an earlier group) */ imprintInkChanges: (g.imprints || []).map((d) => num(d.inkChanges)), /** the same print in an earlier group in other inks: which group and the inks it swaps */ imprintAutoChange: (g.imprints || []).map((d) => seen?.autoChange?.get(d.id) || null), /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: printedLines(g.lines).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  // what the finishing inside the line prices comes to, each ticked item on its own (Amanda, Nov 25 2026: "spike out what
+  // costs calculate the total finishing charge… a line item for tagging and a line for fulfillment"): part of sub, shown apart
+  const finPcs = lines.reduce((a, x) => a + num(x.finQty), 0);
+  const finishItems = finPcs ? finishing.filter((f) => num(f.price)).map((f) => ({ name: f.name, each: num(f.price), qty: finPcs, amount: r2(finPcs * num(f.price)) })) : [];
+  return { id: g.id, finishItems, /** why no setup is charged on this group ("" when it is) */ setupWaived, /** a sample run's charges (Group.sample), inside sub */ sampleCharges, /** each print's color changes as charged (its own plus the inks it changes from the same print in an earlier group) */ imprintInkChanges: (g.imprints || []).map((d) => num(d.inkChanges)), /** the same print in an earlier group in other inks: which group and the inks it swaps */ imprintAutoChange: (g.imprints || []).map((d) => seen?.autoChange?.get(d.id) || null), /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: printedLines(g.lines).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
@@ -1649,6 +1655,10 @@ export function calcOrder(
   const counted = groups.filter((_g, gi) => !off.has(gi));
   const lines = counted.flatMap((g) => g.lines);
   const items = r2(counted.reduce((a, g) => a + g.sub, 0));
+  // the finishing inside items, by item (same name and price added up across groups): Totals shows it apart
+  const finMap = new Map<string, { name: string; each: number; qty: number; amount: number }>();
+  for (const g of counted) for (const f of g.finishItems || []) { const k = `${f.name}|${f.each}`; const x = finMap.get(k); if (x) { x.qty += f.qty; x.amount = r2(x.amount + f.amount); } else finMap.set(k, { ...f }); }
+  const finishing = [...finMap.values()];
   // DTF transfers we order have an order minimum (lib/dtfGrid.ts DTF_MIN; Nov 4, Nick: "DTF orders have a $10 minimum"):
   // what the order's DTF prints come to, topped up to it, in the setup
   const pl0 = priceList(s, o.price_type || "retail");
@@ -1668,7 +1678,7 @@ export function calcOrder(
   const paid = r2(payments.reduce((a, p) => a + num(p.amount), 0));
   // samples pulled off the top are pieces of the order already
   const qty = groups.reduce((a, g, gi) => a + (off.has(gi) || (gs0[gi].sample?.kind === "pre" && gs0[gi].sample?.source === "top") ? 0 : g.qty), 0);
-  return { /** options not counted in the total yet (lib/quoteOptions.ts), by group index */ optionsOff: [...off], groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), /** the DTF order minimum's top-up, inside setup */ dtfMin, qty, /** every piece printed, the shop's own included */ allQty: groups.reduce((a, g, gi) => a + (off.has(gi) ? 0 : g.allQty), 0) };
+  return { /** options not counted in the total yet (lib/quoteOptions.ts), by group index */ optionsOff: [...off], groups, lines, items, /** the finishing inside items, item by item */ finishing, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), /** the DTF order minimum's top-up, inside setup */ dtfMin, qty, /** every piece printed, the shop's own included */ allQty: groups.reduce((a, g, gi) => a + (off.has(gi) ? 0 : g.allQty), 0) };
 }
 
 export const uid = () =>
