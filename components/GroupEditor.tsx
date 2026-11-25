@@ -1118,6 +1118,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
         <b className="qopt-l">Option {option.letter}</b>
         <input type="text" className="qopt-in" readOnly={fixed} aria-label={`What option ${option.letter} is`} placeholder={`What's different (${option.letter === "A" ? "Black, 100 pcs" : "Heather Black, 50 pcs"})`} value={g.opt?.label || ""} onChange={(e) => update((x) => { if (x.opt) x.opt.label = e.target.value; })} />
         <span className="qopt-n">{option.first ? `In the total until they pick` : `Not in the total until picked`}{option.total != null ? <> · if picked <b className="nowrap">{money(option.total)}</b></> : null}</span>
+        {!fixed && <button className={"btn sm ghost danger" + (armed === "opt" + g.id ? " armed" : "")} type="button" title="Take this option off the quote (the other stays, as an ordinary group when it's the last one)" onClick={() => (armed === "opt" + g.id ? onRemove() : arm("opt" + g.id))}>{armed === "opt" + g.id ? "Remove option?" : "Remove option"}</button>}
       </div>}
       <div className="line-h">
         <input type="text" className="grp-name" readOnly={fixed} aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />

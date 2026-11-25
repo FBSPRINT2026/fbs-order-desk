@@ -2106,7 +2106,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 let at = gi; d.groups.forEach((x, xi) => { if (x.opt?.set === src.opt!.set) at = Math.max(at, xi); });
                 d.groups.splice(at + 1, 0, copy);
               }) : undefined}
-              onRemove={() => patch((d) => { d.groups = d.groups.filter((x) => x.id !== g.id && x.sample?.follows !== g.id); })}
+              onRemove={() => patch((d) => {
+                d.groups = d.groups.filter((x) => x.id !== g.id && x.sample?.follows !== g.id);
+                // an option left on its own isn't a choice any more: back to an ordinary group (Nick, Nov 25: "once you click
+                // the Add Option button, there's no way to remove it")
+                const n: Record<string, number> = {};
+                for (const x of d.groups) if (x.opt) n[x.opt.set] = (n[x.opt.set] || 0) + 1;
+                for (const x of d.groups) if (x.opt && n[x.opt.set] < 2) delete x.opt;
+              })}
               moveTo={o.groups.flatMap((x, xi) => (x.id === g.id ? [] : [{ id: x.id, label: [x.name?.trim() || `Group ${xi + 1}`, x.lines.map((l) => l.style).filter(Boolean).slice(0, 2).join(", ")].filter(Boolean).join(" · ") }]))}
               onMoveLine={moveLine} />
           </div>))}</OrderInkCtx.Provider>
