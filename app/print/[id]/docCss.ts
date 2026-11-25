@@ -758,4 +758,8 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wv-loc b{font-size:13pt;text-transform:uppercase;letter-spacing:.03em}
 .pdoc .wv-loc span{font-size:9pt;color:var(--ink3);white-space:nowrap}
 .pdoc .wo-cg.wv-g{border-top:0}
+
+/* a DTF transfer row under its garment line (Nov 25 2026) */
+.iv2-dtf .iv2-nm { padding-left: 14px; }
+.iv2-sz small { font-size: 8px; font-weight: 700; }
 `;

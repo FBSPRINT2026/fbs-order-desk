@@ -1750,14 +1750,15 @@ export function InvoiceDoc(p: DocData) {
                   <div className="iv2-row"><span className="iv2-nm iv2-itn">{pic ? <img className="iv2-itp" src={pic} alt="" /> : null}<span><b>{l.garment || "Item"}</b>{l.note?.trim() && <span className="iv2-itd">{l.note.trim()}</span>}</span></span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
                 </div>
               );
-              return (
-                <div className={"iv2-ln" + (smp ? " iv2-smp" : "")} key={l.id}>
+              const dtfRows = (gc.persItems || []).filter((x) => x.lineId === l.id && x.label === "DTF transfers");
+              return (<Fragment key={l.id}>
+                <div className={"iv2-ln" + (smp ? " iv2-smp" : "")}>
                   {smp && <div className="iv2-smt">Pre-production sample · printed first, sent for your OK, then the run</div>}
-                  <div className="iv2-row"><span className="iv2-nm"><b>{name}</b>{l.color ? <> · {l.color}</> : null}{l.garment && name !== l.garment && <small className="iv2-nsub"> {l.garment}</small>}</span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
+                  <div className="iv2-row"><span className="iv2-nm"><b>{name}</b>{l.color ? <> · {l.color}</> : null}{l.garment && name !== l.garment && <small className="iv2-nsub"> {l.garment}</small>}</span><span>{lc.qty - (lc.dtfQty || 0)}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
                   {(l.garment && name !== l.garment) && <div className="iv2-sub">{l.garment}</div>}
                   {l.extras && <div className="iv2-note"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}
                   {l.note?.trim() && <div className="iv2-note">{l.note.trim()}</div>}
-                  {(() => { const all = (gc.persItems || []).filter((x) => x.lineId === l.id), its = all.filter((x) => !x.label), own = all.filter((x) => x.label); if (!all.length) return null;
+                  {(() => { const all = (gc.persItems || []).filter((x) => x.lineId === l.id && x.label !== "DTF transfers"), its = all.filter((x) => !x.label), own = all.filter((x) => x.label); if (!all.length) return null;
                     // names & numbers (their own labels), then the personalizations
                     const ownRows = own.map((x, k) => <div key={`o${k}`} className="iv2-note"><b>{x.label}:</b> {x.text} · {money(x.unit)} each = {money(x.amount)}</div>);
                     if (its.length > PERS_SHOW) { const q = its.reduce((a, x) => a + x.qty, 0), amt = its.reduce((a, x) => a + x.amount, 0); return <>{ownRows}<div className="iv2-note"><b>Personalization:</b> {q} names · {money(its[0].unit)} each = {money(amt)}</div></>; }
@@ -1766,7 +1767,7 @@ export function InvoiceDoc(p: DocData) {
                     {gc.wholesale && <div className="iv2-cs">Customer<br />supplied</div>}
                     {pic ? <img className="iv2-th" src={pic} alt="" /> : <div className={"iv2-th none" + (logo ? " lg" : "")} style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }}>{logo && <img src={logo} alt="" />}</div>}
                     <div className="iv2-blk">
-                      {!l.spec && <div className={"iv2-sz" + (sz.length > 7 ? " many" : "")}>{sz.map(({ z, n, extra }) => <span key={z} className={n ? (extra ? "x" : "") : "z"}>{sizeLabel(z)}<b>{n}</b></span>)}</div>}
+                      {!l.spec && <div className={"iv2-sz" + (sz.length > 7 ? " many" : "")}>{sz.map(({ z, n, extra }) => { const toDtf = !!lc.dtfQty && n > 0 && g.imprints.some((d) => d.method === "screen" && d.dtf?.sizes?.includes(z)); return <span key={z} className={toDtf ? "z" : n ? (extra ? "x" : "") : "z"}>{sizeLabel(z)}<b>{n}</b>{toDtf ? <small> →DTF</small> : null}</span>; })}</div>}
                       {prints.length > 0 && (
                         <div className="iv2-prs">
                           {/* how it's decorated, then each spot (Oct 30, Nick: "right underneath sizes… screen printing, embroidery,
@@ -1786,7 +1787,8 @@ export function InvoiceDoc(p: DocData) {
                     </div>
                   </div>
                 </div>
-              );
+                {dtfRows.map((x, k2) => <div className="iv2-ln iv2-dtf" key={"dtf" + k2}><div className="iv2-row"><span className="iv2-nm"><b>DTF transfer</b> · {x.text.split(" · same art · ").pop()?.replace(/\s\d+/g, "")}<small className="iv2-nsub"> {x.text.split(" · same art · ")[0]} · same art, transfer pressed on</small></span><span>{x.qty}</span><span>{money(x.unit)}</span><span><b>{money(x.amount)}</b></span></div></div>)}
+              </Fragment>);
             })}
             {gc.finishing.length > 0 && <div className="iv2-set fin"><span>Finishing: {gc.finishing.map((f) => { const ns = isRelabel(f) ? setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel) : null; return ns ? `${f.name} (their ${ns.name || "neck label"} printed inside the neck)` : f.name; }).join(", ")}</span></div>}
             {g.imprints.some((d) => (d.artChanges || []).length) && <div className="iv2-note">Changes we made to your art: {g.imprints.flatMap((d) => d.artChanges || []).join("; ")}</div>}

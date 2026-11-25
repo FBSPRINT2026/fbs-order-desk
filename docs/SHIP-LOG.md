@@ -664,3 +664,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 25 8:22am · 1.3.907 · Nick · Paper proof: stacked cards sized so front, back, specs and the approval line fit one page
 - Nov 25 8:23am · 1.3.908 · Nick · Quote options: Remove option on each option's bar; when one option is left it's an ordinary group again
 - Nov 25 8:48am · 1.3.909 · Nick · DTF transfers priced: a price per transfer (made and pressed) typed beside the sizes; those sizes drop the screen print charge and carry the transfer instead, each its own row under the line on the order, quote, invoice and QuickBooks; the screen print's price break counts only what the press prints
+- Nov 25 9:03am · 1.3.910 · Nick · DTF transfers on the quote: the sizes moved to DTF come off their garment line (YS 2 grayed, →DTF) and sit on a 'DTF transfer · YS' row right under it with its own qty, price and amount; same in QuickBooks and the order's summary

@@ -311,7 +311,7 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
         if (gc?.finishing?.length) extra.push("Finishing: " + gc.finishing.map((f) => f.name).join(", "));
       }
       const desc = [(g.name?.trim() ? `${g.name.trim()}: ` : "") + title, sizes, ...extra].filter(Boolean).join("\n");
-      add(title, desc, key, lc!.qty, lc!.each, lc!.sub);
+      add(title, desc, key, lc!.qty - (lc!.dtfQty || 0), lc!.each, lc!.sub);
       // its personalizations, each its own line (they're in the group's total, not the line's price)
       const all = (gc?.persItems || []).filter((p) => p.lineId === l.id), its = all.filter((p) => !p.label);
       // names & numbers: "Names" and "Number digits", each its own line

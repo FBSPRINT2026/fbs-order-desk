@@ -1032,9 +1032,11 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
     const finOf = (lc: GroupCalc["lines"][number]) => (lc.hasOv ? Math.min(gc.finishEach, lc.each) : gc.finishEach);
     const tagEach = gc.finishing.filter((f) => isRelabel(f)).reduce((t, f) => t + (+f.price || 0), 0); // g.tagPrice applied in calcGroup
     const impOf = (lc: GroupCalc["lines"][number]) => { if (!lc.hasOv) return lc.printEach; const base = lc.calcEach - gc.finishEach; return base > 0 ? ((lc.each - finOf(lc)) * lc.printEach) / base : 0; };
-    const imp = gc.lines.reduce((a, lc) => a + lc.qty * impOf(lc), 0);
-    const finAll = gc.lines.reduce((a, lc) => a + lc.qty * finOf(lc), 0);
-    const tags = gc.lines.reduce((a, lc) => a + lc.qty * Math.min(tagEach, finOf(lc)), 0);
+    // pieces on DTF transfers are off their lines (their own row, in "DTF transfers")
+    const onLine = (lc: { qty: number; dtfQty?: number }) => lc.qty - (lc.dtfQty || 0);
+    const imp = gc.lines.reduce((a, lc) => a + onLine(lc) * impOf(lc), 0);
+    const finAll = gc.lines.reduce((a, lc) => a + onLine(lc) * finOf(lc), 0);
+    const tags = gc.lines.reduce((a, lc) => a + onLine(lc) * Math.min(tagEach, finOf(lc)), 0);
     const fin = Math.round((finAll - tags) * 100) / 100;
     // names (personalization, names & numbers) are their own part of the total, not "Garments" (Nov 1, #40345: the
     // three names' $15 showed as Garments $15.00 on customer supplied jackets)
@@ -1048,7 +1050,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
     const bits: [string, number, string?][] = [
       ...(gc.wholesale && Math.abs(gar) < 0.01 ? [] : [["Garments", gar] as [string, number]]),
       ...(pers > 0.004 ? [["Personalization", pers, `${persN} name${persN === 1 ? "" : "s"}`] as [string, number, string]] : []),
-      ["Imprints", Math.round((imp + Math.min(0, pItems.filter((x) => x.label === "Screen print not on these").reduce((a, x) => a + x.amount, 0))) * 100) / 100],
+      ["Imprints", Math.round(imp * 100) / 100],
       ...(pItems.some((x) => x.label === "DTF transfers") ? [["DTF transfers", Math.round(pItems.filter((x) => x.label === "DTF transfers").reduce((a, x) => a + x.amount, 0) * 100) / 100] as [string, number]] : []),
       // finishing by name when there's one ("Tag removal & custom imprint"), its own line on top of the prints
       ...(tags ? [["Tag prints", tags, `${money(tagEach)} a piece`] as [string, number, string]] : []),

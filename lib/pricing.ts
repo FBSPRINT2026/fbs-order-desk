@@ -1237,7 +1237,7 @@ export function specialLocEach(g: Pick<Group, "imprints" | "lines">, pl: PriceLi
   return (g.imprints || []).filter((d) => !d.patch && (specLocs.includes((d.location || "").toLowerCase()) || onPocket(d))).length * num(pl.specialLocPrice);
 }
 
-export type LineCalc = { id: string; qty: number; garmentEach: number; printEach: number; light: boolean; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
+export type LineCalc = { /** pieces of this line on DTF transfers instead of the screen print (Imprint.dtf): not in its sub, charged on their own row */ dtfQty?: number; id: string; qty: number; garmentEach: number; printEach: number; light: boolean; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
 export type GroupCalc = ReturnType<typeof calcGroup>;
 /**
  * Screens shared across groups (Oct 20, Nick: a reorder of #32668 The Bottles charged 14 screens for one 7-color front:
@@ -1422,6 +1422,8 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     }
   }
   let persTotal = r2(persItems.reduce((a, x) => a + x.amount, 0));
+  // sizes on DTF transfers (the group's screen prints, "+ DTF Transfers"): off their lines, onto a DTF transfer row
+  const dtfSz = gs || smp ? new Set<string>() : new Set((g.imprints || []).filter((d) => d.method === "screen" && d.dtf?.sizes?.length && !split(d)).flatMap((d) => d.dtf!.sizes));
   const lines: LineCalc[] = (g.lines || []).map((l, li) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
@@ -1439,31 +1441,29 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     // a line charged nothing (its price typed as $0, free extras) carries no 2XL+ materials charge either (Amanda,
     // Nov 18 2026, #50145: a $0 add-on still billed $5 for a 2XL and a 3XL); a size charge typed on the line still counts
     const free = hasOv && each === 0;
-    let sub = 0, upTotal = 0;
+    let sub = 0, upTotal = 0, dtfQ = 0;
+    const offDtf = dtfSz.size > 0 && !l.shopUse && !l.ghost && !hasOv;
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
+      if (offDtf && dtfSz.has(sz) && q > 0) dtfQ += q;
       const up = l.sizeUpSet?.[sz] != null && (l.sizeUpSet[sz] as unknown) !== "" ? num(l.sizeUpSet[sz]) : free ? 0 : pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
-      sub += q * each; // 2XL+ Materials Charge are billed as their own line
+      if (!(offDtf && dtfSz.has(sz))) sub += q * each; // 2XL+ Materials Charge are billed as their own line
       if (!l.shopUse && !smp && !gs && !l.ghost) upTotal += q * up;
     });
-    return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
+    return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal), ...(dtfQ ? { dtfQty: dtfQ } : {}) };
   });
-  // DTF transfers for some sizes of a screen print (Imprint.dtf): on each line, those sizes don't carry the screen print
-  // (taken off as its own row) and carry the transfer at the price typed. Lines with a price typed by hand, a sample or
-  // the shop's own are left as they are
-  (g.imprints || []).forEach((d, di) => {
-    if (d.method !== "screen" || !d.dtf?.sizes?.length || gs || smp) return;
-    const scrEach = r2(imprints[di]?.each || 0), at = d.location || "Print";
-    (g.lines || []).forEach((l, li) => {
-      if (l.shopUse || l.ghost || lines[li]?.hasOv) return;
-      const by = d.dtf!.sizes.map((z) => [z, num((l.sizes as Record<string, number> | undefined)?.[z])] as const).filter(([, n]) => n > 0);
-      const q = by.reduce((a, [, n]) => a + n, 0);
-      if (!q) return;
-      const zs = by.map(([z, n]) => `${z} ${n}`).join(" · ");
-      if (scrEach > 0) persItems.push({ lineId: l.id, text: `${at} · ${zs} on DTF transfers, not screen printed`, size: "" as Size | "", qty: q, unit: -scrEach, amount: r2(-q * scrEach), label: "Screen print not on these" });
-      persItems.push({ lineId: l.id, text: `${at} · same art · ${zs}`, size: "" as Size | "", qty: q, unit: num(d.dtf!.each), amount: r2(q * num(d.dtf!.each)), label: "DTF transfers" });
+  // DTF transfers for some sizes of the group's screen prints (Imprint.dtf; Nick, Nov 25 2026: "right below it said DTF
+  // transfer YS, add the qty to the right and subtract the quantity from above"): those pieces are off their line and on a
+  // row of their own under it, priced as the line less its screen print, plus the transfer at the price typed
+  {
+    const dps = (g.imprints || []).map((d, di) => ({ d, di })).filter(({ d }) => d.method === "screen" && d.dtf?.sizes?.length && !split(d));
+    if (dps.length && dtfSz.size) (g.lines || []).forEach((l, li) => {
+      const lc = lines[li]; if (!lc?.dtfQty) return;
+      const zs = [...dtfSz].map((z) => [z, num((l.sizes as Record<string, number> | undefined)?.[z])] as const).filter(([, n]) => n > 0).map(([z, n]) => `${z} ${n}`).join(" · ");
+      const unit = r2(lc.each - dps.reduce((a, { di }) => a + num(imprints[di]?.each), 0) + dps.reduce((a, { d }) => a + num(d.dtf!.each), 0));
+      persItems.push({ lineId: l.id, text: `${[...new Set(dps.map(({ d }) => d.location || "Print"))].join(", ")} · same art · ${zs}`, size: "" as Size | "", qty: lc.dtfQty, unit: Math.max(0, unit), amount: r2(lc.dtfQty * Math.max(0, unit)), label: "DTF transfers" });
     });
-  });
+  }
   persTotal = r2(persItems.reduce((a, x) => a + x.amount, 0));
   // screens: no underbase screen when every garment is light
   const anyDark = !pl.darkAddsColor || (g.lines || []).some((l) => billQty(l) > 0 && !isLightColor(l.color, pl));
