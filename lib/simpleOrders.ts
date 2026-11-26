@@ -11,15 +11,18 @@ import { ONE_SIZE, type GLine, type Group } from "@/lib/pricing";
  * line's price), so totals, the invoice, the portal, payments and QuickBooks all work as they do; what it is lives in
  * `GLine.spec` and its plain description in `GLine.note`.
  */
-export type ProductKind = "apparel" | "signage" | "promo" | "paper";
+export type ProductKind = "apparel" | "signage" | "promo" | "paper" | "general";
 export const KINDS: { k: ProductKind; label: string; sub: string }[] = [
   { k: "apparel", label: "Apparel", sub: "Screen print, embroidery, DTF" },
   { k: "signage", label: "Signage", sub: "Banners, signs: by the square foot" },
   { k: "promo", label: "Promotional products", sub: "Items from a supplier, decorated" },
   { k: "paper", label: "Paper printing", sub: "Business cards, brochures, flyers" },
+  // a plain invoice like QuickBooks' (Nov 26, Nick: "just item, description, quantity, amount, basic… sometimes I just
+  // need to create a generic invoice"): shipping passed on, a design fee, anything that isn't a product we make
+  { k: "general", label: "Generic invoice", sub: "Item, description, quantity, amount" },
 ];
 export const kindLabel = (k?: string | null) => KINDS.find((x) => x.k === (k || "apparel"))?.label || "Apparel";
-export const isSimpleKind = (k?: string | null): k is Exclude<ProductKind, "apparel"> => k === "signage" || k === "promo" || k === "paper";
+export const isSimpleKind = (k?: string | null): k is Exclude<ProductKind, "apparel"> => k === "signage" || k === "promo" || k === "paper" || k === "general";
 
 /** the customer's answer on one line's picture (sent with "Send proofs for approval") */
 export type LineProof = { status: "sent" | "approved" | "changes"; at: string; note?: string; by?: string };
@@ -36,6 +39,8 @@ export type SimpleSpec = {
   itemNo?: string; supplier?: string; productColor?: string; imprintType?: string; imprintColor?: string;
   // paper printing
   size?: string; stock?: string; ink?: string; details?: string;
+  // generic invoice: the line's description as typed
+  desc?: string;
   /** the back (Nick, Nov 25 2026, #50226: "add a back"): its file and, for a PDF, its first page as a picture; the proof
    *  shows front and back side by side */ back?: string; backName?: string; backPreview?: string;
   /** made from a card template (lib/printTemplates.ts): the template and what was typed, so it opens again as it was */
@@ -67,6 +72,7 @@ export function specText(s: SimpleSpec): string {
     const a = sqft(s);
     return [s.material, s.w && s.h ? `${dim(s.w, s.unit)} × ${dim(s.h, s.unit)}${a ? ` (${a} sq ft)` : ""}` : "", s.sides === "double" ? "Double-sided" : s.sides === "single" ? "Single-sided" : "", s.finishing].filter(Boolean).join(" · ");
   }
+  if (s.kind === "general") return (s.desc || "").trim();
   if (s.kind === "promo") return [s.itemNo ? `Item #${s.itemNo}` : "", s.supplier, s.productColor, s.imprintType, s.imprintColor ? `Imprint ${s.imprintColor}` : ""].filter(Boolean).join(" · ");
   return [s.size, s.stock, s.ink, s.details].filter(Boolean).join(" · ");
 }

@@ -1768,7 +1768,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <div className="ot-kind">
                 <button type="button" aria-haspopup="menu" aria-expanded={kindOpen} onClick={() => setKindOpen(!kindOpen)}><MenuItem icon="grid" tone="violet" title="Order type" sub={kindLabel(o.product_kind)} /></button>
                 {kindOpen && <div className="ot-kind-sub" role="menu" aria-label="Order type">
-                  {KINDS.map((k) => <button key={k.k} type="button" role="menuitemradio" aria-checked={(o.product_kind || "apparel") === k.k} className={(o.product_kind || "apparel") === k.k ? "on" : ""} onClick={() => setKind(k.k)}><MenuItem icon={k.k === "apparel" ? "shirt" : k.k === "paper" ? "invoice" : k.k === "promo" ? "label" : "proof"} tone={(o.product_kind || "apparel") === k.k ? "blue" : "gray"} title={k.label} sub={k.sub} /></button>)}
+                  {KINDS.map((k) => <button key={k.k} type="button" role="menuitemradio" aria-checked={(o.product_kind || "apparel") === k.k} className={(o.product_kind || "apparel") === k.k ? "on" : ""} onClick={() => setKind(k.k)}><MenuItem icon={k.k === "apparel" ? "shirt" : k.k === "paper" || k.k === "general" ? "invoice" : k.k === "promo" ? "label" : "proof"} tone={(o.product_kind || "apparel") === k.k ? "blue" : "gray"} title={k.label} sub={k.sub} /></button>)}
                 </div>}
               </div>
               <button type="button" onClick={async () => { await save(); setOwnReorder(true); }}><MenuItem icon="copy" tone="gray" title="Reorder" sub="Same sizes, new sizes from a file, or type them" /></button>

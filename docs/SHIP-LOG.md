@@ -674,3 +674,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 25 10:39am · 1.3.917 · Nick · DTF transfer pieces drop the whole screen print they replace, its specialty ink / puff charge included; other prints (a back printed as usual) stay on them
 - Nov 25 10:43am · 1.3.918 · Nick · A print with its own youth screens used in several groups (one back on every team) is priced at the whole order's adult pieces on adult shirts and the whole order's youth pieces on youth shirts, not each group's own
 - Nov 25 11:37am · 1.3.919 · Nick · Same print with youth screens in some groups: a group of only adult (or only youth) shirts is priced at that side's count across the order, the same as the split groups (#50227 Genesis / Kings backs)
+- Nov 26 7:40am · 1.3.920 · Nick · Order type → Generic invoice: a plain invoice like QuickBooks (item, description, quantity, rate, amount), no pictures or production; never on the production boards
