@@ -13739,7 +13739,8 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pl-cols>div:last-child{border-bottom:1px solid var(--line-2,var(--line))}
 .pl-notes{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
 .pl-foot{margin:6px 0 24px;font-size:13px}
-@media print{.pl .back,.pl .page-head .row,.p-head,.p-foot,header,footer,.preview-bar{display:none!important}.pl-sec{break-inside:avoid}.pl-tbl tbody tr:hover td{background:none}}
+/* printing hides the site's own bars only, never a document's <header>/<footer> (Nov 26 2026: every printed statement lost its logo and title) */
+@media print{.pl .back,.pl .page-head .row,.p-head,.p-foot,.p-top,.stn-bar,.jm-top,.preview-bar{display:none!important}.pl-sec{break-inside:avoid}.pl-tbl tbody tr:hover td{background:none}}
 .pl-tabs{margin:0 0 14px}
 @media print{.pl-tabs{display:none!important}}
 /* On hold under Payments; Order tracking full width (Oct 24, Nick) */
@@ -18250,37 +18251,43 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .gdk-grp .gdk-um:first-of-type{border-top:0}
 @media (max-width:640px){.gdk-grp{grid-template-columns:22px minmax(0,1fr)}.gdk-vbar span{font-size:10px}}
 /* the customer statement (Nov 2, Nick: "rethink the statement") */
-.stx-h{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
-.stx-logo{height:54px;width:auto;display:block}
-.stx-shop{font-size:12px;color:var(--ink-3);margin-top:8px;line-height:1.55}
-.stx-title{text-align:right;font-size:12.5px;color:var(--ink-3);line-height:1.65}
-.stx-title h1{font-family:var(--display);font-size:28px;letter-spacing:.03em;text-transform:uppercase;margin:0 0 4px;color:var(--ink)}
-.stx-title b{color:var(--ink)}
-.stx-strip{height:3px;background:var(--fbs-strip);margin:16px 0 18px}
-.stx-info{display:grid;grid-template-columns:1.3fr 1fr 1.1fr;gap:18px;align-items:start;font-size:13px;line-height:1.55}
+.stx-h{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+.stx-logo{height:62px;width:auto;display:block}
+.stx-title{text-align:right}
+.stx .stx-title h1{font-family:var(--display);font-weight:800;font-stretch:88%;font-size:34px;line-height:1;letter-spacing:-.01em;text-transform:none;margin:0;color:var(--ink)}
+.stx .stx-title h1::after{display:none!important}
+.stx-title div{font-size:13px;color:var(--ink-3);margin-top:6px;white-space:nowrap}
+.stx-info{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;flex-wrap:wrap;font-size:13.5px;line-height:1.55;margin-top:6px}
 .stx-lb{display:block;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
-.stx-due{border:1px solid var(--line);border-radius:8px;padding:12px 14px}
-.stx-due b{display:block;font-size:26px;font-weight:800;white-space:nowrap}
+.stx-info b.stx-co{font-size:15px}
+.stx-terms{font-size:12px;color:var(--ink-3);margin-top:4px}
+.stx-due{text-align:right}
+.stx-due b{display:block;font-family:var(--display);font-weight:800;font-stretch:88%;font-size:40px;line-height:1.05;white-space:nowrap;color:var(--ink)}
 .stx-due small{font-size:12px;color:var(--ink-3)}
-.stx-tbl{margin-top:20px}
+.stx-age{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-top:2px solid var(--ink);border-bottom:1px solid var(--line);margin-top:4px}
+.stx-age div{padding:8px 8px 9px}
+.stx-age span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.stx-age b{font-size:14.5px;white-space:nowrap}
+.stx-age b.late{color:var(--danger)}
+.stx-tbl{margin-top:4px}
+.stx-tbl thead th{border-bottom:1.5px solid var(--ink)}
 .stx-tbl tbody tr td{color:var(--ink)}
 .stx-tbl .st-late{color:var(--danger);font-weight:700}
 .stx-tbl .st-n{white-space:nowrap}
-.stx-tbl .st-n a{font-weight:700}
+.stx-tbl .st-n a{font-weight:700;color:var(--ink);text-decoration:none}
 .stx-grp td{padding-top:14px!important;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)!important;border-bottom:1px solid var(--line)}
-.stx-sub td{background:var(--surface-2);font-weight:700}
-.stx-tot td{border-top:1.5px solid var(--ink);font-weight:800;font-size:14.5px;padding-top:10px}
-.stx-note{font-size:11.5px;color:var(--ink-3);margin:8px 0 0;display:flex;align-items:center;gap:6px}
-.stx-age{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:18px}
-.stx-age div{padding:8px 10px;border-right:1px solid var(--line-2,var(--line))}
-.stx-age div:last-child{border-right:0}
-.stx-age span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
-.stx-age b{font-size:13.5px;white-space:nowrap}
-.stx-pay{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:18px;font-size:12.5px;line-height:1.5}
-.stx-pay>div{border:1px solid var(--line-2,var(--line));border-radius:8px;padding:10px 12px}
-.stx-stub{margin-top:22px;border-top:1.5px dashed var(--line);padding-top:12px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-2)}
-@media (max-width:700px){.stx-info{grid-template-columns:minmax(0,1fr)}.stx-title{text-align:left}.stx-age{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media print{.stx-strip{print-color-adjust:exact;-webkit-print-color-adjust:exact}.stx-sub td{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+.stx-sub td{font-weight:700;color:var(--ink-3)!important}
+.stx-total{display:flex;justify-content:flex-end}
+.stx-total>div{min-width:min(100%,3in);display:flex;justify-content:space-between;gap:24px;border-top:2px solid var(--ink);padding-top:8px;font-family:var(--display);font-weight:800;font-stretch:88%;font-size:19px;white-space:nowrap}
+.stx-note{font-size:11.5px;color:var(--ink-3);margin:0;display:flex;align-items:center;gap:6px}
+.stx-pay{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;font-size:12.5px;line-height:1.5}
+.stx-pay>div{border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.stx-foot{margin-top:auto;padding-top:18px}
+.stx-foot .stx-strip{height:3px;background:var(--fbs-strip)}
+.stx-foot>div:last-child{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:var(--ink-3)}
+.stx-foot b{font-family:var(--display);font-weight:800;font-stretch:88%;font-size:15px;color:var(--ink)}
+@media (max-width:700px){.stx-h{flex-wrap:wrap}.stx-title{text-align:left}.stx-due{text-align:left}.stx-due b{font-size:32px}.stx-age{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media print{.stx{min-height:10in}.stx-foot .stx-strip{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 .cu-co .cu-chg{font-size:12px;font-weight:600;margin-left:6px}
 /* goods rows: one plain line per order (Nov 2, Nick: "hard to read") */
 .gdk-row{display:grid;grid-template-columns:minmax(170px,1.1fr) minmax(0,1.6fr) minmax(110px,.7fr) auto;gap:4px 14px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line-2,var(--line));font-size:13px}
@@ -18303,10 +18310,7 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .rop-qf{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid var(--line);border-radius:6px;padding:4px 4px 4px 9px;font-size:12.5px;background:var(--surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rop-qf button{border:0;background:none;font-size:15px;line-height:1;color:var(--ink-3);cursor:pointer;padding:0 4px}
 /* the statement (Nov 2, Nick): the title's color bar stays inside the paper; a PO is one line, cut with … */
-.stx-title h1::after{width:100%!important;min-width:0!important;max-width:100%}
 .stx-po{display:block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.stx-age{margin-top:16px}
-.stx .stx-tbl{margin-top:18px}
 @media (max-width:700px){.stx-po{max-width:100%}}
 /* the statement's money side (Nov 2, Nick): Due date, Total, Paid and Balance all right-aligned on one line, with room between */
 .stx-tbl th.r,.stx-tbl td.r{text-align:right;white-space:nowrap;padding-left:22px}

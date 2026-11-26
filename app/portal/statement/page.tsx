@@ -67,40 +67,38 @@ export default async function Statement({ searchParams }: { searchParams: Promis
           {rows.length > 0 && <Link className="btn primary" href={payHref}>Pay this statement ({money(total)})</Link>}
         </div>
         <section className="st-page stx">
+          {/* the invoice's look (Nick, Nov 26 2026, option A): logo and title, who it's for and what's owed, how late, the list, how to pay */}
           <header className="stx-h">
-            <div>
-              {shop.logoUrl ? <img src={shop.logoUrl} alt={shop.name} className="st-logo" /> : <img src="/brand/fbs-logo.svg" alt={shop.name} className="stx-logo" />}
-              <div className="stx-shop">{[shop.name, shop.address].filter(Boolean).join(" · ")}<br />{[fmtPhone(shop.phone), shop.email].filter(Boolean).join(" · ")}</div>
-            </div>
-            <div className="stx-title"><h1>Statement</h1><div>Date <b>{fmtDateLong(today)}</b></div><div>Account <b>{acct?.company || acct?.name}</b></div><div>Terms <b>{PAY_TERMS[acct?.payment_terms || "receipt"]}</b></div></div>
+            <img src={shop.logoUrl || "/brand/fbs-logo.svg"} alt={shop.name} className="stx-logo" />
+            <div className="stx-title"><h1>Statement</h1><div>{fmtDateLong(today)} · {rows.length} open invoice{rows.length === 1 ? "" : "s"}</div></div>
           </header>
-          <div className="stx-strip" />
           <div className="stx-info">
-            <div><span className="stx-lb">Bill to</span><b>{acct?.company || acct?.name}</b>{acct?.company && acct?.name && <div>{acct.name}</div>}{acct?.address && <div style={{ whiteSpace: "pre-line" }}>{acct.address}</div>}</div>
-            <div><span className="stx-lb">Summary</span><div>Open invoices <b>{rows.length}</b></div>{lastPay?.[0] && <div>Last payment <b>{fmtDateLong(String(lastPay[0].paid_on || "").slice(0, 10))} · {money(+lastPay[0].amount)}</b></div>}</div>
+            <div><span className="stx-lb">Bill to</span><b className="stx-co">{acct?.company || acct?.name}</b>{acct?.company && acct?.name && <div>{acct.name}</div>}{acct?.address && <div style={{ whiteSpace: "pre-line" }}>{acct.address}</div>}
+              <div className="stx-terms">Terms {PAY_TERMS[acct?.payment_terms || "receipt"]}{lastPay?.[0] ? ` · last payment ${fmtDateLong(String(lastPay[0].paid_on || "").slice(0, 10))}, ${money(+lastPay[0].amount)}` : ""}</div></div>
             <div className="stx-due"><span className="stx-lb">Amount due</span><b>{money(total)}</b>{sum(making) > 0.004 && <small>{money(sum(making))} of it is still being made</small>}</div>
           </div>
-          <div className="stx-age">{buckets.map((b) => <div key={b.k}><span>{b.k}</span><b>{money(b.amt)}</b></div>)}</div>
+          <div className="stx-age">{buckets.map((b, i) => <div key={b.k}><span>{b.k}</span><b className={i >= 3 && b.amt > 0.004 ? "late" : ""}>{money(b.amt)}</b></div>)}</div>
           <table className="st-tbl stx-tbl" data-nofit>
             <thead><tr><th>Invoice</th><th>Date</th><th>Job</th><th>PO</th><th className="r stx-dueh">Due date</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th></tr></thead>
             <tbody>
-              {ready.length > 0 && <tr className="stx-grp"><td colSpan={8}>Ready to pay</td></tr>}
+              {/* "Ready to pay" and "Being made" as their own groups only when there are both */}
+              {making.length > 0 && ready.length > 0 && <tr className="stx-grp"><td colSpan={8}>Ready to pay</td></tr>}
               {ready.map(line)}
-              {ready.length > 0 && <tr className="stx-sub"><td colSpan={7}>Ready to pay · {ready.length} invoice{ready.length === 1 ? "" : "s"}</td><td className="r num">{money(sum(ready))}</td></tr>}
+              {making.length > 0 && ready.length > 0 && <tr className="stx-sub"><td colSpan={7}>Ready to pay · {ready.length} invoice{ready.length === 1 ? "" : "s"}</td><td className="r num">{money(sum(ready))}</td></tr>}
               {making.length > 0 && <tr className="stx-grp"><td colSpan={8}>Being made (due when it&apos;s done)</td></tr>}
               {making.map(line)}
-              {making.length > 0 && <tr className="stx-sub"><td colSpan={7}>Being made · {making.length} order{making.length === 1 ? "" : "s"}</td><td className="r num">{money(sum(making))}</td></tr>}
+              {making.length > 0 && ready.length > 0 && <tr className="stx-sub"><td colSpan={7}>Being made · {making.length} order{making.length === 1 ? "" : "s"}</td><td className="r num">{money(sum(making))}</td></tr>}
               {!rows.length && <tr><td colSpan={8} className="st-none">Nothing is owed right now. Thank you!</td></tr>}
             </tbody>
-            {rows.length > 0 && <tfoot><tr className="stx-tot"><td colSpan={7}>Total due · {rows.length} invoice{rows.length === 1 ? "" : "s"}</td><td className="r num">{money(total)}</td></tr></tfoot>}
           </table>
+          {rows.length > 0 && <div className="stx-total"><div><span>Total due</span><span>{money(total)}</span></div></div>}
           {old.length > 0 && <p className="stx-note"><PrintavoMark /> an invoice from our old system. A due date in red is more than a week past.</p>}
           <div className="stx-pay">
             <div><span className="stx-lb">Pay online</span>Your portal → Payments, by card or bank (ACH, no card fee).{rows.length > 0 && <> <Link className="no-print" href={payHref}>Pay this statement</Link></>}</div>
             {(pay.zelle || pay.venmo) && <div><span className="stx-lb">{pay.zelle && pay.venmo ? "Zelle / Venmo" : pay.zelle ? "Zelle" : "Venmo"}</span>{pay.zelle && <div>Zelle {pay.zelle}</div>}{pay.venmo && <div>Venmo {pay.venmo}</div>}<div>Put the invoice numbers in the note.</div></div>}
             <div><span className="stx-lb">By check</span>Payable to {shop.name}{shop.address && <div>{shop.address}</div>}</div>
           </div>
-          <div className="stx-stub"><span>✂ Return with your payment · <b>{acct?.company || acct?.name}</b> · Statement {fmtDateLong(today)}</span><span>Amount due <b>{money(total)}</b> · Amount paid ____________</span></div>
+          <div className="stx-foot"><div className="stx-strip" /><div><span>{[shop.name, shop.address, fmtPhone(shop.phone)].filter(Boolean).join(" · ").replace(/\n+/g, ", ")}</span><b>Thank you for your business</b></div></div>
         </section>
       </main>
     </>
