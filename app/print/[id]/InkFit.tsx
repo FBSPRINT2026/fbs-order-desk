@@ -21,6 +21,10 @@ import { useEffect } from "react";
  * the same names and size; the Front / Back labels never change. Nothing is cut off.
  */
 const STEPS = ["t1", "t2", "t3", "t4"];
+/** a group's heading pieces (its name, description, column titles: garment or generic-invoice); everything else in a
+ *  group is a row, whatever its kind (Nov 26 2026: a generic invoice's rows were dropped as "empty groups") */
+const HEAD = ".iv2-gh, .iv2-gd, .iv2-cols, .iv2-gcols";
+const ROW = ".iv2-ln, .iv2-grow";
 const lines = (el: HTMLElement) => new Set(Array.from(el.children).map((c) => (c as HTMLElement).offsetTop)).size;
 function fitInks(root: ParentNode) {
   for (const b of Array.from(root.querySelectorAll<HTMLElement>(".iv2-prs"))) {
@@ -51,15 +55,15 @@ function paginate(first: HTMLElement, page: number) {
       if (ch === foot) continue;
       if (ch.classList.contains("iv2-g")) {
         const kids = Array.from(ch.children) as HTMLElement[];
-        const head = kids.filter((k) => k.matches(".iv2-gh, .iv2-gd, .iv2-cols"));
+        const head = kids.filter((k) => k.matches(HEAD));
         kids.filter((k) => !head.includes(k)).forEach((k, i) => atoms.push({ el: k, group: ch, head: i === 0 ? head : [] }));
       } else atoms.push({ el: ch, group: null, head: [] });
     }
     let at = atoms.findIndex((a) => a.el.getBoundingClientRect().bottom > limit);
     if (at <= 0) break;
     // the totals never go over alone: back up to the last garment row before them
-    if (!atoms.slice(at).some((a) => a.el.classList.contains("iv2-ln"))) {
-      const back = atoms.slice(0, at).map((a) => a.el.classList.contains("iv2-ln")).lastIndexOf(true);
+    if (!atoms.slice(at).some((a) => a.el.matches(ROW))) {
+      const back = atoms.slice(0, at).map((a) => a.el.matches(ROW)).lastIndexOf(true);
       if (back > 0) at = back;
     }
     if (at <= 1) break; // nothing sensible to move
@@ -75,7 +79,7 @@ function paginate(first: HTMLElement, page: number) {
       if (!g) {
         g = document.createElement("div");
         g.className = a.group.className;
-        const heads = a.head.length ? a.head : (Array.from(a.group.children) as HTMLElement[]).filter((k) => k.matches(".iv2-gh, .iv2-cols")).map((k) => {
+        const heads = a.head.length ? a.head : (Array.from(a.group.children) as HTMLElement[]).filter((k) => k.matches(".iv2-gh, .iv2-cols, .iv2-gcols")).map((k) => {
           const c = k.cloneNode(true) as HTMLElement;
           const t = c.matches(".iv2-gh") ? c.querySelector("span") : null;
           // "Bottles Onesies (continued)": right after the group's name
@@ -88,7 +92,7 @@ function paginate(first: HTMLElement, page: number) {
       }
       g.appendChild(a.el);
     }
-    for (const g of Array.from(sh.querySelectorAll<HTMLElement>(":scope > .iv2-g"))) if (!g.querySelector(".iv2-ln, .iv2-set")) g.remove();
+    for (const g of Array.from(sh.querySelectorAll<HTMLElement>(":scope > .iv2-g"))) if (!(Array.from(g.children) as HTMLElement[]).some((k) => !k.matches(HEAD))) g.remove();
     if (foot) next.appendChild(foot.cloneNode(true));
     sh.after(next);
     // the new page starts roomy and tightens only as far as it needs, like the first
