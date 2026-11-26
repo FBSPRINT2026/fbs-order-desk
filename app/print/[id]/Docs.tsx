@@ -1689,7 +1689,7 @@ export function InvoiceDoc(p: DocData) {
   const choices = choicesOf(groups), optAt = new Map(choices.flatMap((ch) => ch.options.map((x, k) => [x.gi, { ...x, first: k === 0, n: ch.options.length }] as const)));
   const optTotal = (gid: string) => calcOrder(withPicked({ ...o, groups }, gid), settings, pays).total;
   const sh = settings.shop, isQ = o.type === "quote", kind = isQ ? "Quote" : "Invoice";
-  const issued = new Date(o.sent_at || o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+  const issued = new Date(!isQ && o.invoice_date ? `${o.invoice_date}T12:00:00` : o.sent_at || o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
   const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" });
   const paidUp = !isQ && c.paid > 0 && c.balance <= 0.005;
   const bill = billBlock(billToOf(o), cust);

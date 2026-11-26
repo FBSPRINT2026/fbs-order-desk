@@ -382,7 +382,8 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
   const note = [`Portal order #${o.number}`, po && !qs.po_field_id ? `PO ${po}` : "", o.nickname ? `Job: ${o.nickname}` : "", bill ? `Bill to ${bill.dept}${bill.cc ? ` (cost center ${bill.cc})` : ""}` : ""].filter(Boolean).join(" · ");
   const body: Record<string, unknown> = {
     DocNumber: String(o.number),
-    TxnDate: shopDay(o.approved_at || o.created_at),
+    // its own date when it's dated back by hand (lib/pricing.ts invoiceDay); else as always
+    TxnDate: o.invoice_date || shopDay(o.approved_at || o.created_at),
     ...(due ? { DueDate: due } : {}),
     CustomerRef: inp.customerRef ? { value: inp.customerRef.value } : { value: "(new customer)" },
     Line: lines,

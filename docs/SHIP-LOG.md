@@ -679,3 +679,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 26 8:00am · 1.3.922 · Nick · Generic invoice: Printavo-style table (Item #, Description, Qty, Rate, Amount, attachments per line); the invoice prints the same table
 - Nov 26 8:14am · 1.3.923 · Nick · Invoice pages: the page splitter keeps any row of a group (a generic invoice's rows were dropped from pages 1-2 as empty groups)
 - Nov 26 8:44am · 1.3.924 · Nick · Statement: option A (logo, big title, amount due, aging strip, total, pay boxes, branded footer); printing no longer hides a document's own header (only the site's bars)
+- Nov 26 8:49am · 1.3.925 · Nick · Invoice date: date an invoice back (Job details); terms, the printed invoice, statements, reminders and QuickBooks count from it (blank = the day it was finished)

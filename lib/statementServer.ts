@@ -11,10 +11,10 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export async function openInvoices(admin: SupabaseClient, customerIds: string[]): Promise<OpenInvoice[]> {
   if (!customerIds.length) return [];
   const [{ data: os }, { data: cs }] = await Promise.all([
-    allRows((r0, r1) => admin.from("orders").select("id, number, nickname, po_number, customer_id, created_at, completed_at, approved_at, sent_at, total, status, type, fees, groups").in("customer_id", customerIds).eq("type", "invoice").neq("status", "quote").order("id").range(r0, r1), 5000),
+    allRows((r0, r1) => admin.from("orders").select("id, number, nickname, po_number, customer_id, created_at, completed_at, invoice_date, approved_at, sent_at, total, status, type, fees, groups").in("customer_id", customerIds).eq("type", "invoice").neq("status", "quote").order("id").range(r0, r1), 5000),
     admin.from("customers").select("id, payment_terms").in("id", customerIds),
   ]);
-  const orders = (os || []) as { id: string; number: number; nickname: string | null; po_number: string | null; customer_id: string; created_at: string; completed_at: string | null; approved_at: string | null; sent_at: string | null; total: number; status: string }[];
+  const orders = (os || []) as { id: string; number: number; nickname: string | null; po_number: string | null; customer_id: string; created_at: string; completed_at: string | null; invoice_date: string | null; approved_at: string | null; sent_at: string | null; total: number; status: string }[];
   const ids = orders.map((o) => o.id);
   const paid: Record<string, number> = {};
   for (let i = 0; i < ids.length; i += 300) {
@@ -23,7 +23,7 @@ export async function openInvoices(admin: SupabaseClient, customerIds: string[])
   }
   const terms = new Map(((cs || []) as { id: string; payment_terms: PayTerms }[]).map((c) => [c.id, c.payment_terms]));
   return orders
-    .map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", po_number: o.po_number || "", customer_id: o.customer_id, created_at: o.created_at, status: o.status,
+    .map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", po_number: o.po_number || "", customer_id: o.customer_id, /* an invoice dated back shows (and is paid oldest-first) by its date */ created_at: o.invoice_date ? `${o.invoice_date}T12:00:00` : o.created_at, status: o.status,
       total: r2(+o.total || 0), paid: r2(paid[o.id] || 0), balance: r2((+o.total || 0) - (paid[o.id] || 0)), pay_due: payDueDate(o, terms.get(o.customer_id)), cardFeeIn: cardFeeInOrder(o as never, r2((+o.total || 0) - (paid[o.id] || 0))) }))
     .filter((o) => o.balance > 0.004)
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.number - b.number);

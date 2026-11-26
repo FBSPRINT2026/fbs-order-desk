@@ -55,7 +55,7 @@ export type FollowUp = {
   since: string;
 };
 
-type O = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "customer_id" | "created_at" | "updated_at" | "sent_at" | "approved_at" | "submitted_at" | "completed_at" | "tracking" | "delivery_method">;
+type O = Pick<Order, "id" | "number" | "nickname" | "status" | "type" | "due_date" | "total" | "customer_id" | "created_at" | "updated_at" | "sent_at" | "approved_at" | "submitted_at" | "completed_at" | "invoice_date" | "tracking" | "delivery_method">;
 export type AssistantData = {
   orders: O[];
   customers: Customer[];
@@ -109,7 +109,7 @@ export function loadAssistantData(sb: SupabaseClient<any, any, any>): Promise<As
 async function loadAssistantDataNow(sb: SupabaseClient<any, any, any>): Promise<AssistantData> {
   const since = new Date(Date.now() - 120 * 86400000).toISOString();
   const [orders, customers, payments, proofs, messages, readyEvents] = await Promise.all([
-    fetchAll<O>(() => sb.from("orders").select("id,number,nickname,status,type,due_date,total,customer_id,created_at,updated_at,sent_at,approved_at,submitted_at,completed_at,tracking,delivery_method").order("number", { ascending: false })),
+    fetchAll<O>(() => sb.from("orders").select("id,number,nickname,status,type,due_date,total,customer_id,created_at,updated_at,sent_at,approved_at,submitted_at,completed_at,invoice_date,tracking,delivery_method").order("number", { ascending: false })),
     fetchAll<Customer>(() => sb.from("customers").select("*").order("created_at")),
     fetchAll<{ order_id: string; amount: number }>(() => sb.from("payments").select("order_id,amount").order("created_at")),
     fetchAll<AssistantData["proofs"][number]>(() => sb.from("proofs").select("order_id,status,created_at,decided_at").is("archived_at", null).order("created_at")),

@@ -466,7 +466,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const startedAt = Date.now();
     const { data: savedRow, error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      price_type: d.price_type || "retail", order_type: d.order_type || null, sample: d.order_type === "sample" ? d.sample || null : null, from_sample: d.from_sample || null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, priority: !!d.priority, priority_note: d.priority ? (d.priority_note || "").trim() || null : null, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", order_type: d.order_type || null, sample: d.order_type === "sample" ? d.sample || null : null, from_sample: d.from_sample || null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, invoice_date: d.invoice_date || null, rush: !!d.rush, priority: !!d.priority, priority_note: d.priority ? (d.priority_note || "").trim() || null : null, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       bill_to: d.bill_to || null, ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
@@ -2213,6 +2213,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <div className="jl-v"><input id="o-po" className="jl-in" type="text" value={o.po_number || ""} placeholder="None" onFocus={(e) => { e.currentTarget.dataset.was = e.currentTarget.value; }} onChange={(e) => patch((d) => { d.po_number = e.target.value; })}
                     // a new PO: the suppliers' manifests waiting for it are matched now (lib/manifest.ts resolvePending), once it's saved
                     onBlur={(e) => { if (e.currentTarget.value.trim() && e.currentTarget.value !== e.currentTarget.dataset.was) setTimeout(() => { void save().then(() => fetch("/api/goods/manifest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ retry: true }) })).catch(() => null); }, 300); }} /></div>
+                  {o.type === "invoice" && <>
+                    {/* the invoice's date, to date one back (Nick, Nov 26 2026): blank = the day it was finished; terms count from it */}
+                    <label className="jl-k" htmlFor="o-invd">Invoice date</label>
+                    <div className="jl-v"><input id="o-invd" className="jl-in jl-date" type="date" title={o.completed_at ? `Blank: the day it was finished (${o.completed_at.slice(0, 10)})` : "Blank: the day it's finished"} value={o.invoice_date || ""} onChange={(e) => patch((d) => { d.invoice_date = e.target.value || null; })} /></div>
+                  </>}
                   <label className="jl-k" htmlFor="o-prod">Production</label>
                   <div className="jl-v"><input id="o-prod" className="jl-in jl-date" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
                   <label className="jl-k" htmlFor="o-due">In hands</label>
