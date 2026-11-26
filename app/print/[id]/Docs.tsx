@@ -1715,9 +1715,21 @@ export function InvoiceDoc(p: DocData) {
       <div className="iv2-who">
         {/* the account, or the department this order bills (lib/billTo.ts) */}
         <div><div className="lbl">Bill to</div><b>{bill.name}</b>{bill.lines.map((x, i) => <span key={i}>{x}</span>)}</div>
-        <div className="r"><div className="lbl">Job</div><b>{o.nickname || `#${o.number}`}</b><span>{c.qty} pcs · {how}</span></div>
+        <div className="r"><div className="lbl">Job</div><b>{o.nickname || `#${o.number}`}</b><span>{o.product_kind === "general" ? how : `${c.qty} pcs · ${how}`}</span></div>
       </div>
-      {groups.map((g, gi) => {
+      {/* a generic invoice (lib/simpleOrders.ts "general"): one Printavo-style table, Item # · Description · Qty · Rate ·
+          Amount, no groups or pictures; its attachments stay with the shop (Nick, Nov 25 2026) */}
+      {o.product_kind === "general" && (
+        <div className="iv2-g iv2-gen">
+          <div className="iv2-gcols lbl"><span>Item #</span><span>Description</span><span>Qty</span><span>Rate</span><span>Amount</span></div>
+          {groups.flatMap((g, gi) => g.lines.map((l, li) => ({ l, lc: c.groups[gi]?.lines[li] }))).filter((x) => x.lc && (x.l.garment?.trim() || x.l.note?.trim() || x.lc.sub)).map(({ l, lc }) => (
+            <div className={"iv2-grow" + (l.garment?.trim() ? "" : " nono")} key={l.id}>
+              {l.garment?.trim() ? <b>{l.garment.trim()}</b> : null}<span className="iv2-gdesc">{l.note?.trim() || ""}</span><span className="n">{lc!.qty}</span><span className="n">{money(lc!.each)}</span><span className="n"><b>{money(lc!.sub)}</b></span>
+            </div>
+          ))}
+        </div>
+      )}
+      {o.product_kind !== "general" && groups.map((g, gi) => {
         const gc = c.groups[gi];
         // a run's pre-production sample is a line in the run's group (GroupSample.follows; Nick, Nov 17 2026, option A)
         if (!gc || g.sample?.follows) return null;

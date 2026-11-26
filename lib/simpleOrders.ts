@@ -41,6 +41,8 @@ export type SimpleSpec = {
   size?: string; stock?: string; ink?: string; details?: string;
   // generic invoice: the line's description as typed
   desc?: string;
+  /** generic invoice: files kept with the line (staff only, never on the invoice) */
+  files?: { path: string; name: string }[];
   /** the back (Nick, Nov 25 2026, #50226: "add a back"): its file and, for a PDF, its first page as a picture; the proof
    *  shows front and back side by side */ back?: string; backName?: string; backPreview?: string;
   /** made from a card template (lib/printTemplates.ts): the template and what was typed, so it opens again as it was */

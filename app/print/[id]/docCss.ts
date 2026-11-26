@@ -501,6 +501,13 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-itp{width:.9in;height:.65in;flex:none;object-fit:contain;border-radius:5px;background:#f4f5f7;border:1px solid var(--line2)}
 .pdoc .iv2-itn b{display:block}
 .pdoc .iv2-itd{display:block;font-size:9.5pt;color:#5b6472;font-style:italic;margin-top:2px}
+.pdoc .iv2-gcols,.pdoc .iv2-grow{display:grid;grid-template-columns:1.3in minmax(0,1fr) .55in .8in .95in;gap:10px}
+.pdoc .iv2-gcols{padding:0 0 4px;border-bottom:1px solid #d9dee5}
+.pdoc .iv2-gcols>span:nth-child(n+3),.pdoc .iv2-grow>.n{text-align:right;white-space:nowrap}
+.pdoc .iv2-grow{padding:7px 0;border-bottom:1px solid #eef1f4;align-items:start;break-inside:avoid}
+.pdoc .iv2-grow>b{overflow-wrap:anywhere}
+.pdoc .iv2-grow.nono .iv2-gdesc{grid-column:1/3}
+.pdoc .iv2-gdesc{white-space:pre-wrap;overflow-wrap:anywhere}
 .pdoc .iv2-th.none{background:linear-gradient(var(--sc),var(--sc)) center/45% 55% no-repeat,#f4f5f7}
 .pdoc .iv2-cs{width:.27in;height:.95in;flex:none;border:.75px solid var(--ink);border-radius:4px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);font-size:6pt;font-weight:300;letter-spacing:.12em;line-height:1.15;text-align:center;text-transform:uppercase}
 .pdoc .iv2-blk{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}

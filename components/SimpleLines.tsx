@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ONE_SIZE, type GLine, type Group } from "@/lib/pricing";
 import { itemMockup } from "@/lib/itemProofs";
 import BusinessCardTool from "@/components/tools/BusinessCardTool";
+import GeneralLines from "@/components/GeneralLines";
 import type { CardFill } from "@/lib/printTemplates";
 import { IMPRINT_TYPES, SIGN_FINISHING, SIGN_MATERIALS, kindLabel, linePic, backPic, newSimpleGroup, pdfFirstPage, qtyOf, signEach, specText, sqft, type ProductKind, type SimpleSpec } from "@/lib/simpleOrders";
 
@@ -111,9 +112,11 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
       })();
     });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a generic invoice is a Printavo-style table of its own (Nick, Nov 25 2026)
+  if (kind === "general") return <GeneralLines orderId={orderId} groups={groups} update={update} hidePrices={hidePrices} />;
   return (
     <section className="panel sol">
-      <div className="panel-h"><h2>{kindLabel(kind)}</h2><span className="faint">{kind === "general" ? "Item, description, quantity and amount: never on the production boards." : "Outsourced: a simple invoice, never on the production boards."}</span></div>
+      <div className="panel-h"><h2>{kindLabel(kind)}</h2><span className="faint">Outsourced: a simple invoice, never on the production boards.</span></div>
       <div className="panel-b">
         {err && <div className="err">{err}</div>}
         {!lines.length && <p className="faint">No items yet.</p>}
@@ -124,14 +127,14 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
           const pf = s.proof ? PROOF[s.proof.status] : null;
           const id = `${gi}-${li}`;
           return (
-            <div key={l.id} className={"sol-ln" + (kind === "paper" ? " sol-two" : "") + (kind === "general" ? " sol-plain" : "")}>
-              {kind !== "general" && <label className={"sol-img" + (s.image ? " has" : "")} title={s.image ? "Change the picture" : "Add a picture: what the customer approves"}>
+            <div key={l.id} className={"sol-ln" + (kind === "paper" ? " sol-two" : "")}>
+              <label className={"sol-img" + (s.image ? " has" : "")} title={s.image ? "Change the picture" : "Add a picture: what the customer approves"}>
                 {s.image ? (url ? <img src={url} alt={l.garment || "Item"} /> : isPdf(s.image) ? <span className="sol-pdf">PDF<small>{s.imageName}</small></span> : <span className="faint">…</span>)
                   : url ? <img src={url} alt={l.garment || "Item"} />
                   : <span className="sol-add">{busy === id ? "Uploading…" : "+ Picture"}</span>}
                 <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(gi, li, f); }} />
                 {kind === "paper" && <span className="sol-side">Front</span>}
-              </label>}
+              </label>
               {kind === "paper" && (() => {
                 const bp = backPic(s), bu = bp ? urls[bp] : "";
                 return (
@@ -148,7 +151,7 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
               })()}
               <div className="sol-body">
                 <div className="sol-top">
-                  <input className="sol-name" aria-label="Item name" placeholder={kind === "signage" ? "Mambo 5K start banner" : kind === "promo" ? "20 oz vacuum tumbler" : kind === "general" ? "Item (Shipping, Design fee…)" : "Business cards: Sarah Lee"} value={l.garment} onChange={(e) => edit(gi, li, (x) => { x.garment = e.target.value; })} />
+                  <input className="sol-name" aria-label="Item name" placeholder={kind === "signage" ? "Mambo 5K start banner" : kind === "promo" ? "20 oz vacuum tumbler" : "Business cards: Sarah Lee"} value={l.garment} onChange={(e) => edit(gi, li, (x) => { x.garment = e.target.value; })} />
                   {pf && <span className={"sol-pf " + pf[1]} title={s.proof?.note || ""}>{pf[0]}</span>}
                   {onLogo && kind === "promo" && li === 0 && <button type="button" className="btn sm" title="The logo, its size, spot and colors on a close-up: the same Add logo as an apparel order. It becomes this item's picture and proof" onClick={() => onLogo(groups[gi].id)}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ marginRight: 5, verticalAlign: "-2px" }}><path d="M4 5h11M4 5v14h16v-7M8.5 15.5l3-3 2.5 2.5 2-2 3 3M18 3v6M15 6h6" /></svg>
@@ -178,7 +181,6 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
                     <label><span>Imprint type</span><input list="sol-imp" value={s.imprintType || ""} onChange={(e) => spec(gi, li, { imprintType: e.target.value })} /></label>
                     <label><span>Imprint color</span><input placeholder="PMS 286" value={s.imprintColor || ""} onChange={(e) => spec(gi, li, { imprintColor: e.target.value })} /></label>
                   </>}
-                  {kind === "general" && <label className="sol-wide"><span>Description</span><textarea rows={2} value={s.desc || ""} placeholder="What the customer reads under the item" onChange={(e) => spec(gi, li, { desc: e.target.value })} /></label>}
                   {kind === "paper" && <>
                     <label><span>Size</span><input placeholder='3.5 × 2' value={s.size || ""} onChange={(e) => spec(gi, li, { size: e.target.value })} /></label>
                     <label><span>Stock</span><input placeholder="16 pt matte" value={s.stock || ""} onChange={(e) => spec(gi, li, { stock: e.target.value })} /></label>
@@ -190,7 +192,7 @@ export default function SimpleLines({ orderId, customerId, kind, groups, update,
                   {kind === "signage" && !hidePrices && sqft(s) > 0 ? <span className="sol-calc">{sqft(s)} sq ft × {money(+(s.rate || 0))} = {money(signEach(s))} each</span> : <span />}
                   <span className="sol-money">
                     <label><span>Qty</span><input type="number" min="0" value={q || ""} onChange={(e) => edit(gi, li, (x) => { x.sizes = { [ONE_SIZE]: Math.max(0, Math.round(+e.target.value || 0)) }; })} /></label>
-                    {!hidePrices && <label><span>{kind === "general" ? "Rate" : "Each"}</span><input type="number" min="0" step="0.01" value={l.priceOverride ?? ""} onChange={(e) => edit(gi, li, (x) => { x.priceOverride = e.target.value === "" ? null : +e.target.value; })} /></label>}
+                    {!hidePrices && <label><span>Each</span><input type="number" min="0" step="0.01" value={l.priceOverride ?? ""} onChange={(e) => edit(gi, li, (x) => { x.priceOverride = e.target.value === "" ? null : +e.target.value; })} /></label>}
                     {!hidePrices && <b>{money(q * each)}</b>}
                   </span>
                 </div>

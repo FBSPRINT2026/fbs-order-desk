@@ -676,3 +676,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 25 11:37am · 1.3.919 · Nick · Same print with youth screens in some groups: a group of only adult (or only youth) shirts is priced at that side's count across the order, the same as the split groups (#50227 Genesis / Kings backs)
 - Nov 26 7:40am · 1.3.920 · Nick · Order type → Generic invoice: a plain invoice like QuickBooks (item, description, quantity, rate, amount), no pictures or production; never on the production boards
 - Nov 26 7:42am · 1.3.921 · Nick · Item lines on generic / outsourced invoices with no rate typed are $0, never priced from the garment price list
+- Nov 26 8:00am · 1.3.922 · Nick · Generic invoice: Printavo-style table (Item #, Description, Qty, Rate, Amount, attachments per line); the invoice prints the same table
